@@ -226,6 +226,16 @@ fn recording_panel(app: &mut SoundApp, ctx: &egui::Context) {
                 }
             }
         });
+        ui.horizontal(|ui| {
+            // Count Off (same setting as the toolbar): whole bars of click before the take.
+            let (mut on, mut bars) = (app.engine.session().edit.countoff, app.engine.session().edit.countoff_bars);
+            if ui.checkbox(&mut on, "Count Off").changed() {
+                let _ = app.run("options.countoff", json!({"value": on}));
+            }
+            if ui.add(egui::DragValue::new(&mut bars).range(1..=16).suffix(" bars")).changed() {
+                let _ = app.run("setup.click_countoff", json!({"countoff_bars": bars}));
+            }
+        });
         ui.separator();
         ui.horizontal(|ui| {
             if ui.button("■ Stop").clicked() {

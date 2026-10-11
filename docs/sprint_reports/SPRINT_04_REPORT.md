@@ -116,7 +116,8 @@ commit; result in `regression.log`):
   next Play only, cleared on Stop), and the take is trimmed to start at the record point
   (`countoff_counts_whole_bars_back_from_the_record_point`,
   `countoff_clicks_only_before_the_record_point`, `countoff_applies_to_the_next_play_only`).
-  Loop recording and punch-in while playing do not count off.
+  Loop recording and punch-in while playing do not count off. The Recording window also shows the
+  Count Off toggle and bar count (same settings as the toolbar).
 - **R20 automation arbitration** — recall refused while playing; a recalled static value never
   overrides a Read envelope in rendered audio; Off makes the recalled value audible; saving
   while playing captures static model values (`vmt5_snapshot_recall_and_read_automation_arbitration`).
