@@ -173,15 +173,7 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
                     return true;
                 }
             }
-            let mut edges: Vec<i64> = s
-                .tracks
-                .iter()
-                .filter(|t| s.edit.selected_tracks.contains(&t.id))
-                .flat_map(|t| t.clips().iter().flat_map(|c| [c.start, c.end()]))
-                .collect();
-            edges.sort_unstable();
-            let next = if back { edges.iter().rev().find(|e| **e < at).copied() } else { edges.iter().find(|e| **e > at).copied() };
-            if let Some(n) = next {
+            if let Some(n) = next_clip_edge(s, at, back) {
                 let _ = app.run("transport.locate", json!({"at": n}));
             }
             true
@@ -333,5 +325,38 @@ mod tests {
         assert!(!mods_match(want("Cmd+X"), Modifiers { ctrl: true, ..MAC_CMD }, true), "Cmd+Ctrl+X is not Cut");
         assert!(!search_chord(MAC_CMD, true));
         assert!(search_chord(Modifiers { ctrl: true, ..MAC_CMD }, true));
+    }
+}
+
+/// V01 Tab / Alt+Tab: the next (or previous) clip start/end on the selected tracks, strictly
+/// after (before) `at`.
+pub(crate) fn next_clip_edge(s: &soundcraft_model::Session, at: i64, back: bool) -> Option<i64> {
+    let mut edges: Vec<i64> =
+        s.tracks.iter().filter(|t| s.edit.selected_tracks.contains(&t.id)).flat_map(|t| t.clips().iter().flat_map(|c| [c.start, c.end()])).collect();
+    edges.sort_unstable();
+    if back { edges.iter().rev().find(|e| **e < at).copied() } else { edges.iter().find(|e| **e > at).copied() }
+}
+
+#[cfg(test)]
+mod tab_tests {
+    use super::next_clip_edge;
+    use soundcraft_model::{ChannelFormat, Clip, Session, SourceId, TrackKind};
+
+    #[test]
+    fn tab_walks_clip_edges_of_selected_tracks_only() {
+        let mut s = Session::default();
+        let a = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        let b = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        for (t, start, len) in [(a, 1000, 500), (a, 4000, 1000), (b, 2500, 100)] {
+            let id = s.new_clip_id();
+            s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "c", SourceId(1), 0, start, len));
+        }
+        s.edit.selected_tracks = vec![a];
+        let fwd: Vec<i64> = std::iter::successors(next_clip_edge(&s, 0, false), |x| next_clip_edge(&s, *x, false)).collect();
+        assert_eq!(fwd, vec![1000, 1500, 4000, 5000], "track b's clip is not a stop");
+        assert_eq!(next_clip_edge(&s, 4000, true), Some(1500));
+        assert_eq!(next_clip_edge(&s, 1000, true), None);
+        s.edit.selected_tracks.clear();
+        assert_eq!(next_clip_edge(&s, 0, false), None, "no selected track: no move");
     }
 }

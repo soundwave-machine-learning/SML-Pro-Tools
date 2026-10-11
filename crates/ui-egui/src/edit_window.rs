@@ -1438,35 +1438,9 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
     let Some(p) = resp.interact_pointer_pos().or_else(|| resp.hover_pos()) else { return };
     let at = sample_at(&s, tl, p.x).max(0);
     let hit = clip_at(track, at).cloned();
-    let upper = p.y < lane.center().y;
-    let near_edge = |c: &Clip| -> Option<bool> {
-        let xs = x_of(&s, tl, c.start);
-        let xe = x_of(&s, tl, c.end());
-        if (p.x - xs).abs() < 6.0 {
-            Some(true)
-        } else if (p.x - xe).abs() < 6.0 {
-            Some(false)
-        } else {
-            None
-        }
-    };
+    let edges = hit.as_ref().map(|c| (x_of(&s, tl, c.start), x_of(&s, tl, c.end())));
     // Effective tool under the Smart tool.
-    let eff = match tool {
-        Tool::Smart => {
-            if let Some(c) = &hit {
-                if near_edge(c).is_some() {
-                    Tool::Trim
-                } else if upper {
-                    Tool::Selector
-                } else {
-                    Tool::Grabber
-                }
-            } else {
-                Tool::Selector
-            }
-        }
-        other => other,
-    };
+    let eff = if tool == Tool::Smart { smart_tool_at(p, lane, edges) } else { tool };
     if resp.hovered() {
         let icon = match eff {
             Tool::Trim => egui::CursorIcon::ResizeHorizontal,
@@ -1479,24 +1453,7 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
         ui.ctx().set_cursor_icon(icon);
     }
     let auto_view = AutoParam::parse(&track.view);
-    let fade_corner = if tool == Tool::Smart {
-        hit.as_ref().and_then(|c| {
-            let xs = x_of(&s, tl, c.start);
-            let xe = x_of(&s, tl, c.end());
-            let top = p.y < lane.min.y + lane.height() * 0.28;
-            if !top {
-                None
-            } else if (p.x - xs) > 0.0 && (p.x - xs) < 14.0 {
-                Some(true)
-            } else if (xe - p.x) > 0.0 && (xe - p.x) < 14.0 {
-                Some(false)
-            } else {
-                None
-            }
-        })
-    } else {
-        None
-    };
+    let fade_corner = if tool == Tool::Smart { edges.and_then(|e| smart_fade_corner(p, lane, e)) } else { None };
     if fade_corner.is_some() && resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
     }
@@ -1531,10 +1488,14 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
                 let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
                 Gesture::MoveClips { clips, grab_at: at, delta: 0, from_track: track.id, to_track: track.id }
             }),
-            Tool::Trim => hit.as_ref().map(|c| match near_edge(c) {
-                Some(false) => Gesture::TrimEnd { clip: c.id, track: track.id, to: c.end() },
-                _ if at - c.start < c.end() - at => Gesture::TrimStart { clip: c.id, track: track.id, to: c.start },
-                _ => Gesture::TrimEnd { clip: c.id, track: track.id, to: c.end() },
+            Tool::Trim => hit.as_ref().map(|c| {
+                // Grabbed within 6 px of the end edge (and not of the start): trim the end.
+                let near_end = edges.is_some_and(|(xs, xe)| (p.x - xs).abs() >= 6.0 && (p.x - xe).abs() < 6.0);
+                if near_end || at - c.start >= c.end() - at {
+                    Gesture::TrimEnd { clip: c.id, track: track.id, to: c.end() }
+                } else {
+                    Gesture::TrimStart { clip: c.id, track: track.id, to: c.start }
+                }
             }),
             Tool::Scrubber => Some(Gesture::Scrub { last: at }),
             Tool::Pencil => Some(Gesture::Pencil { track: track.id, points: Vec::new() }),
@@ -1938,5 +1899,54 @@ mod tests {
     fn hold_clears_when_playhead_returns_or_transport_stops() {
         assert_eq!(follow_update(true, true, true, 9_000, 9_000, None, true, 96_000), (false, None));
         assert_eq!(follow_update(false, true, false, 9_000, 9_000, None, true, 96_000), (false, None));
+    }
+}
+
+/// V03 Smart tool zones over a clip whose edges are at screen x `edges` (None = no clip):
+/// within 6 px of an edge = Trim; upper half = Selector; lower half = Grabber; no clip = Selector.
+fn smart_tool_at(p: egui::Pos2, lane: egui::Rect, edges: Option<(f32, f32)>) -> Tool {
+    match edges {
+        Some((xs, xe)) if (p.x - xs).abs() < 6.0 || (p.x - xe).abs() < 6.0 => Tool::Trim,
+        Some(_) if p.y < lane.center().y => Tool::Selector,
+        Some(_) => Tool::Grabber,
+        None => Tool::Selector,
+    }
+}
+
+/// V03 Smart tool fade corners: top 28 % of the lane, inside the clip within 14 px of its start
+/// (`Some(true)`, fade in) or end (`Some(false)`, fade out).
+fn smart_fade_corner(p: egui::Pos2, lane: egui::Rect, (xs, xe): (f32, f32)) -> Option<bool> {
+    if p.y >= lane.min.y + lane.height() * 0.28 {
+        None
+    } else if (p.x - xs) > 0.0 && (p.x - xs) < 14.0 {
+        Some(true)
+    } else if (xe - p.x) > 0.0 && (xe - p.x) < 14.0 {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod smart_tool_tests {
+    use super::*;
+    use egui::{pos2, vec2};
+
+    #[test]
+    fn smart_tool_zones() {
+        let lane = egui::Rect::from_min_size(pos2(0.0, 100.0), vec2(1000.0, 100.0));
+        let clip = Some((200.0, 600.0));
+        assert_eq!(smart_tool_at(pos2(400.0, 120.0), lane, clip), Tool::Selector, "upper half");
+        assert_eq!(smart_tool_at(pos2(400.0, 180.0), lane, clip), Tool::Grabber, "lower half");
+        for x in [195.0, 205.0, 595.0, 605.0] {
+            assert_eq!(smart_tool_at(pos2(x, 150.0), lane, clip), Tool::Trim, "edge band at {x}");
+        }
+        assert_eq!(smart_tool_at(pos2(207.0, 180.0), lane, clip), Tool::Grabber, "outside the 6 px band");
+        assert_eq!(smart_tool_at(pos2(50.0, 180.0), lane, None), Tool::Selector, "empty lane");
+        assert_eq!(smart_fade_corner(pos2(210.0, 110.0), lane, (200.0, 600.0)), Some(true));
+        assert_eq!(smart_fade_corner(pos2(590.0, 110.0), lane, (200.0, 600.0)), Some(false));
+        assert_eq!(smart_fade_corner(pos2(210.0, 140.0), lane, (200.0, 600.0)), None, "below the top 28 %");
+        assert_eq!(smart_fade_corner(pos2(195.0, 110.0), lane, (200.0, 600.0)), None, "outside the clip");
+        assert_eq!(smart_fade_corner(pos2(400.0, 110.0), lane, (200.0, 600.0)), None, "middle of the clip");
     }
 }

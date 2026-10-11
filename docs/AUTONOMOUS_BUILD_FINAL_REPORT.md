@@ -26,7 +26,7 @@ counter available); see "Budget" below.
 | Sprint | Status | Commit(s) | Report |
 |---|---|---|---|
 | 1 — Recording, clock, clean baseline (A1) | **PASS (portable)**; H1 pending | `f70ac26` | `docs/sprint_reports/SPRINT_01_REPORT.md` |
-| 2 — Vocal editing + Nudge (A2) | **PASS for executed rows**; V01/V03/V07/V13/V14 partial; N07 physical/N09 native, N10 claim-only | `c11b84f` | `SPRINT_02_REPORT.md` |
+| 2 — Vocal editing + Nudge (A2) | **PASS for executed rows**; V01/V03/V07/V13 closed in the Sprint 4 follow-up; V14 owner review, V12 owner plugin; N07 physical/N09 native, N10 claim-only | `c11b84f` | `SPRINT_02_REPORT.md` |
 | 3 — Mixer, slots, own plugins, Visual (A3) | **PASS for executed rows** + two carry-over batches; H2/M-T7/SL-T8/VM-T7/8 pending; M-T3/4/8 deferred by owner | `4295a19`, `525d882`, `a130594`, `b1181dc` | `SPRINT_03_REPORT.md` |
 | 4 — Performance, delivery (A4) | **A4 regression PASS**; native H1–H4 BLOCKED; artifacts built (unsigned, untested) | this commit | `SPRINT_04_REPORT.md` |
 
@@ -43,7 +43,7 @@ counter available); see "Budget" below.
 | R08 simple recording view, usable mixer | IMPLEMENTED; UX pending | Recording panel, Console SLOTS/Width rows (renders) |
 | R09 measured responsiveness | PARTIAL | headless profile: 13 overruns @64 frames found, cause measured (rayon overhead on light strips), adaptive strip scheduling → 0 overruns @64/128/256 on the VM — native H3 pending |
 | R10 regression, candidate, manual, delivery | regression PASS; candidates + manual done; native delivery checks pending | `regression.log`, `artifact-manifest.json`, `USER_GUIDE.md` |
-| R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv` (V02/04/05/06/08/09/10/11 verified in software; V12 needs owner plugin) |
+| R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv`: V01–V11 and V13 verified in software; V12 BLOCKED (owner pitch plugin); V14 interaction needs owner UI review |
 | R12 dedicated Nudge | software PASS (N01–N06, N08, N07 unit); N07 physical/N09 native pending; N10 claim-only | Sprint 2 |
 | R13 easy bus/FX return | PASS (software); B-T7 owner pending | `buses/bus-tests.log` |
 | R14 full vocal walkthrough | software stages PASS; native/owner pending | `vocal-e2e.json`, `vocal-e2e-final.json` |
@@ -67,7 +67,7 @@ counter available); see "Budget" below.
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
   CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
-  (**603 passed, 0 failed, exit 0**).
+  (**606 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired

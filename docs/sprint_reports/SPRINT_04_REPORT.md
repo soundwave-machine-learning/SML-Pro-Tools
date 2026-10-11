@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (603 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (606 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -88,6 +88,9 @@ commit; result in `regression.log`):
 - **R20 automation arbitration** — recall refused while playing; a recalled static value never
   overrides a Read envelope in rendered audio; Off makes the recalled value audible; saving
   while playing captures static model values (`vmt5_snapshot_recall_and_read_automation_arbitration`).
+- **V01/V03/V13 coverage** — V01 selection/zoom audio-neutral test and Tab clip-edge walk;
+  V03 Smart-tool zone functions extracted unchanged and tested; V13 row updated to the Sprint 3
+  `v13_named_export_paths` test.
 - **CL05 session swap** — replaced `Arc<Session>` returned to the UI thread for dropping
   (`replaced_sessions_are_dropped_off_the_audio_thread`).
 

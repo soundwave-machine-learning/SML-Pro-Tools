@@ -91,6 +91,27 @@ fn exec(e: &mut Engine, id: &str, p: Value) -> Value {
     e.execute(id, &p).unwrap_or_else(|err| panic!("{id}: {err}"))
 }
 
+/// V01: selection and navigation are view/edit-state only — select, select-all, timeline zoom
+/// and waveform (vertical) zoom never change the rendered audio and add no undo steps.
+#[test]
+fn vocal_v01_selection_and_zoom_are_audio_neutral() {
+    let (mut e, t, _) = three_takes();
+    let r = Range::new(0, LEN as i64);
+    let base = render(&e, r);
+    let undo_before = e.can_undo();
+    exec(&mut e, "edit.select", json!({"tracks": [t.0], "start": 1000, "end": 9000}));
+    assert_eq!(e.session().edit.selection, Range::new(1000, 9000));
+    exec(&mut e, "edit.select_all", json!({}));
+    assert_eq!(e.session().edit.selection, Range::new(0, LEN as i64), "select all spans the content");
+    assert_eq!(e.session().edit.selected_tracks, vec![t]);
+    exec(&mut e, "view.zoom_in", json!({}));
+    exec(&mut e, "view.zoom_set", json!({"samples_per_px": 3.0}));
+    exec(&mut e, "view.zoom_fit", json!({"width_px": 900}));
+    exec(&mut e, "view.waveform_zoom", json!({"factor": 4.0}));
+    assert_eq!(render(&e, r), base, "bit-identical: zoom and selection are not gain");
+    assert_eq!(e.can_undo(), undo_before, "navigation adds no undo step");
+}
+
 /// V02: separate/heal/trim with undo; originals untouched.
 #[test]
 fn vocal_v02_separate_heal_trim_undo_keep_originals() {

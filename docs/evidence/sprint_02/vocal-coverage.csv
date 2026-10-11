@@ -1,7 +1,7 @@
 id,tool_family,status,evidence_command,notes
-V01,Selection and navigation,IMPLEMENTED UNVERIFIED,existing edit.select/edit.select_all/view.zoom_*/Tab-to-boundary (no new test),Existing commands reused; waveform zoom gain-neutral not separately retested
+V01,Selection and navigation,VERIFIED (software),cargo test -p soundcraft-engine --test vocal_workflow vocal_v01; cargo test -p soundcraft-ui-egui tab_tests,Sprint 4 follow-up: select/select-all/timeline zoom/waveform zoom bit-identical render and no undo step; Tab/Alt+Tab walks clip edges of selected tracks only (logic extracted to next_clip_edge; behaviour unchanged)
 V02,Basic editing,VERIFIED,cargo test -p soundcraft-engine --test vocal_workflow vocal_v02,separate/heal/trim exact boundaries + undo; originals hash-identical
-V03,Editing modes,PARTIAL,cargo test -p soundcraft-engine cmd::nudge (n06),Slip default; nudge delta independent of mode/zoom verified; ripple/shuffle opt-in is existing edit.mode; smart-tool hit zones not re-verified
+V03,Editing modes,VERIFIED (software),cargo test -p soundcraft-engine cmd::nudge (n06); cargo test -p soundcraft-ui-egui smart_tool,Slip default; nudge delta independent of mode/zoom verified; ripple/shuffle opt-in is existing edit.mode; Sprint 4 follow-up: Smart tool zones (6 px trim band / upper Selector / lower Grabber / 14 px fade corners in top 28 %) extracted unchanged and unit-tested; physical feel = owner review
 V04,Fades,VERIFIED (software),cargo test -p soundcraft-engine --test vocal_workflow vocal_v04,edit.fades_create equal-power at a join; render unchanged outside fade; undo exact. Audition is native/owner
 V05,Gain cleanup,VERIFIED,cargo test -p soundcraft-engine --test vocal_workflow vocal_v05,clip gain exact scale in source stage; fader untouched; undo exact; no normalization
 V06,Takes and comping,VERIFIED (software),cargo test -p soundcraft-engine --test vocal_workflow vocal_v06,phrase promoted from take 2 sample-exact with original alignment; alternates preserved; save/reopen identical render. Comp lane UI unchanged (existing playlists view)
@@ -11,6 +11,6 @@ V09,Strip silence,VERIFIED (software),cargo test -p soundcraft-engine --test voc
 V10,Grouped editing,VERIFIED (software),cargo test -p soundcraft-engine cmd::nudge (n05),clip groups move rigidly; locked member rejects whole command atomically
 V11,Time correction,VERIFIED (service level),cargo test -p soundcraft-engine --test vocal_workflow vocal_v11,WSOLA stretch: duration within 1%; 440 Hz pitch within 2%; finite; source untouched. Background render/transport non-blocking not tested; listening is owner gate
 V12,Pitch correction,BLOCKED (owner plugin),n/a,needs a named owner VST3 pitch plugin (H2); no ARA/note editor (excluded)
-V13,Printing and handoff,PARTIAL,Sprint 3,Raw/Edited Dry/Processed/Full Mix paths staged to Sprint 3
+V13,Printing and handoff,VERIFIED (software),cargo test -p soundcraft-engine cmd::slots::tests::v13_named_export_paths,file.export_path raw / edited_dry / processed / full_mix differ exactly as declared (Sprint 3); missing-plugin export acknowledgment tested in cmd::bus
 V14,Interaction,PARTIAL,cargo test -p soundcraft-ui-egui nudge_keys,dedicated NUDGE toolbar group + distinct command ids; text/dialog focus blocks nudge; shortcut search/remap existing; no UI capture review executed
 E2E,V-E2E staged (Sprint 2 part),VERIFIED (software),cargo test -p soundcraft-engine --test vocal_workflow vocal_e2e,max abs error 0.0 vs independent reference; source hashes identical after save/reopen; see vocal-e2e.json
