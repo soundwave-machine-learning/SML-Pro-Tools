@@ -1,0 +1,446 @@
+{
+  "package": "SML Studio Next Four Sprints",
+  "revision": "2.2",
+  "date": "2026-10-11",
+  "status": "PREFLIGHT_READY_DOWNSTREAM_GATED_DRAFT",
+  "sprint_count": 4,
+  "requirement_count": 38,
+  "implementation_audit_performed": false,
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "role": "scope-change-or-external-project-brief",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "latest-owner-instruction"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts",
+      "provenance_sha256": null,
+      "sha256": "e0d79f3f738baf154be154a4e55b8947e7da29ad8b1453a032587b4a4887bc7e"
+    },
+    {
+      "path": "START_HERE.md",
+      "sha256": "af07313d0f3f959b61a39f3387bdfeaada11f81401a339dbcaeb52ea36b87613",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/ARCHITECTURE.md",
+      "sha256": "2a4d6caf967f5cc2f550ee75a7152a876a08f759565c703e6aea41bf87f45756",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/ASSISTANT_MASTERING.md",
+      "sha256": "ff9db79c17853068ca1ca8cfa9ed9f0470d28dc61787e7b31f93d9731d7e7139",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/AUTONOMOUS_BUILD_PROMPT.md",
+      "sha256": "c8c95a7d3dbf47c3e4e023e631915b2871f762380123dcae372dd2e474fbcbf2",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/DECISIONS.md",
+      "sha256": "0748a05070905ea6be4d3bea6b013089cc62d6c38f692d9317c78aa9969e9d4e",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/DOCUMENT_INDEX.md",
+      "sha256": "1af0b11857e21f3a957fe70834d2c3e225cd3bf42190a9baec75e1529cff3201",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/FOUNDATION_AUTHORITY.md",
+      "sha256": "99874d84fe96df0fb3e5a7a46eccc31875d1d7b2a5f13c3fc55ccf917ce7f57b",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/INDIVIDUAL_PLUGIN_BRIEF.md",
+      "role": "scope-change-or-external-project-brief",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "latest-owner-instruction"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts",
+      "provenance_sha256": null,
+      "sha256": "84de1e8b03cd9d3bfc2ac3f87122acbd75d489775a094d878dabb4f67507dda8"
+    },
+    {
+      "path": "docs/PACKAGE_AUDIT.md",
+      "sha256": "22c57abbd204c7faa73b46027f942071057ca900ace97651a9c1fb5fd5e8e0ca",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/PROCESSOR_SPEC.md",
+      "sha256": "ffd7b27b4c9ef486d8efffbea1ca4fe6ae2c333a2b5c0cbe47a177c734ba3daa",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/PROJECT_BRIEF.md",
+      "sha256": "7e2fc3363bbe90653bb923dbfc70224b9b4ebe68e6ebce07d70aebc30081979c",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/PROJECT_HANDOFF.md",
+      "sha256": "b61a81c18bf3e7712588ca3fb1f21c7db6102970b218957082361aa4b1b86eca",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/RELIABILITY_AND_ENGINE.md",
+      "sha256": "f0926a13ee7114a56d821c5d51433abb17d31d792a61609c911bfc0579d8494b",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/REPORTED_BASELINE.md",
+      "role": "reported-baseline",
+      "status": "REPORTED_NOT_INSPECTED",
+      "source_ids": [
+        "owner-supplied-Claude-final-report"
+      ],
+      "update_owner": "implementation-lead; retain provenance",
+      "provenance_sha256": null,
+      "sha256": "c8c1af62be71611255c63ea5217dd463b350a8eb48829366e083fec86ee9bb7a"
+    },
+    {
+      "path": "docs/REQUIREMENTS.md",
+      "sha256": "360dc5e9047c8e3d53163d012fcf62aea4b8c010d8783dcb2d9aa34f4f2d69cc",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/ROADMAP.md",
+      "sha256": "f24a1c990a82d682125db56b875effede0db572950685710458e05e832cdc942",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/SOURCES.md",
+      "sha256": "7bf42550b33a6897a620860d2f652b57043deee61f58f7630d4152ec46faa3cd",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/VALIDATION_AND_EXPERIMENTS.md",
+      "sha256": "24c1810a41521b141497ecdab198731ed1c43448c29fd75bc6be8cc0472770c8",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/WORKFLOW_UI_REMOTE.md",
+      "sha256": "c354aef36ffccbae02c3c17ebf19309e1b4025b69fc19c1c120fe60116333a39",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/foundation/BUS_WORKFLOW_SPEC.md",
+      "sha256": "2f183ee09b7bac647371dcd1e4db23987d23c09690588fa471019f8738ad0cc5",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "2f183ee09b7bac647371dcd1e4db23987d23c09690588fa471019f8738ad0cc5"
+    },
+    {
+      "path": "docs/foundation/CLOCK_LATENCY_RESEARCH.md",
+      "sha256": "cbd5aaf1e8afa7a8d47957860e6374c9093e36249615e2485647abbc6a8abddd",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "cbd5aaf1e8afa7a8d47957860e6374c9093e36249615e2485647abbc6a8abddd"
+    },
+    {
+      "path": "docs/foundation/CLOCK_LATENCY_SPEC.md",
+      "sha256": "71a8f4bc80e5b8b1d51920ce50eac2039024ba6e2642eb0c1fff70363b18dc37",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "71a8f4bc80e5b8b1d51920ce50eac2039024ba6e2642eb0c1fff70363b18dc37"
+    },
+    {
+      "path": "docs/foundation/EDIT_TOOLBAR_SPEC.md",
+      "sha256": "4d515891ffb46e05272bcc01b14460637d841ae696cdc4b5b1ea75087759e4ed",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "4d515891ffb46e05272bcc01b14460637d841ae696cdc4b5b1ea75087759e4ed"
+    },
+    {
+      "path": "docs/foundation/LUNA_HARRISON_WORKFLOW_RESEARCH.md",
+      "sha256": "44aa29b1e215cc219ef090377ddcc172762d1969bb93b587fd90a23aea6f2e26",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "44aa29b1e215cc219ef090377ddcc172762d1969bb93b587fd90a23aea6f2e26"
+    },
+    {
+      "path": "docs/foundation/MIXER_MODES_SPEC.md",
+      "sha256": "e037e0b594b901a20ce25ce18c257186eea4fd24afa61eb78dc3ff60929da31c",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "e037e0b594b901a20ce25ce18c257186eea4fd24afa61eb78dc3ff60929da31c"
+    },
+    {
+      "path": "docs/foundation/MIXER_SLOT_SPEC.md",
+      "sha256": "e5411e5581b15b0a86ffca5166b3d78de629b5a2dacc075a7eb0fdf342e7f5c4",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "e5411e5581b15b0a86ffca5166b3d78de629b5a2dacc075a7eb0fdf342e7f5c4"
+    },
+    {
+      "path": "docs/foundation/MIXER_SOUND_RESEARCH.md",
+      "sha256": "acd9830c577e40d531c605fc2c57da938a3243937489a68874ef665ac8e009c9",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "acd9830c577e40d531c605fc2c57da938a3243937489a68874ef665ac8e009c9"
+    },
+    {
+      "path": "docs/foundation/NUDGE_SPEC.md",
+      "sha256": "0e5e5ebe74ec203268ef02010c0f5af70dd434d68e76f1c7b51ff1f706355e98",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "0e5e5ebe74ec203268ef02010c0f5af70dd434d68e76f1c7b51ff1f706355e98"
+    },
+    {
+      "path": "docs/foundation/REFERENCE_BEHAVIOR.md",
+      "sha256": "1bd4afab0d209b21ea6dfd0d9e3e6e460c0aec25198f55d92159cef690c78d95",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "1bd4afab0d209b21ea6dfd0d9e3e6e460c0aec25198f55d92159cef690c78d95"
+    },
+    {
+      "path": "docs/foundation/VISUAL_MIXER_SPEC.md",
+      "sha256": "db68f35d90db5f3084a6343f8b98d1e11e84e55a13e895b910187ce2d8935eec",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "db68f35d90db5f3084a6343f8b98d1e11e84e55a13e895b910187ce2d8935eec"
+    },
+    {
+      "path": "docs/foundation/VOCAL_EDITING_SPEC.md",
+      "sha256": "bebec48cabda084dfae67083f8be2859a7ed7ce2a00b64a9b8521f10b2b382c3",
+      "role": "preserved-foundation",
+      "status": "HISTORICAL_REQUIREMENTS_WITH_OVERRIDES",
+      "source_ids": [
+        "prior-package-r1.7"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": "bebec48cabda084dfae67083f8be2859a7ed7ce2a00b64a9b8521f10b2b382c3"
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_01.md",
+      "sha256": "cefbd0141c05a766c7e28e712e732cdc9f4d2b1b686de70cbec569e457a268a4",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_02.md",
+      "sha256": "5eac08256e9fe20cb3a96f449142d27454c387faf8f4ac82a2883685ae49a52a",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_03.md",
+      "sha256": "05587fc499588cdec00ccb0b6e02eb8c2ce483a8c6652a6b0a816c539498e309",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_04.md",
+      "sha256": "232d7a4bb141a442d46d12f0814ca54959c7676414d4196fab5769b5d4330472",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    },
+    {
+      "path": "tools/verify_package.py",
+      "sha256": "d32dab6b10004cd79aab991f504b755a4e81338c7b24c4240f909c14784e6983",
+      "role": "planning-or-verification",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source_ids": [
+        "owner-conversation",
+        "S01-S25-as-applicable"
+      ],
+      "update_owner": "implementation-lead; preserve issued contracts and append explicit amendments",
+      "provenance_sha256": null
+    }
+  ],
+  "reported_baseline": {
+    "branch": "fable/recording-core",
+    "commit": "396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b",
+    "evidence_class": "REPORTED",
+    "inspected": false
+  }
+}
