@@ -57,3 +57,9 @@ Container needed `libasound2-dev pkg-config libudev-dev mesa-vulkan-drivers libv
 Inspect the branch history and reports before acting; never infer completion from this file.
 Unfinished rows stay PARTIAL until real evidence exists. Native results must come from the target
 machine. Next action: `docs/AUTONOMOUS_BUILD_FINAL_REPORT.md` → "Exact next action".
+
+## Checkpoint
+Final report/handoff source commit: `c74ac7a6ef2e8c2e4dd46f68940d72af53e13af6` (2026-10-11 ≈19:47Z) on `fable/recording-core`;
+artifacts built from `7838032e5d42a192e8355b108247d3a7d882fb22` (later commits are docs only).
+Final regression: `cargo xtask ci` exit 0, 616 passed, 0 failed. Not pushed; nothing merged.
+This line is added in a follow-up commit (a commit cannot contain its own SHA).
