@@ -16,7 +16,7 @@ today; anything not yet validated on the target machine is marked.
   never used silently. ASIO is not compiled in this build.
 - Input channels: a track records the input its *Input* selector names ("In 3", "In 1-2"). If
   the input device lacks that channel, Record refuses to start and says which track and channel;
-  it never records a different input instead. A one-input device can feed a stereo track (the
+  it never records (or monitors) a different input instead. A one-input device can feed a stereo track (the
   same signal on both sides).
 - *Not yet validated on a real Windows interface (H1).*
 

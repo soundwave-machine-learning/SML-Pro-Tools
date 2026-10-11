@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (608 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (609 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -121,7 +121,9 @@ commit; result in `regression.log`):
   refuses to start (and `add_recording` refuses atomically) when an armed track's input
   channels are missing; a one-input device feeding a stereo track stays dual mono. A failed
   take start also clears the player's recording flag
-  (`recording_never_substitutes_another_input_channel`).
+  (`recording_never_substitutes_another_input_channel`). Input monitoring had the same
+  upstream modulo mapping: a missing channel now monitors silence instead of another input
+  (`monitoring_never_substitutes_another_input_channel`).
 - **CL05 session swap** — replaced `Arc<Session>` returned to the UI thread for dropping
   (`replaced_sessions_are_dropped_off_the_audio_thread`).
 

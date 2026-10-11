@@ -1136,9 +1136,12 @@ fn process_strip(
                 }
                 _ => 0,
             };
-            let n_in = live.input.len().max(1);
+            // A channel the device does not have is silent — never another physical input; a
+            // one-input device feeds a stereo track as dual mono (same rule as recording).
+            let dual_mono = live.input.len() == 1 && first == 0;
             for (k, dst) in strip.buf.iter_mut().enumerate() {
-                if let Some(src) = live.input.get((first + k) % n_in) {
+                let ch = if dual_mono { 0 } else { first + k };
+                if let Some(src) = live.input.get(ch) {
                     for (d, x) in dst.iter_mut().zip(src.iter()).take(frames) {
                         *d = *x;
                     }
@@ -3022,6 +3025,28 @@ mod sml_graph_tests {
         let reference = run(false, false);
         assert_eq!(run(true, true), reference, "announced: identical to the per-block check");
         assert_ne!(run(true, false), reference, "unannounced change is (by contract) not picked up");
+    }
+
+    /// R01/H1: input monitoring hears exactly the track's input channel; a missing channel is
+    /// silent (never another input); a one-input device feeds a stereo track as dual mono.
+    #[test]
+    fn monitoring_never_substitutes_another_input_channel() {
+        let hear = |fmt: ChannelFormat, input: &str, device_channels: usize| -> Vec<f32> {
+            let mut s = Session::default();
+            let t = s.add_track(TrackKind::Audio, fmt, None);
+            let tr = s.track_mut(t).unwrap();
+            tr.mixer.input_monitor = true;
+            tr.mixer.input = Route::Hardware(input.into());
+            let mut eng = MixEngine::new(48_000.0, 256);
+            eng.input = (0..device_channels).map(|c| vec![(c + 1) as f32 * 0.1; 256]).collect();
+            let mut out = vec![vec![0.0f32; 256]; 2];
+            eng.render(&s, 0, 256, &mut out);
+            eng.strips[&t].buf.iter().map(|c| c[10]).collect()
+        };
+        assert_eq!(hear(ChannelFormat::Mono, "In 3", 4), vec![0.3f32], "input 3");
+        assert_eq!(hear(ChannelFormat::Mono, "In 3", 2), vec![0.0f32], "missing input is silent");
+        assert_eq!(hear(ChannelFormat::Stereo, "In 1-2", 1), vec![0.1f32, 0.1], "dual mono");
+        assert_eq!(hear(ChannelFormat::Stereo, "In 2-3", 2), vec![0.2f32, 0.0], "second side missing");
     }
 
     /// SL-T1 / VM-T2: empty/Clean slots at unity, 100 % width and mixer view state are
