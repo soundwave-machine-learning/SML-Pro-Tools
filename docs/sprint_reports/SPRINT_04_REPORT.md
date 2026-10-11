@@ -110,6 +110,8 @@ commit; result in `regression.log`):
   start derived from the timestamp (or transport) capture start: audio captured before the loop
   start is skipped, late capture shortens and shifts only the first take; punch-in while already
   looping is no longer misaligned (`loop_passes_follow_the_timestamp_capture_start`).
+  Review also found the earlier V07 note "count-in UI unchanged from upstream" misleading: no
+  musical count-in exists (pre-roll only). V07 stays PARTIAL; count-in is NOT IMPLEMENTED.
 - **R20 automation arbitration** — recall refused while playing; a recalled static value never
   overrides a Read envelope in rendered audio; Off makes the recalled value audible; saving
   while playing captures static model values (`vmt5_snapshot_recall_and_read_automation_arbitration`).

@@ -26,7 +26,7 @@ counter available); see "Budget" below.
 | Sprint | Status | Commit(s) | Report |
 |---|---|---|---|
 | 1 — Recording, clock, clean baseline (A1) | **PASS (portable)**; H1 pending | `f70ac26` | `docs/sprint_reports/SPRINT_01_REPORT.md` |
-| 2 — Vocal editing + Nudge (A2) | **PASS for executed rows**; V01/V03/V07/V13 closed in the Sprint 4 follow-up; V14 owner review, V12 owner plugin; N07 physical/N09 native, N10 claim-only | `c11b84f` | `SPRINT_02_REPORT.md` |
+| 2 — Vocal editing + Nudge (A2) | **PASS for executed rows**; V01/V03/V13 closed and V07 placement closed in the Sprint 4 follow-up (musical count-in NOT IMPLEMENTED); V14 owner review, V12 owner plugin; N07 physical/N09 native, N10 claim-only | `c11b84f` | `SPRINT_02_REPORT.md` |
 | 3 — Mixer, slots, own plugins, Visual (A3) | **PASS for executed rows** + two carry-over batches; H2/M-T7/SL-T8/VM-T7/8 pending; M-T3/4/8 deferred by owner | `4295a19`, `525d882`, `a130594`, `b1181dc` | `SPRINT_03_REPORT.md` |
 | 4 — Performance, delivery (A4) | **A4 regression PASS**; native H1–H4 BLOCKED; artifacts rebuilt from `3eaef10` (unsigned, untested on Windows) | `d41d690`; follow-ups `903992d`, `6859781`, `1e04af1`, `cefa07b`, `3eaef10` + final docs commit | `SPRINT_04_REPORT.md` |
 
@@ -43,7 +43,7 @@ counter available); see "Budget" below.
 | R08 simple recording view, usable mixer | IMPLEMENTED; UX pending | Recording panel, Console SLOTS/Width rows (renders) |
 | R09 measured responsiveness | PARTIAL | headless profile: rayon overhead (measured) removed and per-block structure hash (measured) skipped in playback; p99 load ≤0.05; 64-frame deadline misses remain at VM-noise level (11–18 / 270 000 over six runs) — native H3 decides |
 | R10 regression, candidate, manual, delivery | regression PASS; candidates + manual done; native delivery checks pending | `regression.log`, `artifact-manifest.json`, `USER_GUIDE.md` |
-| R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv`: V01–V11 and V13 verified in software; V12 BLOCKED (owner pitch plugin); V14 interaction needs owner UI review |
+| R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv`: V01–V06, V08–V11 and V13 verified in software; V07 partial (no musical count-in); V12 BLOCKED (owner pitch plugin); V14 interaction needs owner UI review |
 | R12 dedicated Nudge | software PASS (N01–N06, N08, N07 unit); N07 physical/N09 native pending; N10 claim-only | Sprint 2 |
 | R13 easy bus/FX return | PASS (software); B-T7 owner pending | `buses/bus-tests.log` |
 | R14 full vocal walkthrough | software stages PASS; native/owner pending | `vocal-e2e.json`, `vocal-e2e-final.json` |
@@ -113,6 +113,21 @@ None performed (owner not available). Nothing approved on the owner's behalf.
 
 Both built from source commit `3eaef10` (clean tree; later commits are docs only). Linux CLI smoke
 PASS from clean extraction; Windows build never executed. Details: `artifact-manifest.json`.
+
+## Unfinished requirements (exact)
+Software, not done in this run:
+- **Musical count-in** (V07 / CL-T3 "count-in semantics"): not implemented; pre-roll only.
+- **CL05 realtime residue** (`realtime-audit.md`): graph `sync` still allocates on the audio
+  thread when the session *structure* changes (add track/insert/route); the command queue is
+  unbounded; plugin state capture runs between blocks on the audio thread.
+- **64-frame deadline misses** in the headless profile: 11–18 per 270 000 callbacks remain
+  (consistent with VM pauses, unproven).
+- **N07**: the UI toolkit does not distinguish the numeric keypad and has no Win modifier.
+- **UI screen/scale matrix**: renders exist only at 1600×1000 @2x.
+
+Needs the owner or the target machine (not executable here): H1–H4, CL-T6/7, N07 physical,
+N09, N10, VM-T7/8, SL-T8, M-T7, B-T7, V12 (owner pitch plugin), V14 owner UI review, owner
+listening/approval. Deferred by the owner: native summing/tape models (M-T3/4/8).
 
 ## Blockers (exact)
 1. No Windows x64 machine, audio interface, driver or owner plugins → H1–H4, CL-T6/7, N07
