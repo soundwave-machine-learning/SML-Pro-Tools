@@ -132,10 +132,31 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
             let _ = app.run("edit.tool", json!({"tool": tool}));
             true
         }
-        Key::Plus | Key::Minus if !m.command && app.ui.window == MainWindow::Edit => {
-            let dir = if key == Key::Plus { 1 } else { -1 };
-            let _ = app.run("edit.nudge", json!({"direction": dir}));
-            true
+        Key::Plus | Key::Minus | Key::Comma | Key::Period if app.ui.window == MainWindow::Edit => {
+            // Dedicated Nudge (NUDGE_SPEC preset). Text fields and dialogs never get here
+            // (`handle` returns early). egui cannot tell keypad from main-row +/- (recorded gap).
+            use crate::nudge_keys::{Focus, Mods, NudgeAction, NudgeKey, binding};
+            let nk = match key {
+                Key::Plus => NudgeKey::NumPlus,
+                Key::Minus => NudgeKey::NumMinus,
+                Key::Comma => NudgeKey::Comma,
+                _ => NudgeKey::Period,
+            };
+            let focus = if app.engine.session().edit.keyboard_focus == "commands" { Focus::EditKeyboardFocus } else { Focus::Edit };
+            let mods = Mods { ctrl: m.ctrl || (m.command && !mac), alt: m.alt, shift: m.shift, win: false };
+            match binding(nk, mods, focus) {
+                Some(NudgeAction::Command(id, dir)) => {
+                    if let Err(e) = app.run(id, json!({"direction": dir})) {
+                        app.ui.status = e;
+                    }
+                    true
+                }
+                Some(NudgeAction::ChangeValue(dir)) => {
+                    crate::toolbar::cycle_nudge_value(app, dir);
+                    true
+                }
+                None => false,
+            }
         }
         Key::Tab if plain || m.alt => {
             // Tab to next clip boundary (or transient when enabled).

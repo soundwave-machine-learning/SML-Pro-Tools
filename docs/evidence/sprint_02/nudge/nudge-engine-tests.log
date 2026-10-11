@@ -1,0 +1,54 @@
+# command: cargo test -p soundcraft-engine cmd::nudge
+# utc: 2026-10-11T16:04:46Z  source: f70ac26+worktree
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-f76b7e9532565dbf)
+
+running 8 tests
+test cmd::nudge::tests::n04_trims_and_selection_boundaries ... ok
+test cmd::nudge::tests::n03_content_slip_sign_and_handles ... ok
+test cmd::nudge::tests::n05_rigid_group_and_atomic_rejection ... ok
+test cmd::nudge::tests::n08_undo_redo_and_persistence ... ok
+test cmd::nudge::tests::n01_one_sample_round_trip ... ok
+test cmd::nudge::tests::n02_fractional_ms_accumulate_without_drift ... ok
+test cmd::nudge::tests::rejected_commands_do_not_advance_accumulation ... ok
+test cmd::nudge::tests::n06_modes_do_not_change_delta_and_tempo_changes_are_followed ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 119 filtered out; finished in 0.04s
+
+     Running tests/clap_e2e.rs (target/debug/deps/clap_e2e-b703f63c28d04381)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/hostile_params.rs (target/debug/deps/hostile_params-7afbce35eaf588d9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/hostile_sessions.rs (target/debug/deps/hostile_sessions-6b027445306fbb6a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/random_edits.rs (target/debug/deps/random_edits-a8243ab79ae0bf74)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/session_transport.rs (target/debug/deps/session_transport-fe5d52b5c7eac6f7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/vocal_workflow.rs (target/debug/deps/vocal_workflow-b9ee2488a9965fb7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 7 filtered out; finished in 0.00s
+
+EXIT: 0

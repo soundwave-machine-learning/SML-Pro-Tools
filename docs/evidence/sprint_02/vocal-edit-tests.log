@@ -1,0 +1,18 @@
+# command: cargo test -p soundcraft-engine --test vocal_workflow -- --nocapture --test-threads=1
+# utc: 2026-10-11T16:04:45Z  source: f70ac26+worktree
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running tests/vocal_workflow.rs (target/debug/deps/vocal_workflow-b9ee2488a9965fb7)
+
+running 7 tests
+test vocal_e2e_staged_through_save_reopen ... VOCAL_E2E {"clips":6,"max_abs_error_vs_reference":0.0,"playlists":3,"source_hashes_after_reopen":[4543898145070385541,3844735489054709586,12965532127067186545],"source_hashes_before":[4543898145070385541,3844735489054709586,12965532127067186545],"stage":"sprint2 (comp/edit/nudge/group/save-reopen)","tolerance":0.00001}
+ok
+test vocal_v02_separate_heal_trim_undo_keep_originals ... ok
+test vocal_v04_crossfade_and_fade_shapes ... ok
+test vocal_v05_clip_gain_breath_rides ... ok
+test vocal_v06_comp_phrase_from_alternate_take ... ok
+test vocal_v09_strip_silence_preserves_breath_with_padding ... ok
+test vocal_v11_time_stretch_service_duration_and_pitch ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+EXIT: 0

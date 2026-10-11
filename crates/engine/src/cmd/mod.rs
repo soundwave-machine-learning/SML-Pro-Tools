@@ -174,6 +174,11 @@ pub fn has_clipboard(e: &Engine) -> std::result::Result<(), String> {
     if e.clipboard.tracks.is_empty() { Err("the clipboard is empty".into()) } else { Ok(()) }
 }
 
+/// Exact (unrounded) samples of one step of the session's Nudge value; `None` for musical units.
+pub fn nudge_step_samples(s: &soundcraft_model::Session) -> Option<f64> {
+    nudge::step_exact(&s.edit.nudge_panel, s)
+}
+
 // ---- missing plugins (R05) ---------------------------------------------------------------
 
 /// Every active processor the session references that this build cannot run (removed upstream

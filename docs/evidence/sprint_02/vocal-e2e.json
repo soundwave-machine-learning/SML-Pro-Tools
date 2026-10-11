@@ -1,0 +1,20 @@
+{
+  "clips": 6,
+  "max_abs_error_vs_reference": 0.0,
+  "playlists": 3,
+  "source_hashes_after_reopen": [
+    4543898145070385541,
+    3844735489054709586,
+    12965532127067186545
+  ],
+  "source_hashes_before": [
+    4543898145070385541,
+    3844735489054709586,
+    12965532127067186545
+  ],
+  "stage": "sprint2 (comp/edit/nudge/group/save-reopen)",
+  "tolerance": 1e-05,
+  "command": "cargo test -p soundcraft-engine --test vocal_workflow vocal_e2e -- --nocapture",
+  "reference": "independently constructed per-sample expectation (take3 phrase A, take2 phrase B at -3 dB, take1 elsewhere, breath cleared) x engine legacy centre pan gain",
+  "remaining_stages": "Sprint 3: bus/host/export; Sprint 4: native walkthrough (owner)"
+}

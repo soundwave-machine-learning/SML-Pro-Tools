@@ -598,6 +598,65 @@ pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, ra
     Ok(out)
 }
 
+/// Loop recording (V07): splits one continuous capture into one take per loop pass of `sel`,
+/// each on its own playlist (earlier passes stay as alternates), every pass placed at
+/// `sel.start`. A final partial pass shorter than 1/8 of the loop is dropped. Returns the number
+/// of takes made. Pass boundaries are exact sample multiples of the loop length (at the capture
+/// rate); the capture file itself is not modified.
+pub fn add_loop_recording(e: &mut Engine, sel: soundcraft_time::Range, channels: &[Vec<f32>], rate: u32) -> usize {
+    let pass =
+        usize::try_from(soundcraft_time::to_samples(sel.len() as f64 * f64::from(rate) / e.session().sample_rate.as_f64())).unwrap_or(0).max(1);
+    let total = channels.first().map_or(0, Vec::len);
+    let passes = total.div_ceil(pass).max(1);
+    let mut made = 0;
+    for k in 0..passes {
+        let chunk: Vec<Vec<f32>> =
+            channels.iter().map(|c| c.get(k * pass..((k + 1) * pass).min(c.len())).map(<[f32]>::to_vec).unwrap_or_default()).collect();
+        if chunk.first().is_none_or(|c| c.len() < pass / 8) {
+            continue;
+        }
+        if made > 0 {
+            let armed: Vec<u64> = e.session().tracks.iter().filter(|t| t.mixer.record_arm).map(|t| t.id.0).collect();
+            let _ = e.execute("track.playlist_new", &serde_json::json!({"tracks": armed}));
+        }
+        if add_recording(e, sel.start, chunk, rate).is_ok() {
+            made += 1;
+        }
+    }
+    made
+}
+
+#[cfg(test)]
+mod loop_record_tests {
+    use super::*;
+
+    /// V07 / CL-T3: 3.5 loop passes → 4 takes on 4 playlists, each starting exactly at the
+    /// loop start with the capture samples of its pass; a sliver tail (< 1/8 pass) is dropped.
+    #[test]
+    fn loop_passes_become_aligned_takes() {
+        let mut e = Engine::default();
+        let t = e.session_mut().add_track(TrackKind::Audio, soundcraft_model::ChannelFormat::Mono, Some("Vox"));
+        e.session_mut().track_mut(t).unwrap().mixer.record_arm = true;
+        let sel = soundcraft_time::Range::new(48_000, 48_000 + 1000);
+        let capture: Vec<f32> = (0..3500).map(|i| i as f32).collect();
+        assert_eq!(add_loop_recording(&mut e, sel, std::slice::from_ref(&capture), 48_000), 4);
+        let tr = e.session().track(t).unwrap();
+        assert_eq!(tr.playlists.len(), 4);
+        for (k, pl) in tr.playlists.iter().enumerate() {
+            let c = &pl.clips[0];
+            assert_eq!(c.start, 48_000, "pass {k} placed at the loop start");
+            let ClipContent::Audio { source, offset } = c.content else { panic!() };
+            let audio = e.session().pool.get(source).unwrap();
+            assert_eq!(audio.channel(0).unwrap()[offset as usize], (k * 1000) as f32, "pass {k} begins at its exact sample");
+        }
+        let sliver: Vec<f32> = (0..3100).map(|i| i as f32).collect();
+        let mut e2 = Engine::default();
+        let t2 = e2.session_mut().add_track(TrackKind::Audio, soundcraft_model::ChannelFormat::Mono, None);
+        e2.session_mut().track_mut(t2).unwrap().mixer.record_arm = true;
+        assert_eq!(add_loop_recording(&mut e2, sel, &[sliver], 48_000), 3, "100-sample tail (< 1/8 pass) dropped");
+    }
+}
+
 #[cfg(test)]
 mod save_tests {
     use super::*;

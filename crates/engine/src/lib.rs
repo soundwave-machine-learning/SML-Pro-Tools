@@ -20,7 +20,7 @@ use soundcraft_model::{Clip, Session, TrackId};
 use soundcraft_time::Samples;
 use std::sync::Arc;
 
-pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command};
+pub use cmd::{CommandInfo, CommandSpec, command_specs, find_command, nudge_step_samples};
 pub use soundcraft_model as model;
 
 /// Shuts the third-party plugin hosts down, running the module exit of every plugin binary they

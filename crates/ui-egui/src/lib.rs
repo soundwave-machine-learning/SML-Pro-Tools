@@ -15,6 +15,7 @@ pub mod icons;
 pub mod menus;
 pub mod midi_editor;
 pub mod mix_window;
+pub mod nudge_keys;
 pub mod ops_windows;
 pub mod palette;
 pub mod panels;
@@ -566,26 +567,7 @@ impl SoundApp {
         let sel = self.engine.session().edit.selection;
         if self.engine.session().edit.loop_record && !sel.is_empty() {
             // Split the capture into one take per loop pass; each pass gets its own playlist.
-            let pass = usize::try_from(soundcraft_time::to_samples(sel.len() as f64 * f64::from(rate) / self.engine.session().sample_rate.as_f64()))
-                .unwrap_or(0)
-                .max(1);
-            let total = take.channels.first().map_or(0, Vec::len);
-            let passes = total.div_ceil(pass).max(1);
-            let mut made = 0;
-            for k in 0..passes {
-                let chunk: Vec<Vec<f32>> =
-                    take.channels.iter().map(|c| c.get(k * pass..((k + 1) * pass).min(c.len())).map(<[f32]>::to_vec).unwrap_or_default()).collect();
-                if chunk.first().is_none_or(|c| c.len() < pass / 8) {
-                    continue;
-                }
-                if made > 0 {
-                    let armed: Vec<u64> = self.engine.session().tracks.iter().filter(|t| t.mixer.record_arm).map(|t| t.id.0).collect();
-                    let _ = self.engine.execute("track.playlist_new", &serde_json::json!({"tracks": armed}));
-                }
-                if soundcraft_engine::io::add_recording(&mut self.engine, sel.start, chunk, rate).is_ok() {
-                    made += 1;
-                }
-            }
+            let made = soundcraft_engine::io::add_loop_recording(&mut self.engine, sel, &take.channels, rate);
             self.ui.status = format!("Loop-recorded {made} take(s)");
             return;
         }

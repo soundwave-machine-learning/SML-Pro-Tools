@@ -1,0 +1,130 @@
+# command: cargo test -p soundcraft-ui-egui nudge_keys
+# utc: 2026-10-11T16:04:46Z  source: f70ac26+worktree
+   Compiling proc-macro2 v1.0.107
+   Compiling wgpu-hal v30.0.1
+   Compiling wgpu-core v30.0.1
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling quote v1.0.47
+   Compiling wgpu v30.0.1
+   Compiling syn v3.0.6
+   Compiling syn v2.0.119
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling accesskit_consumer v0.35.0
+   Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+   Compiling tempfile v3.27.0
+   Compiling kittest v0.4.0
+   Compiling bytemuck_derive v1.12.1
+   Compiling thiserror-impl v2.0.21
+   Compiling serde_derive v1.0.229
+   Compiling zerocopy-derive v0.8.60
+   Compiling bytemuck v1.25.2
+   Compiling symphonia-core v0.5.5
+   Compiling symphonia-metadata v0.5.5
+   Compiling thiserror v2.0.21
+   Compiling symphonia-utils-xiph v0.5.5
+   Compiling naga-types v30.0.1
+   Compiling font-types v0.12.6
+   Compiling color v0.3.3
+   Compiling read-fonts v0.41.0
+   Compiling peniko v0.6.1
+   Compiling vello_common v0.1.0
+   Compiling serde v1.0.229
+   Compiling soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+   Compiling zerocopy v0.8.60
+   Compiling half v2.7.1
+   Compiling naga v30.0.1
+   Compiling wgpu-types v30.0.1
+   Compiling symphonia-format-ogg v0.5.5
+   Compiling symphonia-codec-vorbis v0.5.5
+   Compiling symphonia-bundle-flac v0.5.5
+   Compiling symphonia-format-isomp4 v0.5.5
+   Compiling symphonia-format-mkv v0.5.5
+   Compiling symphonia-format-caf v0.5.5
+   Compiling symphonia-bundle-mp3 v0.5.5
+   Compiling symphonia-format-riff v0.5.5
+   Compiling symphonia-codec-alac v0.5.5
+   Compiling symphonia-codec-adpcm v0.5.5
+   Compiling symphonia-codec-aac v0.5.5
+   Compiling symphonia-codec-pcm v0.5.5
+   Compiling emath v0.36.2
+   Compiling ecolor v0.36.2
+   Compiling symphonia v0.5.5
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling ahash v0.8.12
+   Compiling harfrust v0.12.0
+   Compiling skrifa v0.44.0
+   Compiling vello_cpu v0.1.0
+   Compiling gpu-allocator v0.28.0
+   Compiling epaint v0.36.2
+   Compiling soundcraft-audio-io v0.5.0 (/home/user/SML-Pro-Tools/crates/audio-io)
+   Compiling soundcraft-midi v0.5.0 (/home/user/SML-Pro-Tools/crates/midi)
+   Compiling soundcraft-time v0.5.0 (/home/user/SML-Pro-Tools/crates/time)
+   Compiling image v0.25.10
+   Compiling soundcraft-model v0.5.0 (/home/user/SML-Pro-Tools/crates/model)
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+   Compiling soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+   Compiling soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+   Compiling egui v0.36.2
+   Compiling soundcraft-video v0.5.0 (/home/user/SML-Pro-Tools/crates/video)
+   Compiling egui-wgpu v0.36.2
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+   Compiling craft-ui v0.1.0 (https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51)
+   Compiling soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+   Compiling dify v0.8.0
+   Compiling egui_kittest v0.36.2
+    Finished `test` profile [optimized + debuginfo] target(s) in 4m 15s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_ui_egui-164f5f7704503e0e)
+
+running 4 tests
+test nudge_keys::nudge_keys_tests::nudge_keys_focus_blocks_edits ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_modifier_matrix ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_laptop_mapping_needs_explicit_focus ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_every_target_has_a_distinct_command ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.00s
+
+     Running tests/clip_gain_fader.rs (target/debug/deps/clip_gain_fader-75c0a2bd9f7d13c0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/clip_menu.rs (target/debug/deps/clip_menu-c67b60309044c159)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/docking_workflows.rs (target/debug/deps/docking_workflows-c3e48fc458fbb5ed)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/midi_panel.rs (target/debug/deps/midi_panel-a875d7bc188d2ddc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/shared_controls.rs (target/debug/deps/shared_controls-be4bb72288fa7c71)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 0.00s
+
+     Running tests/shortcuts.rs (target/debug/deps/shortcuts-49bb4de20be33b97)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/theme_docking.rs (target/debug/deps/theme_docking-9678aabe6f004677)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+EXIT: 0

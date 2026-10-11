@@ -31,6 +31,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         tools(app, ui);
         counters(app, ui);
         grid_nudge(app, ui);
+        nudge_panel(app, ui);
         transport(app, ui);
         tempo_meter(app, ui);
         output_meter(app, ui);
@@ -245,6 +246,78 @@ fn grid_nudge(app: &mut SoundApp, ui: &mut Ui) {
     for rr in [gr, nr] {
         icons::draw(ui.painter(), Rect::from_center_size(pos2(rr.max.x - 6.0, rr.center().y), vec2(10.0, 10.0)), "triangle_down", t.text_dim);
     }
+}
+
+/// Steps the dedicated Nudge value through the SML presets (Ctrl+Alt+Num±).
+pub fn cycle_nudge_value(app: &mut SoundApp, dir: i64) {
+    let p = app.engine.session().edit.nudge_panel.clone();
+    let presets = soundcraft_model::NUDGE_PRESETS;
+    let cur = presets.iter().position(|(v, u)| *u == p.unit && (*v - p.value).abs() < 1e-9);
+    let n = presets.len() as i64;
+    let next = match cur {
+        Some(i) => (i as i64 + dir).rem_euclid(n),
+        None => 0,
+    };
+    if let Some((v, u)) = presets.get(next as usize) {
+        let _ = app.run("nudge.set", json!({"value": v, "unit": u.label()}));
+    }
+}
+
+/// The always-visible dedicated NUDGE group: value, unit, target, arrows and the exact
+/// displacement readout (e.g. "10 ms = 480 smp"). Separate from the Grid value.
+fn nudge_panel(app: &mut SoundApp, ui: &mut Ui) {
+    use soundcraft_model::{NudgeTarget, NudgeUnit};
+    let p = app.engine.session().edit.nudge_panel.clone();
+    let sr = app.engine.session().sample_rate.as_f64();
+    ui.vertical(|ui| {
+        ui.spacing_mut().item_spacing.y = 2.0;
+        ui.horizontal(|ui| {
+            ui.label(egui::RichText::new("NUDGE").strong().small());
+            if ui.small_button("◀").on_hover_text("Nudge earlier (Num-)").clicked()
+                && let Err(e) = app.run("nudge.apply", json!({"direction": -1}))
+            {
+                app.ui.status = e;
+            }
+            if ui.small_button("▶").on_hover_text("Nudge later (Num+)").clicked()
+                && let Err(e) = app.run("nudge.apply", json!({"direction": 1}))
+            {
+                app.ui.status = e;
+            }
+            let mut v = p.value;
+            if ui.add(egui::DragValue::new(&mut v).range(0.001..=100_000.0).speed(0.1).max_decimals(3)).changed() {
+                let _ = app.run("nudge.set", json!({"value": v}));
+            }
+            egui::ComboBox::from_id_salt("nudge_unit").selected_text(p.unit.label()).width(64.0).show_ui(ui, |ui| {
+                for u in [NudgeUnit::Samples, NudgeUnit::Milliseconds, NudgeUnit::Seconds, NudgeUnit::Ticks, NudgeUnit::Frames] {
+                    if ui.selectable_label(p.unit == u, u.label()).clicked() {
+                        let _ = app.run("nudge.set", json!({"unit": u.label()}));
+                    }
+                }
+            });
+        });
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_id_salt("nudge_target").selected_text(p.target.label()).width(130.0).show_ui(ui, |ui| {
+                for tg in NudgeTarget::ALL {
+                    if ui.selectable_label(p.target == tg, tg.label()).clicked() {
+                        let _ = app.run("nudge.set", json!({"target": tg.id()}));
+                    }
+                }
+            });
+            for (v, u, label) in [(1.0, "samples", "1 smp"), (1.0, "ms", "1 ms"), (10.0, "ms", "10 ms")] {
+                if ui.small_button(label).clicked() {
+                    let _ = app.run("nudge.set", json!({"value": v, "unit": u}));
+                }
+            }
+            let readout = match p.unit {
+                NudgeUnit::Ticks => format!("{:.0} ticks (tempo map)", p.value),
+                _ => {
+                    let smp = soundcraft_engine::nudge_step_samples(app.engine.session()).unwrap_or(0.0);
+                    format!("= {smp:.2} smp @ {:.1} kHz", sr / 1000.0)
+                }
+            };
+            ui.label(egui::RichText::new(readout).small());
+        });
+    });
 }
 
 fn value_menu(app: &mut SoundApp, resp: &egui::Response, cmd: &str) {
