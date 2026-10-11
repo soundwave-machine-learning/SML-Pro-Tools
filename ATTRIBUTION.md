@@ -48,3 +48,4 @@ and, at runtime, the operating system's own UI fonts when available (never redis
 | `docs/evidence/sprint_03/ui/console.png` | SML Recording project (generated) | offscreen render of this app's UI (`ui_shot` example, demo session synthesised in code) | MIT OR Apache-2.0 |
 | `docs/evidence/sprint_03/ui/visual.png` | SML Recording project (generated) | offscreen render of this app's UI (`ui_shot` example, demo session synthesised in code) | MIT OR Apache-2.0 |
 | `docs/evidence/sprint_03/ui/split.png` | SML Recording project (generated) | offscreen render of this app's UI (`ui_shot` example, demo session synthesised in code) | MIT OR Apache-2.0 |
+| `docs/evidence/sprint_03/ui/recording_panel.png` | SML Recording project (generated) | offscreen render of this app's UI (`ui_shot` example, demo session synthesised in code) | MIT OR Apache-2.0 |

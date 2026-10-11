@@ -195,7 +195,15 @@ pub fn canvas(app: &mut SoundApp, ui: &mut Ui) {
             "{readout}\nDrag: pan (x) / fader (y). Shift: lock axis. Alt: fine. Double-click: reset to 0 dB / centre. Esc: cancel drag."
         ));
         if resp.clicked() {
-            let _ = app.run("edit.select", json!({"tracks": [tr.id.0]}));
+            // Ctrl/Cmd+click toggles the node in a multi-selection; plain click selects it alone.
+            let toggle = ui.input(|i| i.modifiers.command);
+            let mut sel: Vec<u64> = if toggle { selected.iter().map(|t| t.0).collect() } else { Vec::new() };
+            if let Some(i) = sel.iter().position(|x| *x == tr.id.0) {
+                sel.remove(i);
+            } else {
+                sel.push(tr.id.0);
+            }
+            let _ = app.run("edit.select", json!({"tracks": sel}));
         }
         if resp.double_clicked() {
             let _ = app.run("mix.volume", json!({"track": tr.id.0, "db": 0.0}));
@@ -211,12 +219,12 @@ pub fn canvas(app: &mut SoundApp, ui: &mut Ui) {
     if ui.input(|i| i.key_pressed(egui::Key::Escape))
         && let Some(g) = app.ui.visual_gesture.take()
     {
-        // Cancel: restore the gesture's starting values inside the same merged step.
-        if let Some(tr) = app.engine.session().track(g.track).cloned() {
-            let key = format!("visual:{}", g.track.0);
-            let _ = app.engine.execute_merged("mix.volume", &json!({"track": tr.id.0, "db": g.start_db}), &key);
-            for (i, v) in g.start_pan.iter().enumerate() {
-                let _ = app.engine.execute_merged("mix.pan", &json!({"track": tr.id.0, "pan": v, "index": i}), &key);
+        // Cancel: restore every member's starting values inside the same merged step.
+        let key = format!("visual:{}", g.track.0);
+        for (id, db, pan) in &g.members {
+            let _ = app.engine.execute_merged("mix.volume", &json!({"track": id.0, "db": db}), &key);
+            for (i, v) in pan.iter().enumerate() {
+                let _ = app.engine.execute_merged("mix.pan", &json!({"track": id.0, "pan": v, "index": i}), &key);
             }
         }
         app.engine.end_merge();
@@ -240,15 +248,53 @@ pub struct VisualGesture {
     pub start_db: f32,
     pub start_pan: Vec<f32>,
     pub start_pos: egui::Pos2,
+    /// Every node moved by this gesture (the dragged one plus the rest of a multi-selection):
+    /// (id, start dB, start pan endpoints).
+    pub members: Vec<(TrackId, f32, Vec<f32>)>,
+}
+
+/// Engine fader limits (dB).
+pub const FADER_MIN_DB: f32 = -144.0;
+pub const FADER_MAX_DB: f32 = 12.0;
+
+/// VM02 group vertical drag: one common dB delta for every member, clamped so no member leaves
+/// the engine range (relative finite-dB offsets are preserved). A member at −∞ has no finite
+/// offset, so a multi-member vertical drag containing one is rejected.
+pub fn common_db_delta(starts: &[f32], want: f32) -> Result<f32, &'static str> {
+    if starts.len() > 1 && starts.iter().any(|s| *s <= FADER_MIN_DB) {
+        return Err("a selected channel is at -inf: set its level numerically, then drag the group");
+    }
+    let lo = starts.iter().map(|s| FADER_MIN_DB - s).fold(f32::NEG_INFINITY, f32::max);
+    let hi = starts.iter().map(|s| FADER_MAX_DB - s).fold(f32::INFINITY, f32::min);
+    Ok(if want.is_finite() { want.clamp(lo, hi.max(lo)) } else { 0.0 })
+}
+
+/// VM02 group horizontal drag: a common pan delta keeping every mono member inside [-1, 1]
+/// (stereo members narrow their own span at the edges instead).
+pub fn common_pan_delta(mono_starts: &[f32], want: f32) -> f32 {
+    let lo = mono_starts.iter().map(|p| -1.0 - p).fold(-2.0f32, f32::max);
+    let hi = mono_starts.iter().map(|p| 1.0 - p).fold(2.0f32, f32::min);
+    if want.is_finite() { want.clamp(lo, hi.max(lo)) } else { 0.0 }
 }
 
 fn node_drag(app: &mut SoundApp, ui: &Ui, resp: &egui::Response, tr: &Track, r: Rect) {
     if resp.drag_started() {
+        let sel = app.engine.session().edit.selected_tracks.clone();
+        let members: Vec<(TrackId, f32, Vec<f32>)> = if sel.contains(&tr.id) && sel.len() > 1 {
+            sel.iter()
+                .filter_map(|id| app.engine.session().track(*id))
+                .filter(|t| t.kind != TrackKind::Master)
+                .map(|t| (t.id, t.mixer.volume_db, t.mixer.pan.clone()))
+                .collect()
+        } else {
+            vec![(tr.id, tr.mixer.volume_db, tr.mixer.pan.clone())]
+        };
         app.ui.visual_gesture = Some(VisualGesture {
             track: tr.id,
             start_db: tr.mixer.volume_db,
             start_pan: tr.mixer.pan.clone(),
             start_pos: resp.interact_pointer_pos().unwrap_or_default(),
+            members,
         });
     }
     if resp.dragged()
@@ -261,18 +307,43 @@ fn node_drag(app: &mut SoundApp, ui: &Ui, resp: &egui::Response, tr: &Track, r: 
         let d = (pos - g.start_pos) * fine;
         let (lock_x, lock_y) = if m.shift { (d.y.abs() > d.x.abs(), d.x.abs() >= d.y.abs()) } else { (false, false) };
         let key = format!("visual:{}", tr.id.0);
+        let group = g.members.len() > 1;
         if !lock_y {
             // -inf has no finite dB offset: vertical drag from -inf starts at the bottom.
             let base_y = db_to_y(g.start_db.max(BOTTOM_DB), r);
             let db = y_to_db(base_y + d.y, r);
             let db = if db <= BOTTOM_DB + 0.01 { g.start_db.min(BOTTOM_DB) } else { (db * 10.0).round() / 10.0 };
-            let _ = app.engine.execute_merged("mix.volume", &json!({"track": tr.id.0, "db": db}), &key);
+            if group {
+                let starts: Vec<f32> = g.members.iter().map(|m| m.1).collect();
+                match common_db_delta(&starts, db - g.start_db) {
+                    Ok(delta) => {
+                        for (id, s, _) in &g.members {
+                            let _ = app.engine.execute_merged("mix.volume", &json!({"track": id.0, "db": s + delta}), &key);
+                        }
+                    }
+                    Err(e) => app.ui.status = e.into(),
+                }
+            } else {
+                let _ = app.engine.execute_merged("mix.volume", &json!({"track": tr.id.0, "db": db}), &key);
+            }
         }
         if !lock_x {
             let start_center = node_x(&Track { mixer: soundcraft_model::Mixer { pan: g.start_pan.clone(), ..tr.mixer.clone() }, ..tr.clone() });
             let pan = x_to_pan(pan_to_x(start_center, r) + d.x, r);
-            for cmd in pan_commands(tr, &g.start_pan, pan) {
-                let _ = app.engine.execute_merged("mix.pan", &cmd, &key);
+            if group {
+                let monos: Vec<f32> = g.members.iter().filter(|m| m.2.len() == 1).map(|m| m.2[0]).collect();
+                let delta = common_pan_delta(&monos, pan - start_center);
+                for (id, _, sp) in &g.members {
+                    let Some(mt) = app.engine.session().track(*id).cloned() else { continue };
+                    let c0 = node_x(&Track { mixer: soundcraft_model::Mixer { pan: sp.clone(), ..mt.mixer.clone() }, ..mt.clone() });
+                    for cmd in pan_commands(&mt, sp, c0 + delta) {
+                        let _ = app.engine.execute_merged("mix.pan", &cmd, &key);
+                    }
+                }
+            } else {
+                for cmd in pan_commands(tr, &g.start_pan, pan) {
+                    let _ = app.engine.execute_merged("mix.pan", &cmd, &key);
+                }
             }
         }
     }
@@ -355,6 +426,19 @@ mod tests {
         }
         // +18 dB is drawn at the top edge but the mapping is not used to rewrite it.
         assert_eq!(db_to_y(18.0, r), r.min.y);
+    }
+
+    /// VM-T4 group rules: common delta keeps relative offsets, clamps at the engine limits,
+    /// rejects a −∞ member for vertical moves; pan delta keeps mono members in range.
+    #[test]
+    fn group_drag_deltas() {
+        assert_eq!(common_db_delta(&[-6.0, -12.0], 3.0), Ok(3.0));
+        assert_eq!(common_db_delta(&[6.0, -12.0], 10.0), Ok(6.0), "clamped by the member nearest +12");
+        assert!(common_db_delta(&[-6.0, -144.0], 3.0).is_err());
+        assert_eq!(common_db_delta(&[-144.0], 6.0), Ok(6.0), "single node may leave -inf");
+        assert_eq!(common_pan_delta(&[0.5, -0.2], 0.8), 0.5);
+        assert_eq!(common_pan_delta(&[0.5, -0.2], -1.0), -0.8);
+        assert_eq!(common_pan_delta(&[], 0.3), 0.3);
     }
 
     #[test]

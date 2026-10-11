@@ -453,6 +453,7 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
 /// One dedicated slot row: provider name (Clean/None when empty), click for the slot menu
 /// (installed plugins, Clean/None, bypass, trim, Master Tape Pre/Post). No model knobs exist.
 fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcraft_model::SlotKind, r: Rect) {
+    let scan = app.plugin_scan.clone();
     use soundcraft_model::{SlotKind, TapePosition};
     let t = Tokens::current();
     let slot = track.mixer.slots.get(kind);
@@ -495,7 +496,7 @@ fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcra
         if ui.button(format!("{empty_name} (identity)")).clicked() {
             run_report(app, "mix.slot", json!({"track": id.0, "slot": kind.id(), "plugin": ""}));
         }
-        if let Some(p) = hosted_menus(ui, false) {
+        if let Some(p) = hosted_menus(ui, &scan, false) {
             run_report(app, "mix.slot", json!({"track": id.0, "slot": kind.id(), "plugin": p}));
         }
         ui.separator();
@@ -584,6 +585,7 @@ fn insert_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, slot: usize, r: R
 }
 
 pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, occupied: bool) {
+    let scan = app.plugin_scan.clone();
     if occupied {
         if ui.button("Bypass").clicked() {
             let _ = app.run("mix.insert_bypass", json!({"track": id.0, "slot": slot}));
@@ -614,7 +616,7 @@ pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, oc
             }
         });
     }
-    if let Some(plugin) = hosted_menus(ui, false)
+    if let Some(plugin) = hosted_menus(ui, &scan, false)
         && let Err(e) = app.run("mix.insert", json!({"track": id.0, "slot": slot, "plugin": plugin}))
     {
         app.ui.status = e;
@@ -624,6 +626,7 @@ pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, oc
 /// The instrument picker of an instrument track: its instrument's editor, then the built-in,
 /// CLAP, VST3 and Audio Units instruments.
 pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
+    let scan = app.plugin_scan.clone();
     let slot = soundcraft_mix::INSTRUMENT_SLOT;
     let current = app.engine.session().track(id).and_then(|t| t.instrument.clone());
     if let Some(info) = current.as_ref().and_then(|i| plugin_info(&i.plugin)) {
@@ -651,7 +654,7 @@ pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
             }
         }
     });
-    if let Some(p) = hosted_menus(ui, true) {
+    if let Some(p) = hosted_menus(ui, &scan, true) {
         picked = Some(p);
     }
     if let Some(plugin) = picked
@@ -670,7 +673,25 @@ struct MenuPlugin {
 
 /// The CLAP, VST3 and (on macOS) Audio Units submenus, of effects or of instruments; returns the
 /// id picked. Each format is scanned the first time its submenu opens, then cached by its host.
-fn hosted_menus(ui: &mut Ui, instruments: bool) -> Option<String> {
+fn hosted_menus(ui: &mut Ui, scan: &crate::plugin_scan::Scanner, instruments: bool) -> Option<String> {
+    use crate::plugin_scan::Phase;
+    match scan.phase() {
+        Phase::Done => {}
+        Phase::Running => {
+            ui.label(format!("Scanning installed plugins… ({} of 2-3 formats)", scan.progress()));
+            if ui.button("Cancel scan").clicked() {
+                scan.cancel();
+            }
+            return None;
+        }
+        Phase::Idle | Phase::Cancelled => {
+            ui.label("Plugin scan not run (or cancelled)");
+            if ui.button("Scan now").clicked() {
+                scan.start(false);
+            }
+            return None;
+        }
+    }
     let mut picked = None;
     ui.menu_button("CLAP", |ui| {
         let list = soundcraft_clap_host::scan().into_iter().filter(|d| d.is_instrument == instruments);

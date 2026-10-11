@@ -238,14 +238,10 @@ fn grid_nudge(app: &mut SoundApp, ui: &mut Ui) {
     ui.painter().text(pos2(gr.max.x - 14.0, gr.center().y), Align2::RIGHT_CENTER, grid.label(), mono(11.0), t.counter_text);
     let gresp = ui.interact(gr, ui.id().with("grid_value"), Sense::click());
     value_menu(app, &gresp, "view.grid");
-    ui.painter().text(pos2(r.min.x + 10.0, r.min.y + 44.0), Align2::LEFT_CENTER, "Nudge", regular(11.0), t.counter_label);
-    let nr = Rect::from_min_max(pos2(r.min.x + 60.0, r.min.y + 34.0), pos2(r.max.x - 4.0, r.min.y + 54.0));
-    ui.painter().text(pos2(nr.max.x - 14.0, nr.center().y), Align2::RIGHT_CENTER, nudge.label(), mono(11.0), t.counter_text);
-    let nresp = ui.interact(nr, ui.id().with("nudge_value"), Sense::click());
-    value_menu(app, &nresp, "view.nudge");
-    for rr in [gr, nr] {
-        icons::draw(ui.painter(), Rect::from_center_size(pos2(rr.max.x - 6.0, rr.center().y), vec2(10.0, 10.0)), "triangle_down", t.text_dim);
-    }
+    // The nudge value lives in the dedicated NUDGE group (separate from Grid); the legacy
+    // grid-style nudge value (`view.nudge` / `edit.nudge`) is no longer shown here.
+    let _ = nudge;
+    icons::draw(ui.painter(), Rect::from_center_size(pos2(gr.max.x - 6.0, gr.center().y), vec2(10.0, 10.0)), "triangle_down", t.text_dim);
 }
 
 /// Steps the dedicated Nudge value through the SML presets (Ctrl+Alt+Num±).

@@ -90,3 +90,13 @@ passed — `docs/evidence/sprint_03/ci-sprint3-carryover.log`):
 Still PARTIAL: background/cancellable plugin scanning; multi-select Visual drag; slot I/O meters;
 simplified recording view; loop-record placement uses the loop start (not timestamps); native
 verification of every item above (H1–H3).
+
+### Carry-over batch 2 (full CI exit 0, 594 passed — `ci-carryover2.log`)
+| Item | Change | Test |
+|---|---|---|
+| R04 module deletion | upstream processor implementations deleted; metadata only (see `plugin-removal-inventory.md`) | `ci-module-removal.log` |
+| R06 background plugin scan | worker-thread CLAP/VST3/(AU) scan at startup, never started while recording, cancellable between formats; menus show progress/cancel/retry instead of blocking | `ui-egui plugin_scan::tests` (2) |
+| R08 recording view | Window › Recording: input/output, selected track arm/monitor/meter, monitoring mode, Stop/Play/Record, Mixer | rendered `ui/recording_panel.png` (not natively exercised) |
+| VM02 group gestures | Ctrl/Cmd+click multi-select; group drag with common dB/pan delta, relative offsets kept, −∞ member rejects vertical, Esc restores all | `ui-egui visual_mixer::tests::group_drag_deltas` |
+| Nudge UI | legacy grid-style nudge value removed from the toolbar (dedicated NUDGE group is the only nudge value shown; `edit.nudge` command kept for compatibility) | — |
+Remaining PARTIAL: slot/I-O meter taps in the inspector; rename/route badges in the Visual list.

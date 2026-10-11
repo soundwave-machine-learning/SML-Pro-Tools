@@ -19,6 +19,7 @@ pub mod nudge_keys;
 pub mod ops_windows;
 pub mod palette;
 pub mod panels;
+pub mod plugin_scan;
 pub mod score_editor;
 pub mod shortcuts;
 pub mod theme;
@@ -61,6 +62,9 @@ pub struct UiState {
     pub show_big_counter: bool,
     pub show_undo_history: bool,
     pub show_session_info: bool,
+    /// Simple recording panel (R08).
+    #[serde(default)]
+    pub show_recording: bool,
     pub show_audio_health: bool,
     pub show_about: bool,
     pub show_midi_editor: bool,
@@ -132,6 +136,7 @@ impl Default for UiState {
             show_big_counter: false,
             show_undo_history: false,
             show_session_info: false,
+            show_recording: false,
             show_audio_health: false,
             show_about: false,
             show_midi_editor: false,
@@ -224,6 +229,8 @@ pub struct SoundApp {
     pub player: Option<Player>,
     /// Input capture, opened on first record.
     pub recorder: Option<soundcraft_playback::record::Recorder>,
+    /// Background plugin scanning (R06).
+    pub plugin_scan: plugin_scan::Scanner,
     record_start: Samples,
     /// Punch range to trim the take to (pre/post-roll recordings).
     punch: Option<Range>,
@@ -291,6 +298,7 @@ impl SoundApp {
             record_start: 0,
             punch: None,
             recorder_failed: false,
+            plugin_scan: plugin_scan::Scanner::default(),
             ui: UiState::default(),
             audio_health_report: None,
             services,
@@ -815,6 +823,10 @@ impl SoundApp {
 
     /// Per-frame logic: control channel, transport, document sync.
     pub fn logic(&mut self, ctx: &egui::Context) {
+        // Plugin scanning runs in the background, never while recording.
+        if self.plugin_scan.phase() == plugin_scan::Phase::Idle {
+            self.plugin_scan.start(self.engine.transport.recording);
+        }
         // Fonts set now take effect next frame, so draw only from the frame after.
         if !self.fonts_ready {
             if self.fonts_installed {
