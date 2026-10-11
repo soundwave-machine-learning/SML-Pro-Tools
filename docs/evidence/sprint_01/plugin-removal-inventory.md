@@ -22,11 +22,15 @@ Removed ids (26): see `catalogue.json` (`eq_1band … drum_synth`).
 Clip gain/envelopes and fades (`mix::render_clip`), metering (`dsp::meter`), pan (`dsp::pan`,
 new `dsp::mixmath`), resampling/time-stretch/pitch-shift offline services (`dsp::offline`), click
 (`mix::click`), dither (export path), external host traits (`dsp::Plugin`, `clap-host`,
-`vst3-host`, `au-host`). The upstream implementation modules under `crates/dsp/src/plugins/`
-remain compiled as internal code (used by `dsp::offline` services and the dsp crate's own unit
-tests) but are unreachable from every product route listed above. **Deleting those modules is
-not done in this pass** (PARTIAL for "remove implementation modules"): several retained offline
-services share their code, and extraction was not completed within budget.
+`vst3-host`, `au-host`). **Update (after Sprint 3):** the upstream implementation modules under `crates/dsp/src/plugins/`
+(~3.8k lines: EQ, dynamics, reverb, modulation, harmonic, pitch, utility, synth, drums, strip)
+were **deleted**. Only their metadata (ids, names, categories, parameter tables) remains in
+`crates/dsp/src/removed_meta.rs`, used to show old sessions' placeholders by name and keep their
+values; `soundcraft_dsp::create` instantiates nothing. Helper code used only by them was removed.
+The EQ-curve displays (Mix strip section and plugin window) that drew the removed EQ's response
+were removed; the plugin window now labels such inserts as missing. Retained offline services
+(`dsp::offline`: gain, normalize, reverse, invert, fades, resample, time-stretch, pitch-shift,
+`apply_plugin`) do not depend on the deleted code. CI: `docs/evidence/sprint_03/ci-module-removal.log`.
 
 ## Old sessions (R05)
 
@@ -52,3 +56,8 @@ Tests: `cmd::bus::missing_tests::missing_processors_survive_reload_and_block_sil
 
 No tolerance was loosened and no expected output was regenerated.
 | `automation tests/agent_tasks.rs::agent_builds_and_mixes_a_session` | Step 3 (insert bundled `eq_7band` + bypass) replaced by `bus.create_from_selection` over MCP; bundled `mod_delay` insert removed from step 4 (the aux stays an empty return) | Catalogue removed; MCP agent workflow coverage kept with a real SML feature |
+| `dsp tests/plugins.rs` (25 tests) | Retired | Exercised only the deleted bundled processors |
+| `dsp tests/fuzz.rs::plugins_survive_random_params` | Replaced by `removed_processors_are_never_instantiated` | Nothing to process; verifies ids are never instantiable and metadata is sane |
+| `dsp lib tests::built_ins_have_no_state_or_editor` | Replaced by `removed_builtins_have_metadata_only` | Same reason |
+| `dsp tests/offline_meters.rs::apply_plugin_compensates_latency` | Uses a local deterministic latency/tail fixture instead of the removed pitch shifter/reverb | `apply_plugin` service coverage kept |
+| `mix`/`playback` tests using `dsp::create("gain")` as a stand-in | Use the test-only `test:gain` provider (settable `gain` dB) | Same host-mechanics coverage |

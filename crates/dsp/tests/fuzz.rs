@@ -4,33 +4,15 @@ use soundcraft_dsp::{create, offline, plugins};
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(48))]
 
-    /// Any parameter values and any finite input: no panic, finite output.
+    /// Removed upstream processors: any id, any parameter metadata lookup — never instantiable,
+    /// never a panic (replaces the retired bundled-plugin fuzz case).
     #[test]
-    fn plugins_survive_random_params(
-        which in 0usize..64,
-        values in proptest::collection::vec(any::<f32>(), 32),
-        input in proptest::collection::vec(-4.0f32..4.0, 1..700),
-        block in 1usize..300,
-    ) {
+    fn removed_processors_are_never_instantiated(which in 0usize..64, value in any::<f32>()) {
         let info = plugins()[which % plugins().len()];
-        let mut p = create(info.id).unwrap();
-        p.prepare(44_100.0, block, 2);
-        for (param, v) in info.params.iter().zip(values.iter().cycle()) {
-            p.set_param(param.id, *v);
+        prop_assert!(create(info.id).is_none());
+        for param in info.params {
+            prop_assert!(param.clamp(value).is_finite());
         }
-        p.note_on(0, 60, 100);
-        let mut io = [input.clone(), input.clone()];
-        let len = input.len();
-        let mut pos = 0;
-        while pos < len {
-            let n = block.min(len - pos);
-            let mut buf = vec![io[0][pos..pos + n].to_vec(), io[1][pos..pos + n].to_vec()];
-            p.process(&mut buf, n);
-            io[0][pos..pos + n].copy_from_slice(&buf[0]);
-            io[1][pos..pos + n].copy_from_slice(&buf[1]);
-            pos += n;
-        }
-        prop_assert!(io.iter().flatten().all(|v| v.is_finite()), "{} produced non-finite output", info.id);
     }
 
     /// Offline helpers accept any arguments without panicking.

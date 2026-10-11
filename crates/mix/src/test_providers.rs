@@ -4,7 +4,7 @@
 //!
 //! Ids encode their fixed settings:
 //! - `test:identity`
-//! - `test:gain:<dB>`
+//! - `test:gain:<dB>` (also a settable `gain` parameter, dB)
 //! - `test:delay:<samples>` (reports that latency)
 //! - `test:affine:<a>:<b>` (y = a·x + b; noncommuting with gain, so it proves order)
 
@@ -51,11 +51,21 @@ impl Plugin for Fixture {
         }
         self.idx = 0;
     }
-    fn set_param(&mut self, _id: &str, _v: f32) -> bool {
-        false
+    /// `test:gain:*` exposes its gain as a settable `gain` parameter in dB.
+    fn set_param(&mut self, id: &str, v: f32) -> bool {
+        match (&mut self.kind, id) {
+            (Kind::Gain(g), "gain") if v.is_finite() => {
+                *g = 10f32.powf(v.clamp(-144.0, 24.0) / 20.0);
+                true
+            }
+            _ => false,
+        }
     }
-    fn param(&self, _id: &str) -> Option<f32> {
-        None
+    fn param(&self, id: &str) -> Option<f32> {
+        match (&self.kind, id) {
+            (Kind::Gain(g), "gain") => Some(20.0 * g.max(1e-9).log10()),
+            _ => None,
+        }
     }
     fn process(&mut self, io: &mut [Vec<f32>], frames: usize) {
         match self.kind {

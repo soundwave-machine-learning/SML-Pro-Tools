@@ -21,13 +21,12 @@ mod osc;
 pub mod pan;
 mod params;
 pub mod pitch_detect;
-pub mod plugins;
+mod removed_meta;
 pub mod spectrum;
 mod util;
 
 pub use offline::FadeShape;
 pub use osc::Waveform;
-pub use plugins::eq::{eq1_response, eq7_response};
 
 /// Plugin category, used to group the insert menu.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -242,10 +241,40 @@ pub trait PluginEditor: Send {
 }
 
 /// The plugin registry.
+/// The removed upstream processors' metadata, in their former menu order.
+static REMOVED: &[&PluginInfo] = &[
+    &removed_meta::eq::EQ1_INFO,
+    &removed_meta::eq::EQ7_INFO,
+    &removed_meta::dynamics::COMP_INFO,
+    &removed_meta::dynamics::GATE_INFO,
+    &removed_meta::dynamics::DEESS_INFO,
+    &removed_meta::dynamics::MAX_INFO,
+    &removed_meta::strip::STRIP_INFO,
+    &removed_meta::reverb::ROOM_INFO,
+    &removed_meta::reverb::PLATE_INFO,
+    &removed_meta::modulation::DELAY_INFO,
+    &removed_meta::modulation::CHORUS_INFO,
+    &removed_meta::modulation::FLANGER_INFO,
+    &removed_meta::modulation::PHASER_INFO,
+    &removed_meta::harmonic::SAT_INFO,
+    &removed_meta::harmonic::LOFI_INFO,
+    &removed_meta::harmonic::RECT_INFO,
+    &removed_meta::pitch::PITCH_INFO,
+    &removed_meta::utility::SHIFT_INFO,
+    &removed_meta::utility::GAIN_INFO,
+    &removed_meta::utility::TRIM_INFO,
+    &removed_meta::utility::INVERT_INFO,
+    &removed_meta::utility::DC_INFO,
+    &removed_meta::utility::GEN_INFO,
+    &removed_meta::utility::DITHER_INFO,
+    &removed_meta::synth::SYNTH_INFO,
+    &removed_meta::drums::DRUM_INFO,
+];
+
 /// The selectable insert/instrument catalogue of SML Recording: empty. The upstream bundled
 /// effects and instruments were removed from every product route (insert menus, CLI, MCP,
 /// demo, offline processing); use installed VST3/CLAP plugins instead. The implementations in
-/// [`plugins`] remain only as internal services/fixtures and are never instantiated for a session.
+/// Only their metadata remains (to show old sessions' placeholders); no processing code exists.
 pub fn catalogue() -> &'static [&'static PluginInfo] {
     &[]
 }
@@ -253,25 +282,25 @@ pub fn catalogue() -> &'static [&'static PluginInfo] {
 /// True for an id of a removed upstream built-in processor (kept in old sessions as an inactive
 /// missing placeholder).
 pub fn is_removed_builtin(id: &str) -> bool {
-    plugins::REGISTRY.iter().any(|p| p.id == id)
+    REMOVED.iter().any(|p| p.id == id)
 }
 
-/// Internal registry of the retained (non-selectable) upstream implementations.
+/// Metadata of the removed upstream processors (ids, names, categories, parameters).
 pub fn plugins() -> &'static [&'static PluginInfo] {
-    plugins::REGISTRY
+    REMOVED
 }
 
 /// Creates a plugin by id, prepared for 48 kHz stereo with 1024-frame blocks.
 /// Hosts should call `prepare` again with their real settings.
 pub fn create(id: &str) -> Option<Box<dyn Plugin>> {
-    let mut p = plugins::instantiate(id)?;
-    p.prepare(48_000.0, 1024, 2);
-    Some(p)
+    // SML Recording ships no bundled processors: removed ids cannot be instantiated.
+    let _ = id;
+    None
 }
 
 /// Looks up a plugin description by id.
 pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {
-    plugins::REGISTRY.iter().copied().find(|i| i.id == id)
+    REMOVED.iter().copied().find(|i| i.id == id)
 }
 
 /// Silence floor used by the dB helpers.
@@ -304,14 +333,16 @@ mod trait_default_tests {
     use super::*;
 
     #[test]
-    fn built_ins_have_no_state_or_editor() {
+    fn removed_builtins_have_metadata_only() {
+        assert!(catalogue().is_empty(), "SML Recording ships no bundled processors");
+        assert_eq!(plugins().len(), 26);
         for info in plugins() {
-            let mut p = create(info.id).unwrap();
-            assert!(p.save_state().is_none(), "{}", info.id);
-            assert!(!p.load_state(b"anything"), "{}", info.id);
-            assert!(p.open_editor().is_err(), "{}", info.id);
-            p.close_editor();
-            assert!(p.editor().is_none(), "{}", info.id);
+            assert!(is_removed_builtin(info.id) && create(info.id).is_none(), "{}", info.id);
+            assert_eq!(plugin_info(info.id).map(|p| p.id), Some(info.id));
+            for p in info.params {
+                assert!(p.min <= p.default && p.default <= p.max, "{} {}", info.id, p.id);
+            }
         }
+        assert!(!is_removed_builtin("clap:any.plugin"));
     }
 }

@@ -912,7 +912,7 @@ mod tests {
         let (tx, rx) = channel();
         let (gtx, grx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::new(soundcraft_model::Session::default()), 48_000.0, gtx);
-        let plugin: Box<dyn Plugin> = Box::new(Stateful(soundcraft_dsp::create("gain").unwrap()));
+        let plugin: Box<dyn Plugin> = Box::new(Stateful(soundcraft_mix::test_providers::create("test:gain:0").unwrap()));
         tx.send(Cmd::Session(Arc::clone(&s), vec![PreparedInstance { track: t, slot: 1, id: "clap:test.fake".into(), ch: 2, plugin }])).unwrap();
         let (rtx, rrx) = channel();
         tx.send(Cmd::CaptureStates(rtx)).unwrap();
@@ -933,7 +933,7 @@ mod tests {
                 slot: 1,
                 id: "clap:test.fake".into(),
                 ch: 2,
-                plugin: Box::new(Stateful(soundcraft_dsp::create("gain").unwrap())),
+                plugin: Box::new(Stateful(soundcraft_mix::test_providers::create("test:gain:0").unwrap())),
             }],
         ))
         .unwrap();

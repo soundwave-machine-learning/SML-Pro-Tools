@@ -404,8 +404,13 @@ fn plugin_windows(app: &mut SoundApp, ctx: &egui::Context) {
                     ui.label(egui::RichText::new("Load and edit sounds in the plugin's own editor.").color(Tokens::current().text_dim));
                     return;
                 }
-                if info.id == "eq_7band" || info.id == "eq_1band" {
-                    eq_curve(ui, info.id, &ins);
+                if soundcraft_dsp::is_removed_builtin(info.id) {
+                    ui.label(
+                        egui::RichText::new(
+                            "Missing: this upstream bundled processor is not part of SML Recording. Its settings are kept; audio passes through.",
+                        )
+                        .color(Tokens::current().text_dim),
+                    );
                 }
                 egui::Grid::new(("pg", tid.0, slot)).num_columns(3).show(ui, |ui| {
                     for p in info.params {
@@ -452,30 +457,6 @@ fn plugin_windows(app: &mut SoundApp, ctx: &egui::Context) {
         }
     }
     app.ui.plugin_windows = keep;
-}
-
-fn eq_curve(ui: &mut Ui, id: &str, ins: &soundcraft_model::Insert) {
-    let t = Tokens::current();
-    let (r, _) = ui.allocate_exact_size(vec2(ui.available_width().max(300.0), 110.0), Sense::hover());
-    ui.painter().rect_filled(r, 4.0, Color32::from_rgb(14, 18, 22));
-    let n = 160;
-    let freqs: Vec<f32> = (0..n).map(|i| 20.0 * 1000f32.powf(i as f32 / (n - 1) as f32)).collect();
-    let params: Vec<(&str, f32)> = ins.params.iter().map(|(k, v)| (k.as_str(), *v)).collect();
-    let resp = if id == "eq_7band" {
-        soundcraft_dsp::eq7_response(&params, &freqs, 48_000.0)
-    } else {
-        soundcraft_dsp::eq1_response(&params, &freqs, 48_000.0)
-    };
-    for db in [-12.0f32, 0.0, 12.0] {
-        let y = r.center().y - db / 18.0 * r.height() * 0.5;
-        ui.painter().line_segment([pos2(r.min.x, y), pos2(r.max.x, y)], Stroke::new(1.0, Color32::from_rgb(40, 50, 60)));
-    }
-    let pts: Vec<egui::Pos2> = resp
-        .iter()
-        .enumerate()
-        .map(|(i, db)| pos2(r.min.x + r.width() * i as f32 / (n - 1) as f32, r.center().y - db.clamp(-18.0, 18.0) / 18.0 * r.height() * 0.5))
-        .collect();
-    ui.painter().add(egui::Shape::line(pts, Stroke::new(2.0, t.counter_text)));
 }
 
 fn about(app: &mut SoundApp, ctx: &egui::Context) {

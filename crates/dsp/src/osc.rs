@@ -52,11 +52,6 @@ impl Osc {
         Self { phase: 0.0, rng: Rng::new(seed), pink: PinkNoise::new() }
     }
 
-    pub(crate) fn reset(&mut self) {
-        self.phase = 0.0;
-        self.pink = PinkNoise::new();
-    }
-
     /// Produces one sample; `inc` is frequency / sample rate.
     #[inline]
     pub(crate) fn next(&mut self, wave: Waveform, inc: f32) -> f32 {

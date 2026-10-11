@@ -2512,11 +2512,11 @@ mod tests {
         let dry = render_block(&mut eng, &s, 0);
         assert!(dry > 0.3, "{dry}");
         let sets = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let mut gain = soundcraft_dsp::create("gain").unwrap();
+        let mut gain = test_providers::create("test:gain:0").unwrap();
         gain.prepare(48_000.0, 512, 1);
         let fake = Stateful { inner: gain, blob: b"live state".to_vec(), sets: Arc::clone(&sets) };
         // An instance for the wrong channel count is retired, not used.
-        let wrong = Stateful { inner: soundcraft_dsp::create("gain").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
+        let wrong = Stateful { inner: test_providers::create("test:gain:0").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
         eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 2, plugin: Box::new(wrong) }]);
         assert!(render_block(&mut eng, &s, 512) > 0.3);
         assert_eq!(eng.take_retired().len(), 1);
@@ -2535,7 +2535,7 @@ mod tests {
         assert_eq!(eng.take_retired().len(), 1);
         assert!(eng.capture_states().is_empty());
         // Instances nobody claims are retired too; drain_plugins empties the engine.
-        eng.adopt(vec![PreparedInstance { track: t, slot: 3, id: "clap:x".into(), ch: 1, plugin: soundcraft_dsp::create("gain").unwrap() }]);
+        eng.adopt(vec![PreparedInstance { track: t, slot: 3, id: "clap:x".into(), ch: 1, plugin: test_providers::create("test:gain:0").unwrap() }]);
         render_block(&mut eng, &s, 21 * 512);
         assert_eq!(eng.take_retired().len(), 1);
         assert!(eng.drain_plugins().is_empty());
@@ -2552,7 +2552,7 @@ mod tests {
         let mut eng = MixEngine::new(48_000.0, 512);
         eng.set_external_instances(true);
         let sets = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-        let fake = Stateful { inner: soundcraft_dsp::create("gain").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
+        let fake = Stateful { inner: test_providers::create("test:gain:0").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
         eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "vst3:00000000000000000000000000000001".into(), ch: 1, plugin: Box::new(fake) }]);
         render_block(&mut eng, &s, 0);
         assert_eq!(sets.load(std::sync::atomic::Ordering::Relaxed), 1, "session params apply once");

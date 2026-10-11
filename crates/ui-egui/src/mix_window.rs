@@ -243,30 +243,11 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
     if all || has("eq_curve") {
         let sec = Rect::from_min_size(pos2(x0, y), vec2(inner_w, 40.0));
         ui.painter().rect_filled(sec, 2.0, Color32::from_rgb(14, 18, 22));
-        let eq = track.mixer.inserts.iter().flatten().find(|i| i.plugin == "eq_7band" || i.plugin == "eq_1band");
-        if let Some(ins) = eq {
-            let n = 40;
-            let freqs: Vec<f32> = (0..n).map(|i| 20.0 * 1000f32.powf(i as f32 / (n - 1) as f32)).collect();
-            let params: Vec<(&str, f32)> = ins.params.iter().map(|(k, v)| (k.as_str(), *v)).collect();
-            let resp = if ins.plugin == "eq_7band" {
-                soundcraft_dsp::eq7_response(&params, &freqs, 48_000.0)
-            } else {
-                soundcraft_dsp::eq1_response(&params, &freqs, 48_000.0)
-            };
-            let pts: Vec<egui::Pos2> = resp
-                .iter()
-                .enumerate()
-                .map(|(i, db)| {
-                    pos2(sec.min.x + sec.width() * i as f32 / (n - 1) as f32, sec.center().y - db.clamp(-18.0, 18.0) / 18.0 * sec.height() * 0.45)
-                })
-                .collect();
-            ui.painter().add(egui::Shape::line(pts, Stroke::new(1.5, t.counter_text)));
-        } else {
-            ui.painter().line_segment(
-                [pos2(sec.min.x + 2.0, sec.center().y), pos2(sec.max.x - 2.0, sec.center().y)],
-                Stroke::new(1.0, Color32::from_rgb(60, 70, 80)),
-            );
-        }
+        // The EQ curve came from the removed bundled EQ; a flat reference line remains.
+        ui.painter().line_segment(
+            [pos2(sec.min.x + 2.0, sec.center().y), pos2(sec.max.x - 2.0, sec.center().y)],
+            Stroke::new(1.0, Color32::from_rgb(60, 70, 80)),
+        );
         y = sec.max.y + 4.0;
     }
     if all || has("comments") {

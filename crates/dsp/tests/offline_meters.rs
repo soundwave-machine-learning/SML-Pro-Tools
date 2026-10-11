@@ -3,7 +3,7 @@ use std::f32::consts::TAU;
 use soundcraft_dsp::meter::{LoudnessMeter, PeakMeter, RmsMeter};
 use soundcraft_dsp::offline::{self, FadeShape, Waveform};
 use soundcraft_dsp::spectrum::{bin_hz, magnitude_db};
-use soundcraft_dsp::{create, db_to_gain, gain_to_db, pan};
+use soundcraft_dsp::{db_to_gain, gain_to_db, pan};
 
 fn sine(freq: f32, amp: f32, sr: f32, len: usize) -> Vec<f32> {
     (0..len).map(|i| amp * (TAU * freq * i as f32 / sr).sin()).collect()
@@ -229,19 +229,70 @@ fn signal_generator_offline() {
     }
 }
 
+/// Deterministic test plugin: delays by `lat` samples (and reports it) and rings for `tail`
+/// samples (replaces the removed bundled pitch shifter / reverb in this service test).
+struct Fixture {
+    lat: usize,
+    tail: usize,
+    buf: Vec<f32>,
+    idx: usize,
+}
+
+static FIXTURE_INFO: soundcraft_dsp::PluginInfo = soundcraft_dsp::PluginInfo {
+    id: "test:fixture",
+    name: "Fixture",
+    short_name: "Fix",
+    category: soundcraft_dsp::Category::Other,
+    params: &[],
+    is_instrument: false,
+    audiosuite: true,
+};
+
+impl soundcraft_dsp::Plugin for Fixture {
+    fn info(&self) -> &'static soundcraft_dsp::PluginInfo {
+        &FIXTURE_INFO
+    }
+    fn prepare(&mut self, _sr: f32, _mb: usize, _ch: usize) {
+        self.buf = vec![0.0; self.lat.max(1)];
+        self.idx = 0;
+    }
+    fn reset(&mut self) {}
+    fn set_param(&mut self, _id: &str, _v: f32) -> bool {
+        false
+    }
+    fn param(&self, _id: &str) -> Option<f32> {
+        None
+    }
+    fn process(&mut self, io: &mut [Vec<f32>], frames: usize) {
+        if self.lat == 0 {
+            return;
+        }
+        for x in io[0].iter_mut().take(frames) {
+            std::mem::swap(&mut self.buf[self.idx], x);
+            self.idx = (self.idx + 1) % self.lat;
+        }
+    }
+    fn latency(&self) -> usize {
+        self.lat
+    }
+    fn tail_samples(&self) -> usize {
+        self.tail
+    }
+}
+
 #[test]
 fn apply_plugin_compensates_latency() {
     let sr = 48_000.0;
-    let mut p = create("pitch_shifter").unwrap();
+    let mut p = Fixture { lat: 300, tail: 0, buf: Vec::new(), idx: 0 };
     let mut x = vec![vec![0.0f32; 10_000]];
     x[0][2000] = 1.0;
-    offline::apply_plugin(&mut x, p.as_mut(), sr);
+    offline::apply_plugin(&mut x, &mut p, sr);
     let pos = x[0].iter().enumerate().max_by(|a, b| a.1.abs().total_cmp(&b.1.abs())).unwrap().0;
     assert_eq!(pos, 2000);
 
-    let mut r = create("room_reverb").unwrap();
-    let out = offline::apply_plugin_with_tail(&[vec![1.0; 100]], r.as_mut(), sr);
-    assert!(out[0].len() > 100 + 48_000);
+    let mut r = Fixture { lat: 0, tail: 48_000, buf: Vec::new(), idx: 0 };
+    let out = offline::apply_plugin_with_tail(&[vec![1.0; 100]], &mut r, sr);
+    assert!(out[0].len() >= 100 + 48_000);
 }
 
 #[test]
