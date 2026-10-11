@@ -1,0 +1,35 @@
+{
+  "source_commit": "b1181dcfb88cc52c037c5ae7e6ad702e9ede2380",
+  "note": "artifacts built from this commit plus uncommitted Sprint 4 docs; binaries not committed (dist/ is gitignored)",
+  "artifacts": [
+    {
+      "path": "dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz",
+      "bytes": 15692322,
+      "sha256": "7d95b1f7b248440c1c18c0cff13c939638539b4f63421fb3f7e267011f38db0d",
+      "description": "Linux x86_64 tarball via packaging/linux/package.sh --skip-build --formats tar"
+    },
+    {
+      "path": "dist/release/sml-recording-0.5.0-windows-x64-gnu-unsigned.zip",
+      "bytes": 16277642,
+      "sha256": "cebcb166cd519b8b45eeef6ed1ae55912972c8b749eac942be47addaa6844b81",
+      "description": "Windows x64 portable zip, cross-built (x86_64-pc-windows-gnu, mingw-w64), unsigned"
+    },
+    {
+      "path": "target/x86_64-pc-windows-gnu/release/soundcraft.exe",
+      "bytes": 37277946,
+      "sha256": "38c44c1d1ec1db955acaac8324e6e3ef6625c7b3f15329f4a0136fcbe61abea3",
+      "description": "Windows GUI exe inside the zip"
+    },
+    {
+      "path": "target/x86_64-pc-windows-gnu/release/soundcraft-cli.exe",
+      "bytes": 11165817,
+      "sha256": "61f1154a88abcd495a273920be2fd60ac6974d2e6037aa07a8421d7a99a9d75f",
+      "description": "Windows CLI exe inside the zip"
+    }
+  ],
+  "runtime_validation": {
+    "linux": "headless CLI smoke PASS in container (package-smoke.log); GUI not launched (no display)",
+    "windows": "NOT RUN (no Windows host). Cross-compiling is not a Windows runtime pass. Native MSVC packaging (package.ps1) not run."
+  },
+  "signing": "none (out of authorization)"
+}

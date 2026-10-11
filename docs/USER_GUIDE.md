@@ -131,3 +131,22 @@ slots, routing, trims and automation are not part of snapshots.
   live monitoring path to reduce delay; `mix.tracking_restore` brings them back. This is temporary,
   never saved, and exports always use your normal mix.
 - **Post-fader inserts**: right-click an insert › *Post-fader* (stopped) to run it after the fader.
+
+## 10. Plugins: what to expect
+- SML Recording ships **no bundled effects or instruments**. Use your installed VST3 (or CLAP;
+  AU on macOS) plugins. Plugins are scanned in the background at startup (never while recording);
+  menus show progress and offer Cancel / Scan now.
+- Plugins run **inside the SML Recording process**. A crashing plugin can take the application
+  down; there is no sandbox. Your recordings are protected by the on-disk capture journal (the
+  take is recovered up to its last durable checkpoint), but save often when trying new plugins.
+- Old sessions that used the removed built-in processors open with those inserts shown as
+  **missing**: their settings are kept, audio passes through them unchanged, and exports ask you to
+  acknowledge that their sound is not included.
+- Not yet validated with your own plugins (EQ, dynamics, pitch correction): see
+  `TARGET_MACHINE_GAUNTLET.md` §5.
+
+## 11. Not supported in this build
+ASIO (WASAPI/ALSA/CoreAudio via the default hosts only), aggregate-device clock correction, ARA /
+note-level pitch editing, native analog summing/tape models (deferred), VCAs beyond the existing
+basic VCA tracks, monitor-only dim/mono/cue systems, detailed tape-machine UI, keypad-vs-main-row
+key distinction and Win-key nudge chords (toolkit limitation).

@@ -1,0 +1,4 @@
+config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance
+16play+2rec+bus+fx v2,64,48000,45000,1333.3,92.6,289.2,3602.2,0.217,2.702,13,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2,128,48000,22500,2666.7,99.0,310.1,1654.2,0.116,0.620,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2,256,48000,11250,5333.3,123.3,245.5,2112.9,0.046,0.396,0,headless container release build (not native; no device; single process)

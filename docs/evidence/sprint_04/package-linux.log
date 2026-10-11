@@ -1,0 +1,7 @@
+==> SoundCraft 0.5.0 for Linux x86_64 (tar)
+wrote /home/user/SML-Pro-Tools/dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz
+SoundCraft CLI 0.5.0
+==> done
+total 15M
+-rw-r--r-- 1 root root 15M Oct 11 17:18 soundcraft-0.5.0-linux-x86_64.tar.gz
+EXIT: 0

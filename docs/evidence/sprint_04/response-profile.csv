@@ -1,0 +1,2 @@
+metric,samples,p50_us,p95_us,max_us,provenance
+fader command ack (event->model revision),1000,16.6,25.5,415.2,headless engine only; excludes UI frame/render and audible onset

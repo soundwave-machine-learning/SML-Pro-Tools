@@ -21,6 +21,15 @@ All commands run from the repository root on the execution host recorded in `env
 | SL-T / CL-T4 / VM-T2 engine graph fixtures (A3) | `cargo test -p soundcraft-mix sml_graph` | slots, width, profile, PDC through slots |
 | Visual mixer mappings (A3, UI unit) | `cargo test -p soundcraft-ui-egui visual_mixer` | |
 | Vocal coverage (A2) | `cargo test -p soundcraft-engine vocal_` | V-row fixtures added in Sprint 2 |
+| CL03 tracking, slot state, V13 exports, audition | `cargo test -p soundcraft-engine cmd::slots` | |
+| SL02 Post inserts, CL04 latency event | `cargo test -p soundcraft-mix -- sml_graph_post latency_change` | |
+| CL04 timestamp placement | `cargo test -p soundcraft-playback -- timestamp_placement playback_anchor` | |
+| SL-T6 real CLAP fixture in a slot | `cargo test -p soundcraft-engine --test clap_e2e` | builds the repo CLAP fixture |
+| Background plugin scan | `cargo test -p soundcraft-ui-egui plugin_scan` | |
+| Headless callback/response profile (A4, not native) | `cargo run --release -p soundcraft-engine --example sml_profile -- callback.csv response.csv` | |
+| UI renders | `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png script.jsonl --size 1600x1000` | needs a Vulkan driver (lavapipe here) |
+| Linux package | `cargo build --release --locked -p soundcraft -p soundcraft-cli && packaging/linux/package.sh --skip-build --formats tar` | |
+| Windows cross-build (not a runtime test) | `cargo build --release --locked -p soundcraft -p soundcraft-cli --target x86_64-pc-windows-gnu` | needs mingw-w64 |
 | H1–H4, CL-T6/7, N07 physical, N09, VM-T7/8, SL-T8, M-T7 | not runnable here | need Windows x64 target, interface/driver, owner plugins, owner review — see `docs/TARGET_MACHINE_GAUNTLET.md` |
 
 Rows added after Sprint 1 are marked by their gate; each was executed when its sprint ran

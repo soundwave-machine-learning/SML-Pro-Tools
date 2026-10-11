@@ -1,0 +1,23 @@
+# package smoke 2026-10-11T17:18:28Z
+total 38140
+drwxr-xr-x 2 root root     4096 Oct 11 17:18 .
+drwxr-xr-x 4 root root     4096 Oct 11 17:18 ..
+-rwxr-xr-x 1 root root 31354984 Oct 11 17:18 soundcraft
+-rwxr-xr-x 1 root root  7687368 Oct 11 17:18 soundcraft-cli
+/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft:     ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=a7e7ab59000007c0eef265d9c986bd3488896a8b, stripped
+/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft-cli: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=6d4989d93e693230048becfdc01d4ce43b36d691, stripped
+SoundCraft CLI 0.5.0
+--- plugins catalogue (expect empty)
+exit 0
+--- headless demo: bus + width + profile + bounce
+bus.create_from_selection: {"bus":33,"bus_track":34,"name":"Drum Bus","output":"main","rerouted":[{"from":"Main","to":"bus","track":"Kick"},{"from":"Main","to":"bus","track":"Snare"},{"from":"Main","to":"bus","track":"Hats"}]}
+mix.width: {"tracks":1,"width":1.4}
+mix.profile: {"balance_compensated":false,"graph_version":2,"kind":"LogicStyle","law":"-3db","stereo_mode":"Balance"}
+{"bytes":16094696,"lufs":-16.761947631835938,"path":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/demo.wav","peak_db":-3.195802927017212,"seconds":55.884,"true_peak_db":-3.195802927017212}
+exit 0
+-rw-r--r-- 1 root root 16094696 Oct 11 17:18 /tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/demo.wav
+--- GUI binary help/launch without display
+2026-10-11T17:18:30.504Z INFO  [main] soundcraft: SoundCraft 0.5.0 (linux x86_64)
+2026-10-11T17:18:30.504Z INFO  [main] soundcraft: log file /root/.config/soundcraft/logs/soundcraft.log
+Error: WinitEventLoop(Os(OsError { line: 765, file: "/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/linux/mod.rs", error: Misc("neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set.") }))
+exit 0
