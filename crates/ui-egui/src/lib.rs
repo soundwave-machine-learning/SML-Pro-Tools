@@ -618,7 +618,9 @@ impl SoundApp {
             p.set_recording(false);
         }
         let Some(r) = &self.recorder else { return };
-        let take = r.take();
+        // Read back only the inputs armed tracks record (the file keeps every input).
+        let keep = soundcraft_engine::io::armed_input_channels(self.engine.session(), r.channels);
+        let take = r.take_selected(&|c| keep.get(c).copied().unwrap_or(false));
         if let Some(rep) = &take.report
             && rep.state.is_partial()
         {

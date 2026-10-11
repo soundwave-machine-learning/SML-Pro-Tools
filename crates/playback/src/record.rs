@@ -176,11 +176,17 @@ impl Recorder {
 
     /// Stop capturing, finalize the file and return the take (read back from disk).
     pub fn take(&self) -> Take {
+        self.take_selected(&|_| true)
+    }
+
+    /// Finish the take and read back only the capture channels `keep` selects (the others are
+    /// empty at their index): the file on disk always holds every input.
+    pub fn take_selected(&self, keep: &dyn Fn(usize) -> bool) -> Take {
         let Some(cap) = self.active().take() else {
             return Take { sample_rate: self.sample_rate, channels: vec![Vec::new(); self.channels], media: None, report: None };
         };
         let report = cap.finish();
-        let channels = crate::capture::read_capture(&report.media).map(|(_, c)| c).unwrap_or_else(|e| {
+        let channels = crate::capture::read_capture_selected(&report.media, keep).map(|(_, c)| c).unwrap_or_else(|e| {
             log::warn!("reading back {}: {e}", report.media.display());
             vec![Vec::new(); self.channels]
         });

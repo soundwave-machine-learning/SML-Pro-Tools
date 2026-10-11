@@ -623,11 +623,21 @@ pub fn recover(media: &Path) -> std::io::Result<RecoveryReport> {
     })
 }
 
-/// Reads a capture WAV (32-bit float, as written here) back as planar channels.
+/// Reads a finalized (or recovered) float capture file back as planar channels.
 pub fn read_capture(media: &Path) -> std::io::Result<(u32, Vec<Vec<f32>>)> {
-    let data = std::fs::read(media)?;
-    let get16 = |at: usize| data.get(at..at + 2).and_then(|b| b.try_into().ok()).map(u16::from_le_bytes);
-    let get32 = |at: usize| data.get(at..at + 4).and_then(|b| b.try_into().ok()).map(u32::from_le_bytes);
+    read_capture_selected(media, &|_| true)
+}
+
+/// Like [`read_capture`], keeping only the channels `keep` selects (the others come back empty,
+/// at their index). Streams the file, so memory is the kept channels only — a take from a
+/// many-input interface does not load every input when one track was armed.
+pub fn read_capture_selected(media: &Path, keep: &dyn Fn(usize) -> bool) -> std::io::Result<(u32, Vec<Vec<f32>>)> {
+    use std::io::Read;
+    let mut f = std::io::BufReader::with_capacity(1 << 16, std::fs::File::open(media)?);
+    let mut head = [0u8; 44];
+    f.read_exact(&mut head).map_err(|_| std::io::Error::other("short WAV header"))?;
+    let get16 = |at: usize| head.get(at..at + 2).and_then(|b| b.try_into().ok()).map(u16::from_le_bytes);
+    let get32 = |at: usize| head.get(at..at + 4).and_then(|b| b.try_into().ok()).map(u32::from_le_bytes);
     let (Some(ch), Some(rate), Some(fmt)) = (get16(22), get32(24), get16(20)) else {
         return Err(std::io::Error::other("short WAV header"));
     };
@@ -635,18 +645,19 @@ pub fn read_capture(media: &Path) -> std::io::Result<(u32, Vec<Vec<f32>>)> {
         return Err(std::io::Error::other("not a float capture file"));
     }
     let ch = usize::from(ch).max(1);
-    let body = data.get(44..).unwrap_or(&[]);
-    let declared = get32(40).map_or(body.len(), |d| (d as usize).min(body.len()));
-    let mut out = vec![Vec::new(); ch];
-    for (i, b) in body.get(..declared).unwrap_or(&[]).chunks_exact(4).enumerate() {
-        let v = f32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        if let Some(o) = out.get_mut(i % ch) {
-            o.push(v);
+    let on_disk = std::fs::metadata(media)?.len().saturating_sub(44);
+    let declared = get32(40).map_or(on_disk, |d| u64::from(d).min(on_disk));
+    let frames = usize::try_from(declared / (4 * ch as u64)).unwrap_or(0);
+    let kept: Vec<bool> = (0..ch).map(keep).collect();
+    let mut out: Vec<Vec<f32>> = kept.iter().map(|k| if *k { Vec::with_capacity(frames) } else { Vec::new() }).collect();
+    let mut frame = vec![0u8; 4 * ch];
+    for _ in 0..frames {
+        f.read_exact(&mut frame)?;
+        for ((o, k), b) in out.iter_mut().zip(&kept).zip(frame.chunks_exact(4)) {
+            if *k {
+                o.push(f32::from_le_bytes([b[0], b[1], b[2], b[3]]));
+            }
         }
-    }
-    let frames = out.iter().map(Vec::len).min().unwrap_or(0);
-    for o in &mut out {
-        o.truncate(frames);
     }
     Ok((rate, out))
 }
@@ -867,5 +878,30 @@ mod tests {
         }
         assert_eq!(ring.capacity_samples(), cap);
         assert_eq!(ring.accepted_frames(), 128_000);
+    }
+
+    /// A selected read keeps exactly the chosen channels (bit-exact), others empty, and agrees
+    /// with the full read.
+    #[test]
+    fn selected_read_keeps_only_the_chosen_channels() {
+        let d = tmpdir("selected");
+        let (frames, ch) = (5000, 6);
+        let data = fixture(frames, ch);
+        let mut w = WavCaptureFile::create(&d.join("t.wav"), ch, 48_000).unwrap();
+        w.write(&data).unwrap();
+        w.finalize(frames as u64).unwrap();
+        let (_, full) = read_capture(&d.join("t.wav")).unwrap();
+        let (rate, sel) = read_capture_selected(&d.join("t.wav"), &|c| c == 2 || c == 5).unwrap();
+        assert_eq!(rate, 48_000);
+        assert_eq!(sel.len(), ch);
+        for c in 0..ch {
+            if c == 2 || c == 5 {
+                assert_eq!(sel[c], full[c]);
+                assert_eq!(sel[c].len(), frames);
+            } else {
+                assert!(sel[c].is_empty());
+            }
+        }
+        let _ = std::fs::remove_dir_all(&d);
     }
 }

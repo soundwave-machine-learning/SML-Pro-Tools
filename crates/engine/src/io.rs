@@ -586,8 +586,25 @@ pub fn input_channel_problems(s: &Session, device_channels: usize) -> Vec<String
         .collect()
 }
 
+/// Which capture channels (of `device_channels`) the armed audio tracks record — read back only
+/// these after a take.
+pub fn armed_input_channels(s: &Session, device_channels: usize) -> Vec<bool> {
+    let mut keep = vec![false; device_channels];
+    for t in s.tracks.iter().filter(|t| t.mixer.record_arm && t.kind == TrackKind::Audio && !t.inactive) {
+        let first = first_input_channel(t);
+        for k in 0..t.channels() {
+            let ch = if device_channels == 1 { 0 } else { first + k };
+            if let Some(x) = keep.get_mut(ch) {
+                *x = true;
+            }
+        }
+    }
+    keep
+}
+
 pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, rate: u32) -> Result<Vec<soundcraft_model::ClipId>> {
-    let frames = channels.first().map_or(0, Vec::len);
+    // Channels no armed track records may be empty (read back selectively).
+    let frames = channels.iter().map(Vec::len).max().unwrap_or(0);
     if frames == 0 {
         return Ok(Vec::new());
     }
@@ -643,7 +660,7 @@ pub fn add_loop_recording_at(e: &mut Engine, sel: soundcraft_time::Range, captur
     let pass = to_capture(sel.len()).max(1);
     // Capture index of the loop start (negative: capture began after it).
     let lead = to_capture(sel.start - capture_start);
-    let total = channels.first().map_or(0, Vec::len) as i64;
+    let total = channels.iter().map(Vec::len).max().unwrap_or(0) as i64;
     let passes = (total - lead).max(0).div_euclid(pass) + i64::from((total - lead).max(0).rem_euclid(pass) > 0);
     let mut made = 0;
     for k in 0..passes.max(1) {
@@ -691,6 +708,13 @@ mod input_channel_tests {
         let c = e.session().track(v).unwrap().clips().iter().find(|c| c.id == ids[0]).cloned().unwrap();
         let ClipContent::Audio { source, .. } = c.content else { panic!() };
         assert_eq!(e.session().pool.get(source).unwrap().channel(0).unwrap()[0], 3.0, "capture channel 3");
+        // Selective read-back: only channel 3 present (others empty) records the same take.
+        let keep = armed_input_channels(e.session(), 8);
+        assert_eq!(keep, vec![false, false, true, false, false, false, false, false]);
+        let sparse: Vec<Vec<f32>> = cap(8).into_iter().enumerate().map(|(i, c)| if keep[i] { c } else { Vec::new() }).collect();
+        let ids = add_recording(&mut e, 0, sparse, 48_000).unwrap();
+        let c = e.session().track(v).unwrap().clips().iter().find(|c| c.id == ids[0]).cloned().unwrap();
+        assert_eq!(c.length, 100, "length from the kept channel, not channel 0");
         // Stereo track on a one-input device: dual mono, allowed.
         let st = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Stereo, Some("Gtr"));
         e.session_mut().track_mut(v).unwrap().mixer.record_arm = false;
