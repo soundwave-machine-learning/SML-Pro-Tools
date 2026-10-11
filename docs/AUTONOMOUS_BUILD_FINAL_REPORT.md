@@ -122,7 +122,9 @@ Software, not done in this run:
 - **64-frame deadline misses** in the headless profile: 11–18 per 270 000 callbacks remain
   (consistent with VM pauses, unproven).
 - **N07**: the UI toolkit does not distinguish the numeric keypad and has no Win modifier.
-- **UI screen/scale matrix**: renders exist only at 1600×1000 @2x.
+- **UI screen/scale matrix**: offscreen renders at 1600×1000 @2x and 1366×768 @150 % only; the
+  latter found clipped faders/toolbar groups (fixed by scrolling, not by a redesign). Native
+  check pending.
 
 Needs the owner or the target machine (not executable here): H1–H4, CL-T6/7, N07 physical,
 N09, N10, VM-T7/8, SL-T8, M-T7, B-T7, V12 (owner pitch plugin), V14 owner UI review, owner

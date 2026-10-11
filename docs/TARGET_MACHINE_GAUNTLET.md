@@ -27,7 +27,9 @@ results under `docs/evidence/sprint_04/` (or a new dated folder) — never fill 
 6. Export: Full Mix and `file.export_path` Edited Dry/Processed for the vocal.
 7. Screens: 1366×768 and 1920×1080 at 100/125/150 % scaling — Mix (Console/Visual/Split),
    Edit (NUDGE group), Recording window: controls readable, reachable, no overlap. Save images
-   with resolution/scale in the filename; record hashes.
+   with resolution/scale in the filename; record hashes. On small/scaled screens the Console
+   scrolls vertically to the faders and the Edit toolbar scrolls sideways to NUDGE/transport —
+   check both are reachable and usable.
 Evidence: `package-smoke-windows.md`, images.
 
 ## 2. H1 recording / clock (≈60 min)

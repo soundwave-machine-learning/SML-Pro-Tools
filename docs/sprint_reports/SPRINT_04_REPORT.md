@@ -146,6 +146,15 @@ commit; result in `regression.log`):
   and a 7/8 meter change start on the exact tempo-map sample, and irregular varying blocks
   (1–512 frames) render the identical signal
   (`click_placement_is_exact_across_tempo_changes_and_irregular_blocks`; test only, no change).
+- **Small-screen layout (portable renders, not native)** — `ui_shot` gained `--scale` (pixels
+  per point). At 1366×768 @150 % (911×512 pt), the Console (Console and Split views) clipped the
+  fader section with no way to reach it (horizontal-only scroll; strips keep a 560 pt minimum),
+  and the Edit toolbar row was wider than the window, clipping NUDGE, transport and tempo. The
+  toolbar row was too wide **even at 1600 pt** — the NUDGE group added in Sprint 2 pushed the
+  transport/tempo/meter groups off the right edge (a regression of this build). Both areas now
+  scroll (Console both ways, toolbar sideways); nothing else changed. Static renders cannot
+  show the scrolling itself (`ui/scale-1366x768-150pct-*.png`); the native screen/scale matrix
+  (gauntlet §1) still decides.
 - **Take read-back memory** — opening every interface input (the new picker) would have made
   `take()` load all inputs (and the raw file a second time) into RAM. Read-back now streams the
   capture file and keeps only the channels armed tracks record; the file still holds every input

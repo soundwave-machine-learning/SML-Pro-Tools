@@ -1,6 +1,6 @@
 //! Render the real UI offscreen (no window, no focus stealing) and save PNGs.
 //!
-//! `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png [script.jsonl] [--blank] [--size WxH] [--system-theme light|dark|none]`
+//! `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png [script.jsonl] [--blank] [--size WxH] [--scale PPP] [--system-theme light|dark|none]`
 //!
 //! Script lines are control requests (`{"method": "...", "params": {...}}`), `{"shot": "path.png"}`
 //! or `{"steps": n}`. `{"system_theme": "light"}` (also `"dark"` or `"none"`) changes the
@@ -42,11 +42,13 @@ fn main() {
         .and_then(|s| s.split_once('x'))
         .and_then(|(a, b)| Some((a.parse::<f32>().ok()?, b.parse::<f32>().ok()?)))
         .unwrap_or((1600.0, 1000.0));
+    // Pixels per point (OS display scaling: 1.0 = 100 %, 1.25, 1.5 …); `--size` is in points.
+    let ppp = args.iter().position(|a| a == "--scale").and_then(|i| args.get(i + 1)).and_then(|s| s.parse::<f32>().ok()).unwrap_or(2.0);
     let engine = if blank { soundcraft_engine::Engine::default() } else { soundcraft_engine::demo::demo_engine() };
     let (tx, rx) = mpsc::channel::<ControlRequest>();
     let app = SoundApp::new(engine, None, Services::default()).with_control(rx);
     let mut harness =
-        egui_kittest::Harness::builder().with_size(egui::vec2(w, h)).with_pixels_per_point(2.0).with_max_steps(1_000_000).wgpu().build_ui_state(
+        egui_kittest::Harness::builder().with_size(egui::vec2(w, h)).with_pixels_per_point(ppp).with_max_steps(1_000_000).wgpu().build_ui_state(
             |ui, app: &mut SoundApp| {
                 if !READY.load(Ordering::Relaxed) {
                     return;

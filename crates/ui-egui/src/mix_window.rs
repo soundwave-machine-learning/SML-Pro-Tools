@@ -31,7 +31,9 @@ pub(crate) fn content(app: &mut SoundApp, ui: &mut Ui) {
     crate::visual_mixer::header(app, ui);
     let view = crate::visual_mixer::MixView::of(app);
     let console = |app: &mut SoundApp, ui: &mut Ui| {
-        egui::ScrollArea::horizontal().id_salt("console").auto_shrink([false, false]).show(ui, |ui| {
+        // Both directions: strips keep a 560 pt minimum height, so on short screens (e.g.
+        // 1366×768 at 150 %, or the Split view) the faders are reached by scrolling, not clipped.
+        egui::ScrollArea::both().id_salt("console").auto_shrink([false, false]).show(ui, |ui| {
             ui.horizontal_top(|ui| {
                 ui.spacing_mut().item_spacing.x = 1.0;
                 for id in &ids {

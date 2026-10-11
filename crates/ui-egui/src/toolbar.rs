@@ -23,18 +23,22 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     let full = ui.max_rect();
     ui.painter().rect_filled(full, 0.0, t.toolbar_bg);
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.add_space(8.0);
-        ui.spacing_mut().item_spacing.x = 8.0;
-        edit_modes(app, ui);
-        zoom_group(app, ui);
-        tools(app, ui);
-        counters(app, ui);
-        grid_nudge(app, ui);
-        nudge_panel(app, ui);
-        transport(app, ui);
-        tempo_meter(app, ui);
-        output_meter(app, ui);
+    // Scrolls sideways when the window is narrower than the row (e.g. 1366×768 at 150 %), so
+    // the NUDGE group and transport stay reachable instead of being clipped.
+    egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.add_space(8.0);
+            ui.spacing_mut().item_spacing.x = 8.0;
+            edit_modes(app, ui);
+            zoom_group(app, ui);
+            tools(app, ui);
+            counters(app, ui);
+            grid_nudge(app, ui);
+            nudge_panel(app, ui);
+            transport(app, ui);
+            tempo_meter(app, ui);
+            output_meter(app, ui);
+        });
     });
 }
 
