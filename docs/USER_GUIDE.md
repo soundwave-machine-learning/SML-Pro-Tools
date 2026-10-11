@@ -11,7 +11,9 @@ today; anything not yet validated on the target machine is marked.
 - If the disk cannot keep up or fails, or the input interface disappears (unplugged, driver
   error), recording stops and the status bar says so; every frame captured before the problem
   is kept. After an interface loss, press Record again once it is back — the input is reopened
-  (a specifically chosen interface is never replaced by another one). After a crash, the take file can be recovered to the last
+  (a specifically chosen interface is never replaced by another one).
+- If the **output** device disappears, playback (and a running recording) stops with a message;
+  the take is kept. Reopen the device in Setup › Playback Engine. After a crash, the take file can be recovered to the last
   durable checkpoint (at most about one second is lost).
 - Device/rate/buffer: choose the input interface in **Setup › Playback Engine** (*Scan input
   devices*, §9). The exact device/rate/buffer is opened, or you get an error — another device is

@@ -928,6 +928,22 @@ impl SoundApp {
             self.recorder = None;
             self.recorder_failed = false;
         }
+        // The output stream failed: the transport cannot advance. A running take (input is
+        // separate) is finalized normally; the user reopens the device in Playback Engine.
+        if self.player.as_ref().and_then(|p| p.output_lost()).is_some() && (self.engine.transport.playing || self.engine.transport.recording) {
+            let why = self.player.as_ref().and_then(|p| p.output_lost()).unwrap_or_default();
+            let take = if self.engine.transport.recording {
+                self.finish_recording();
+                format!(" {}", self.ui.status)
+            } else {
+                String::new()
+            };
+            if let Some(p) = &self.player {
+                p.stop();
+            }
+            self.engine.transport.playing = false;
+            self.ui.status = format!("Playback stopped: {why}. Reopen the device in Setup › Playback Engine.{take}");
+        }
         // Stop the old playback before sending a replacement session to the audio thread.
         self.handle_transport(dt);
         if self.engine.revision != self.last_rev {

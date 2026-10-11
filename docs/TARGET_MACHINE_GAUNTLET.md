@@ -38,7 +38,8 @@ Evidence: `package-smoke-windows.md`, images.
   an encoded test signal (e.g. a counting ramp or MLS from a second device), stop/finalize,
   crash test (kill the process mid-take; reopen; the take recovers up to the last checkpoint),
   unplug test (pull the interface's USB mid-take: recording must stop with a named message and
-  keep the frames before the unplug; replug and press Record).
+  keep the frames before the unplug; replug and press Record). With separate input/output
+  devices, also unplug the output during a take: playback stops with a message, the take is kept.
 - Evidence: `hardware-recording.md`, `recording-alignment.csv`.
 
 ## 3. CL-T6 latency and calibration (≈60 min)

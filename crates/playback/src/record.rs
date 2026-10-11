@@ -39,8 +39,8 @@ pub struct StreamStats {
 
 impl StreamStats {
     /// Records an input stream failure (first one wins).
-    pub fn mark_lost(&self, device_gone: bool) {
-        let _ = self.lost.compare_exchange(0, if device_gone { 1 } else { 2 }, Ordering::AcqRel, Ordering::Acquire);
+    pub fn mark_lost(&self, code: u8) {
+        let _ = self.lost.compare_exchange(0, code.max(1), Ordering::AcqRel, Ordering::Acquire);
     }
 
     /// Why the input stream stopped, if it did.
@@ -137,7 +137,7 @@ impl Recorder {
                 move |e| {
                     // Possibly the audio thread (see `crate::mark_audio_thread`).
                     crate::mark_audio_thread();
-                    st_err.mark_lost(matches!(e, cpal::StreamError::DeviceNotAvailable));
+                    st_err.mark_lost(crate::stream_error_code(&e));
                     log::warn!("input stream error: {e}");
                 },
                 None,
@@ -286,8 +286,8 @@ mod tests {
             pushed += 128;
         }
         assert!(rec.input_lost().is_none());
-        rec.stats.mark_lost(true); // the backend's error callback
-        rec.stats.mark_lost(false); // later errors do not overwrite the first reason
+        rec.stats.mark_lost(1); // the backend's error callback: device not available
+        rec.stats.mark_lost(2); // later errors do not overwrite the first reason
         assert_eq!(rec.input_lost(), Some("the input device is no longer available"));
         let take = rec.take();
         let report = take.report.unwrap();

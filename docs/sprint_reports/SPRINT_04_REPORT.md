@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (611 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (612 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -131,7 +131,10 @@ commit; result in `regression.log`):
   a running take ends as an explicit `DeviceLost` partial with every captured frame kept, the
   transport stops with a named message and the dead stream is dropped so Record reopens the
   input (`disconnect_mid_take_is_an_explicit_partial_with_frames_kept`, simulated in software;
-  a real unplug is part of H1).
+  a real unplug is part of H1). The output stream got the same treatment: its error is
+  recorded, playback/recording stop with a named message (a running take is finalized normally;
+  the input is separate) and the user reopens the device in Playback Engine
+  (`output_loss_reason_is_reported` covers the shared error mapping; the UI path is untested).
 - **Take read-back memory** — opening every interface input (the new picker) would have made
   `take()` load all inputs (and the raw file a second time) into RAM. Read-back now streams the
   capture file and keeps only the channels armed tracks record; the file still holds every input

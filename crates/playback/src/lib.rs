@@ -83,6 +83,9 @@ struct Shared {
     last_callback_frames: AtomicU32,
     /// Set by the audio thread when compensation latency changed during recording.
     latency_alarm: AtomicBool,
+    /// Output stream failure: 0 none, 1 device not available, 2 other backend error (set from
+    /// the stream's error callback; first one wins).
+    output_lost: std::sync::atomic::AtomicU8,
     /// Latest (presentation instant, session sample presented then) while playing (CL04).
     play_anchor: Mutex<Option<(cpal::StreamInstant, Samples)>>,
 }
@@ -98,6 +101,7 @@ impl Shared {
             stream_frames: std::sync::atomic::AtomicU64::new(0),
             last_callback_frames: AtomicU32::new(0),
             latency_alarm: AtomicBool::new(false),
+            output_lost: std::sync::atomic::AtomicU8::new(0),
             play_anchor: Mutex::new(None),
         }
     }
@@ -135,6 +139,19 @@ pub(crate) struct Garbage {
     plugins: Vec<Box<dyn Plugin>>,
     /// Held only so it is dropped by the receiver.
     _session: Option<Arc<Session>>,
+}
+
+/// Stream failure code kept by the error callbacks: 1 device gone, 2 other backend error.
+pub(crate) fn stream_error_code(e: &cpal::StreamError) -> u8 {
+    if matches!(e, cpal::StreamError::DeviceNotAvailable) { 1 } else { 2 }
+}
+
+fn lost_reason(code: u8) -> Option<&'static str> {
+    match code {
+        0 => None,
+        1 => Some("the output device is no longer available"),
+        _ => Some("the output driver reported an error"),
+    }
 }
 
 fn new_engine(sr: f32) -> MixEngine {
@@ -489,8 +506,10 @@ impl Player {
                 let mut state = AudioState::new(rx, Arc::clone(&shared), session, f64::from(rate), gtx);
                 // cpal may call this on the audio thread (on ALSA in a loop while the device
                 // stays broken): marked, so the logger hands the record off instead of writing it.
-                let err_fn = |e: cpal::StreamError| {
+                let lost = Arc::clone(&shared);
+                let err_fn = move |e: cpal::StreamError| {
                     mark_audio_thread();
+                    let _ = lost.output_lost.compare_exchange(0, stream_error_code(&e), Ordering::AcqRel, Ordering::Acquire);
                     log::warn!("audio stream error: {e}");
                 };
                 use cpal::traits::{DeviceTrait, StreamTrait};
@@ -724,6 +743,12 @@ impl Player {
     }
 
     /// True once after the audio thread saw the compensation latency change while recording.
+    /// Why the output stream stopped (device unplugged / driver error), if it did. The
+    /// transport cannot advance on this stream; reopen the device (Playback Engine).
+    pub fn output_lost(&self) -> Option<&'static str> {
+        lost_reason(self.shared.output_lost.load(Ordering::Acquire))
+    }
+
     pub fn take_latency_alarm(&self) -> bool {
         self.shared.latency_alarm.swap(false, Ordering::AcqRel)
     }
@@ -951,6 +976,22 @@ mod tests {
         tx.send(Cmd::Session(Arc::new(s44), Vec::new())).unwrap();
         st.fill(&mut out, 2);
         assert_eq!(retired(&grx), 1);
+    }
+
+    /// CL-T2 output disconnect: the first stream error's reason is kept and reported.
+    #[test]
+    fn output_loss_reason_is_reported() {
+        let gone = cpal::StreamError::DeviceNotAvailable;
+        let other = cpal::StreamError::BackendSpecific { err: cpal::BackendSpecificError { description: "xrun storm".into() } };
+        assert_eq!((stream_error_code(&gone), stream_error_code(&other)), (1, 2));
+        assert_eq!(lost_reason(0), None);
+        assert_eq!(lost_reason(stream_error_code(&gone)), Some("the output device is no longer available"));
+        assert_eq!(lost_reason(stream_error_code(&other)), Some("the output driver reported an error"));
+        // Input side: the first failure wins.
+        let st = record::StreamStats::default();
+        st.mark_lost(stream_error_code(&gone));
+        st.mark_lost(stream_error_code(&other));
+        assert_eq!(st.lost_reason(), Some("the input device is no longer available"));
     }
 
     /// CL05: a replaced session is handed back to the UI thread, so its last reference is not
