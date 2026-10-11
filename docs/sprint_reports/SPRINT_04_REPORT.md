@@ -124,6 +124,8 @@ commit; result in `regression.log`):
   (`recording_never_substitutes_another_input_channel`). Input monitoring had the same
   upstream modulo mapping: a missing channel now monitors silence instead of another input
   (`monitoring_never_substitutes_another_input_channel`).
+  A take recorded from an input running at another rate than the session is resampled (as
+  before) and the status line now says so (UI-only change; no test).
 - **CL05 session swap** — replaced `Arc<Session>` returned to the UI thread for dropping
   (`replaced_sessions_are_dropped_off_the_audio_thread`).
 

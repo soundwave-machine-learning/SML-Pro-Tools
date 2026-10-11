@@ -660,7 +660,9 @@ impl SoundApp {
         if self.engine.session().edit.loop_record && !sel.is_empty() {
             // Split the capture into one take per loop pass; each pass gets its own playlist.
             let made = soundcraft_engine::io::add_loop_recording_at(&mut self.engine, sel, start, &take.channels, rate);
-            self.ui.status = format!("Loop-recorded {made} take(s)");
+            let session_rate = self.engine.session().sample_rate.hz();
+            let note = if rate == session_rate { String::new() } else { format!(" — input ran at {rate} Hz, resampled to {session_rate} Hz") };
+            self.ui.status = format!("Loop-recorded {made} take(s){note}");
             return;
         }
         match soundcraft_engine::io::add_recording(&mut self.engine, start, take.channels, rate) {
@@ -674,7 +676,13 @@ impl SoundApp {
                         "record",
                     );
                 }
-                self.ui.status = format!("Recorded {} clip(s)", ids.len());
+                let session_rate = self.engine.session().sample_rate.hz();
+                self.ui.status = if rate == session_rate {
+                    format!("Recorded {} clip(s)", ids.len())
+                } else {
+                    // Visible, never silent: the take was resampled (the capture file is unchanged).
+                    format!("Recorded {} clip(s) — input ran at {rate} Hz, resampled to the session's {session_rate} Hz", ids.len())
+                };
             }
             Err(e) => self.ui.status = e.to_string(),
         }

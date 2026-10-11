@@ -18,6 +18,9 @@ today; anything not yet validated on the target machine is marked.
   the input device lacks that channel, Record refuses to start and says which track and channel;
   it never records (or monitors) a different input instead. A one-input device can feed a stereo track (the
   same signal on both sides).
+- If the input device runs at a different rate than the session, the take is resampled to the
+  session rate and the status line says so (the capture file keeps the device rate). For
+  bit-exact dry takes, open the input at the session rate (§9).
 - *Not yet validated on a real Windows interface (H1).*
 
 ## 2. Nudge
