@@ -56,9 +56,11 @@ Evidence: `package-smoke-windows.md`, images.
   >100 ms; report measurement resolution. N09: 100 nudge key actions during playback on 16
   tracks / 2000 clips; VM-T7: 60 s continuous node drag + automation.
 - Headless reference (this container, NOT native): the first profile showed **13 deadline
-  overruns at 64 frames** caused by rayon scheduling of light strips; after adaptive strip
-  scheduling `callback-profile.csv` shows p99 load 0.04/0.03/0.03 and 0 overruns. Workers are
-  still used with ≥4 plugin-hosting strips — check 64 frames with workload (b) specifically.
+  misses at 64 frames**, caused by rayon scheduling of light strips (fixed: adaptive strips). Six
+  later runs still show 11–18 misses / 270 000 callbacks at 64 frames in every config, with
+  1.5–2.7 ms maxima against a p99 ≈ 50–65 µs. That is consistent with VM pauses but **unproven**:
+  check 64 frames natively with both workloads. Workers are used with ≥4 plugin-hosting strips,
+  so check workload (b) specifically.
 - Evidence: `callback-profile.csv`, `response-profile.csv` (native), stress log.
 
 ## 5. H2 owner plugins and N07/N10, owner review

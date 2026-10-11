@@ -33,6 +33,9 @@ was a fresh `Vec` before Sprint 4 and is now a reused buffer (FIXED). Strip para
 adaptive: rayon workers only when ≥4 strips host processing (measured 3–5× scheduler overhead for
 light strips; `docs/evidence/sprint_04/callback-profile*.csv`); in parallel mode rayon itself
 allocated 3 times in 200 blocks (OPEN, third-party scheduler; documented).
+Per-block graph-structure hash (`ensure_synced` in every `render`): measured 3.1 µs per block for
+21 tracks. The playback engine now announces session changes (`set_session_changes_signalled`)
+and skips the hash otherwise (CHANGED, Sprint 4; `announced_session_changes_resync_the_graph`).
 `sync` allocates and runs inside `render` when the session structure changes (document edits);
 in realtime use that happens on the audio thread after a session swap — a known CL05 gap
 (graph construction should move off the callback). Recorded as OPEN, not fixed in this pass.

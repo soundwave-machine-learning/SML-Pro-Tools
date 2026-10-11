@@ -1,0 +1,7 @@
+config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance
+16play+2rec+bus+fx v2 parallel allowed (adaptive),64,48000,45000,1333.3,25.7,55.4,950.5,0.042,0.713,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips,64,48000,45000,1333.3,25.7,54.9,2947.6,0.041,2.211,2,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 parallel allowed (adaptive),128,48000,22500,2666.7,41.9,77.8,358.0,0.029,0.134,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips,128,48000,22500,2666.7,41.8,63.0,819.3,0.024,0.307,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 parallel allowed (adaptive),256,48000,11250,5333.3,74.7,137.6,1703.7,0.026,0.319,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips,256,48000,11250,5333.3,74.9,135.5,2164.6,0.025,0.406,0,headless container release build (not native; no device; single process)

@@ -49,9 +49,12 @@ fn main() {
     let session = e.session().clone();
     let mut csv =
         String::from("config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance\n");
-    for (n, parallel) in [64usize, 128, 256].into_iter().flat_map(|n| [(n, true), (n, false)]) {
+    // Configs: playback's (adaptive strips, announced session changes), the same with the
+    // per-block structure check (offline default), and forced-serial strips.
+    for (n, parallel, signalled) in [64usize, 128, 256].into_iter().flat_map(|n| [(n, true, false), (n, false, false), (n, true, true)]) {
         let mut eng = soundcraft_mix::MixEngine::new(sr as f32, 512);
         eng.parallel_strips = parallel;
+        eng.set_session_changes_signalled(signalled);
         eng.recording = true;
         eng.input = vec![vec![0.01; 512]];
         let mut out = vec![vec![0.0f32; n]; 2];
@@ -71,7 +74,11 @@ fn main() {
         let _ = writeln!(
             csv,
             "16play+2rec+bus+fx v2 {},{n},{sr},{callbacks},{budget:.1},{:.1},{:.1},{:.1},{:.3},{:.3},{misses},headless container release build (not native; no device; single process)",
-            if parallel { "parallel allowed (adaptive)" } else { "serial strips" },
+            match (parallel, signalled) {
+                (true, true) => "adaptive strips + announced changes (playback config)",
+                (true, false) => "adaptive strips + per-block structure check",
+                _ => "serial strips + per-block structure check",
+            },
             pct(0.5),
             pct(0.99),
             times[times.len() - 1],

@@ -41,7 +41,7 @@ counter available); see "Budget" below.
 | R06 own VST3/CLAP, editors/state/export | software PASS (repo CLAP fixture in insert and Tape slot); background scan; H2 owner plugins pending | `plugin-compatibility.csv` |
 | R07 mixer/routing/compensation | PASS (software) | SL02 graph v2, PDC through slots (0–1024), cycles, mute/solo policy |
 | R08 simple recording view, usable mixer | IMPLEMENTED; UX pending | Recording panel, Console SLOTS/Width rows (renders) |
-| R09 measured responsiveness | PARTIAL | headless profile: 13 overruns @64 frames found, cause measured (rayon overhead on light strips), adaptive strip scheduling → 0 overruns @64/128/256 on the VM — native H3 pending |
+| R09 measured responsiveness | PARTIAL | headless profile: rayon overhead (measured) removed and per-block structure hash (measured) skipped in playback; p99 load ≤0.05; 64-frame deadline misses remain at VM-noise level (11–18 / 270 000 over six runs) — native H3 decides |
 | R10 regression, candidate, manual, delivery | regression PASS; candidates + manual done; native delivery checks pending | `regression.log`, `artifact-manifest.json`, `USER_GUIDE.md` |
 | R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv`: V01–V11 and V13 verified in software; V12 BLOCKED (owner pitch plugin); V14 interaction needs owner UI review |
 | R12 dedicated Nudge | software PASS (N01–N06, N08, N07 unit); N07 physical/N09 native pending; N10 claim-only | Sprint 2 |
@@ -67,7 +67,7 @@ counter available); see "Budget" below.
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
   CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
-  (**606 passed, 0 failed, exit 0**).
+  (**607 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired
@@ -89,13 +89,18 @@ ignored latency pre-roll) — the product behaviour was right in both cases.
 
 ## Measured latency / performance
 Physical latency: **not measured**. Headless release profile on the shared VM (not native):
-the first run found **13 deadline overruns at 64 frames** (p99 load 0.217); measurement showed
-rayon scheduling costing 3–5× the work of light strips. After the adaptive rule (workers only for
-≥4 strips with hosted processing; reused work buffer; bit-identical output), `callback-profile.csv`
-shows p99 load 0.042 / 0.029 / 0.026 at 64 / 128 / 256 frames and **0 overruns** in the adaptive
-rows (forced-serial rows: 2 overruns at 64 frames from VM pauses). Render is allocation-free in
-steady state (serial; test). Fader command ack p95 19.9 µs (engine only). Not evidence of native
-performance; owner plugins (heavy strips) are not represented.
+- First run: **13 deadline misses / 45 000 callbacks at 64 frames** (p99 load 0.217). Measured
+  cause: rayon scheduling cost 3–5× the work of light strips. Fixed with adaptive strips
+  (workers only for ≥4 strips that host processing; reused work buffer; bit-identical output).
+- Per-block graph-structure hash measured at 3.1 µs (≈12 % of the 64-frame median); playback now
+  announces session changes instead. 64-frame median 26.1–30.1 → 23.0–23.9 µs over six runs.
+- p99 load now 0.03–0.05 at 64/128/256 frames. **Deadline misses at 64 frames remain** in
+  every config (11–18 per 270 000 callbacks over six runs, maxima 1.5–2.7 ms vs p99 ≈ 50–65 µs).
+  This is consistent with VM scheduler pauses, but zero misses cannot be shown here, so the
+  64-frame finding stays **open for the native run**. 256 frames: 0 misses.
+- Render is allocation-free in steady state (serial; test). Fader command ack p95 25.1 µs
+  (engine only).
+Not evidence of native performance; owner plugins (heavy strips → workers) are not represented.
 
 ## Owner review
 None performed (owner not available). Nothing approved on the owner's behalf.

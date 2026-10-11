@@ -140,6 +140,8 @@ pub(crate) struct Garbage {
 fn new_engine(sr: f32) -> MixEngine {
     let mut m = MixEngine::new(sr, BLOCK);
     m.set_external_instances(true);
+    // Every session hand-off below announces itself (`Cmd::Session`).
+    m.set_session_changes_signalled(true);
     m.realtime_overrides = true;
     m.metronome = true;
     m
@@ -188,6 +190,7 @@ impl AudioState {
                         let _ = self.garbage.send(Garbage { plugins: old.drain_plugins(), _session: None });
                     }
                     self.mix.adopt(instances);
+                    self.mix.session_changed();
                     // The main format changed (a document edit, not steady state): resize.
                     let nch = main_channels(&s);
                     if self.block.len() != nch {

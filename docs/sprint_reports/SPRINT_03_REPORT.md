@@ -88,7 +88,7 @@ passed — `docs/evidence/sprint_03/ci-sprint3-carryover.log`):
 | CL04 timestamp placement | output callback records (presentation instant, session sample); input records the first capture instant; takes are placed by `clock::place_by_timestamps` (driver terms inside the instants, residual/manual once), else transport estimate | `playback timestamp_placement_signs`, `playback_anchor_maps_instant_to_session_position` |
 
 Still PARTIAL: background/cancellable plugin scanning; multi-select Visual drag; slot I/O meters;
-simplified recording view; loop-record placement uses the loop start (not timestamps); native
+simplified recording view; loop-record placement uses the loop start (not timestamps — closed in the Sprint 4 follow-up); native
 verification of every item above (H1–H3).
 
 ### Carry-over batch 2 (full CI exit 0, 594 passed — `ci-carryover2.log`)

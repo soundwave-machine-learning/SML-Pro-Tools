@@ -365,6 +365,11 @@ pub struct MixEngine {
     last_end: Samples,
     /// Snapshot key of the session the strips/order were synced to.
     synced: (usize, usize, usize),
+    /// CL05: the caller announces every session change ([`MixEngine::session_changed`]), so
+    /// `render` skips the per-block structure fingerprint (measured ≈3 µs per block for 21
+    /// tracks — about 12 % of a 64-frame callback's work in the headless profile).
+    changes_signalled: bool,
+    session_dirty: bool,
     order: Vec<usize>,
     /// Current total compensation delay (samples) of the mix.
     pub latency: usize,
@@ -525,6 +530,8 @@ impl MixEngine {
             pan_law: PanLaw::Minus3,
             last_end: 0,
             synced: (0, 0, 0),
+            changes_signalled: false,
+            session_dirty: true,
             order: Vec::new(),
             latency: 0,
             input: Vec::new(),
@@ -736,7 +743,23 @@ impl MixEngine {
     /// Re-syncs plugin instances and the routing order when the session's structure changed
     /// since the last sync (or instances were adopted). `render` calls it; a realtime host may
     /// also call it right after swapping sessions so slots are filled before playback starts.
+    /// Opt in to announcing session changes: afterwards `render` checks the graph structure
+    /// only after [`MixEngine::session_changed`] (or [`MixEngine::ensure_synced`]) instead of
+    /// hashing it every block. A caller that passes a different session without announcing it
+    /// renders the previous structure — so only owners of the session hand-off (the playback
+    /// engine) enable this; offline renders keep the per-block check.
+    pub fn set_session_changes_signalled(&mut self, on: bool) {
+        self.changes_signalled = on;
+        self.session_dirty = true;
+    }
+
+    /// The next `render` receives a different session: re-check the graph structure once.
+    pub fn session_changed(&mut self) {
+        self.session_dirty = true;
+    }
+
     pub fn ensure_synced(&mut self, s: &Session) {
+        self.session_dirty = false;
         let key = (structure_fingerprint(s), s.tracks.len(), s.busses.len());
         if key != self.synced {
             self.sync(s);
@@ -758,7 +781,9 @@ impl MixEngine {
             }
         }
         self.last_end = pos.saturating_add(frames as i64);
-        self.ensure_synced(s);
+        if !self.changes_signalled || self.session_dirty {
+            self.ensure_synced(s);
+        }
         self.profile = MixProfileView::of(s);
         self.graph_version = s.mix_profile.graph_version;
         for b in self.busses.values_mut() {
@@ -2968,6 +2993,35 @@ mod sml_graph_tests {
         eng.realtime_overrides = true;
         eng.render(&s, 512, 256, &mut out);
         assert!(!eng.meters[&a].slots[0].active);
+    }
+
+    /// CL05: with announced session changes the structure is re-checked exactly when announced;
+    /// output is identical to the per-block check for the same session sequence.
+    #[test]
+    fn announced_session_changes_resync_the_graph() {
+        let mut s = Session::default();
+        track(&mut s, ChannelFormat::Mono, vec![ramp(1.0)], 1);
+        s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+        let mut s2 = s.clone();
+        track(&mut s2, ChannelFormat::Stereo, vec![ramp(0.3), ramp(0.7)], 2);
+        let run = |signalled: bool, announce: bool| {
+            let mut eng = MixEngine::new(48_000.0, 256);
+            eng.set_session_changes_signalled(signalled);
+            let mut out = vec![vec![0.0f32; 256]; 2];
+            let mut all = Vec::new();
+            for b in 0..8i64 {
+                let cur = if b < 4 { &s } else { &s2 };
+                if b == 4 && announce {
+                    eng.session_changed();
+                }
+                eng.render(cur, b * 256, 256, &mut out);
+                all.extend_from_slice(&out[0]);
+            }
+            all
+        };
+        let reference = run(false, false);
+        assert_eq!(run(true, true), reference, "announced: identical to the per-block check");
+        assert_ne!(run(true, false), reference, "unannounced change is (by contract) not picked up");
     }
 
     /// SL-T1 / VM-T2: empty/Clean slots at unity, 100 % width and mixer view state are

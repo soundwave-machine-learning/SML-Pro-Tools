@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (606 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (607 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -24,27 +24,50 @@ exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **N
    serially; worker threads are used only when ≥ `PARALLEL_MIN_HEAVY_STRIPS` (4) strips host a
    plugin, dedicated-slot provider or instrument (`MixEngine::parallel_strips` can disable them
    entirely). The strip work list is a reused buffer. Output is bit-identical in both modes
-   (`serial_and_parallel_strips_render_identically`). Result (`callback-profile.csv`):
+   (`serial_and_parallel_strips_render_identically`).
 
-   | Frames | budget | mode | p50 | p99 | max | p99 load | overruns |
+   **Second CL05 optimization (measured first):** `render` hashed the graph structure every block
+   to detect session changes — measured 3.1 µs per block for 21 tracks (a temporary release
+   micro-benchmark), ≈12 % of the 64-frame median. The playback engine now announces each
+   session hand-off (`MixEngine::set_session_changes_signalled`, `session_changed` on
+   `Cmd::Session`); offline renders keep the per-block check. Identical output for the same
+   session sequence (`announced_session_changes_resync_the_graph`).
+
+   Result, final run (`callback-profile.csv`; config order: per-block adaptive, per-block
+   serial, playback):
+
+   | Frames | budget | config | p50 | p99 | max | p99 load | deadline misses |
    |---|---|---|---|---|---|---|---|
-   | 64 | 1333 µs | adaptive | 25.7 µs | 55.4 µs | 950 µs | 0.042 | **0 / 45 000** |
-   | 64 | 1333 µs | serial | 25.7 µs | 54.9 µs | 2948 µs | 0.041 | 2 / 45 000 |
-   | 128 | 2667 µs | adaptive | 41.9 µs | 77.8 µs | 358 µs | 0.029 | 0 / 22 500 |
-   | 128 | 2667 µs | serial | 41.8 µs | 63.0 µs | 819 µs | 0.024 | 0 / 22 500 |
-   | 256 | 5333 µs | adaptive | 74.7 µs | 137.6 µs | 1704 µs | 0.026 | 0 / 11 250 |
-   | 256 | 5333 µs | serial | 74.9 µs | 135.5 µs | 2165 µs | 0.025 | 0 / 11 250 |
+   | 64 | 1333 µs | adaptive + announced changes (playback) | 23.3 µs | 54.0 µs | 2412 µs | 0.041 | 2 / 45 000 |
+   | 64 | 1333 µs | adaptive + per-block check | 26.3 µs | 64.6 µs | 1950 µs | 0.048 | 2 / 45 000 |
+   | 64 | 1333 µs | serial + per-block check | 26.3 µs | 61.3 µs | 2748 µs | 0.046 | 1 / 45 000 |
+   | 128 | 2667 µs | adaptive + announced changes (playback) | 39.9 µs | 90.1 µs | 778 µs | 0.034 | 0 / 22 500 |
+   | 128 | 2667 µs | adaptive + per-block check | 42.4 µs | 69.0 µs | 228 µs | 0.026 | 0 / 22 500 |
+   | 128 | 2667 µs | serial + per-block check | 54.1 µs | 113.5 µs | 4768 µs | 0.043 | 1 / 22 500 |
+   | 256 | 5333 µs | adaptive + announced changes (playback) | 83.1 µs | 148.6 µs | 2158 µs | 0.028 | 0 / 11 250 |
+   | 256 | 5333 µs | adaptive + per-block check | 76.9 µs | 177.8 µs | 2147 µs | 0.033 | 0 / 11 250 |
+   | 256 | 5333 µs | serial + per-block check | 76.4 µs | 151.9 µs | 2487 µs | 0.028 | 0 / 11 250 |
 
-   The profile session has no hosted plugins, so "adaptive" runs serially and the two rows
-   measure the same code path; the 2 serial overruns and the multi-ms maxima are scheduler
-   pauses of the shared VM (single run, p99 unaffected). Allocation guard
-   (`crates/mix/tests/realtime_alloc.rs`, `stats_alloc` global allocator): **0 allocations and
-   reallocations over 200 steady-state blocks in serial mode** (graph v2, buses, sends, FX
-   return, width, Tape-slot fixture, profile pans, live input); with 4 heavy strips in parallel
-   mode rayon's scheduler itself allocated 3 times in 200 blocks (reported, not asserted).
+   **Run-to-run variance (6 runs, `callback-profile-runs.csv`):** the median drop is consistent
+   (64 frames: 23.0–23.9 µs with announced changes vs 26.1–30.1 µs with the per-block check).
+   Deadline misses at 64 frames occur in **every** config — 18, 11 and 12 per 270 000 callbacks
+   (playback / per-block adaptive / serial; 0–9 per run in each config, no stable ranking),
+   with maxima of 1.5–2.7 ms against a p99 near 50–65 µs. For this plugin-free session all
+   three configs run the same serial strip code, so the misses are consistent with scheduler
+   pauses of the shared VM, not with compute (an earlier run not kept in the file, playback
+   config first, had 6). **The 64-frame overrun finding is therefore not closed** in this container:
+   the rayon cost was removed, but zero misses cannot be shown here. 128 frames: 1 miss per
+   135 000 in each config; 256 frames: none. An earlier single run showing "0 overruns" was a
+   quiet run, not a stable result, and is superseded by these six.
 
-   Fader command acknowledgment (event → model revision, engine only): p50 13.3 µs, p95 19.9 µs,
-   max 76.5 µs (1000 samples, `response-profile.csv`). These are container measurements with a
+   Allocation guard (`crates/mix/tests/realtime_alloc.rs`, `stats_alloc` global allocator):
+   **0 allocations and reallocations over 200 steady-state blocks in serial mode** (graph v2,
+   buses, sends, FX return, width, Tape-slot fixture, profile pans, live input). In parallel
+   mode with 4 heavy strips, rayon's scheduler itself allocated 3 times in 200 blocks (reported,
+   not asserted).
+
+   Fader command acknowledgment (event → model revision, engine only): p50 13.7 µs, p95 25.1 µs,
+   max 173.6 µs (1000 samples, `response-profile.csv`). These are container measurements with a
    shared, noisy scheduler — **not** native results and not a CL-T7 PASS. The native machine
    must still be checked at 64 frames with owner plugins (heavy strips → workers).
 2. **Native H1–H3, CL-T6/7**: not executable here; gauntlet written with topologies, counts,
@@ -96,7 +119,8 @@ commit; result in `regression.log`):
 
 ## Evidence
 `regression.log`, `release-build.log`, `profile-run.log`, `callback-profile.csv`,
-`callback-profile-before-adaptive.csv`,
+`callback-profile-before-adaptive.csv`, `callback-profile-before-announced-sync.csv`,
+`callback-profile-runs.csv`,
 `response-profile.csv`, `package-linux.log`, `package-smoke.log`, `package-smoke.md`,
 `windows-cross-build.log`, `artifact-manifest.json`.
 
