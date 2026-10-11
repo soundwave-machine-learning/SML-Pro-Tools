@@ -2774,6 +2774,50 @@ mod tests {
         out
     }
 
+    /// CL-T3: clicks across tempo changes with non-integer beat lengths (97.3 and 133.7 BPM at
+    /// 44.1 kHz) and a meter change land on the exact sample the tempo map gives, and irregular,
+    /// varying block sizes (block edges and interiors) render the identical signal.
+    #[test]
+    fn click_placement_is_exact_across_tempo_changes_and_irregular_blocks() {
+        let mut s = Session { sample_rate: soundcraft_time::SampleRate::new(44_100).unwrap(), ..Session::default() };
+        s.edit.click = true;
+        let sr = s.sample_rate;
+        let tpb = s.tempo.meter_at_tick(0).ticks_per_beat();
+        s.tempo.set_tempo(0, 97.3).unwrap();
+        s.tempo.set_tempo(4 * tpb, 133.7).unwrap();
+        s.tempo.set_meter(8 * tpb, 7, 8).unwrap();
+        let mut beats = Vec::new();
+        let mut tick = 0i64;
+        while beats.len() < 16 {
+            beats.push(s.tempo.tick_to_samples(tick, sr));
+            tick += s.tempo.meter_at_tick(tick).ticks_per_beat();
+        }
+        let len = usize::try_from(*beats.last().unwrap()).unwrap() + 4410;
+        let reference = render_playback(&s, len, 512, false);
+        // Irregular, varying callback sizes.
+        let sizes = [64usize, 100, 37, 512, 1, 255, 128, 333];
+        let mut eng = MixEngine::new(44_100.0, 512);
+        eng.metronome = true;
+        let mut out = vec![vec![0.0f32; len]; 2];
+        let mut tmp = vec![vec![0.0f32; 512]; 2];
+        let (mut done, mut k) = (0usize, 0usize);
+        while done < len {
+            let n = sizes[k % sizes.len()].min(len - done);
+            k += 1;
+            eng.render(&s, done as i64, n, &mut tmp);
+            out[0][done..done + n].copy_from_slice(&tmp[0][..n]);
+            out[1][done..done + n].copy_from_slice(&tmp[1][..n]);
+            done += n;
+        }
+        assert_eq!(out, reference, "block partition never changes the click signal");
+        // Each blip starts with sin(0) = 0, so its first non-zero sample is beat + 1.
+        for (b, at) in beats.iter().enumerate() {
+            let at = usize::try_from(*at).unwrap();
+            assert!(out[0][at.saturating_sub(20)..=at].iter().all(|x| *x == 0.0), "silence before beat {b}");
+            assert_ne!(out[0][at + 1], 0.0, "beat {b} onset exactly at sample {at}");
+        }
+    }
+
     #[test]
     fn click_sounds_on_every_beat_only_in_playback() {
         let mut s = Session::default();

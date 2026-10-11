@@ -28,6 +28,7 @@ All commands run from the repository root on the execution host recorded in `env
 | Background plugin scan | `cargo test -p soundcraft-ui-egui plugin_scan` | |
 | CL-T5 render allocation guard, serial/parallel equality (A4) | `cargo test -p soundcraft-mix --test realtime_alloc` and `cargo test -p soundcraft-mix serial_and_parallel` | `stats_alloc` global allocator |
 | Follow-up batch (A4): input picker, slot I/O meters, list badges, loop placement, arbitration, session drop | `cargo test -p soundcraft-playback -- input_request replaced_sessions`; `cargo test -p soundcraft-mix sml_graph_slot_io`; `cargo test -p soundcraft-ui-egui -- failed_input_switch route_badge`; `cargo test -p soundcraft-engine -- loop_passes vmt5_snapshot_recall` | |
+| CL-T3 click/tempo placement, device loss (A4 follow-up) | `cargo test -p soundcraft-mix click_placement`; `cargo test -p soundcraft-playback -- disconnect output_loss` | |
 | Headless callback/response profile (A4, not native) | `cargo run --release -p soundcraft-engine --example sml_profile -- callback.csv response.csv` | |
 | UI renders | `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png script.jsonl --size 1600x1000` | needs a Vulkan driver (lavapipe here) |
 | Linux package | `cargo build --release --locked -p soundcraft -p soundcraft-cli && packaging/linux/package.sh --skip-build --formats tar` | |

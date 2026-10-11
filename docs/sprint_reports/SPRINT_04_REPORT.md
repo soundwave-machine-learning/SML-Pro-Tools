@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (612 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (613 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -135,6 +135,10 @@ commit; result in `regression.log`):
   recorded, playback/recording stop with a named message (a running take is finalized normally;
   the input is separate) and the user reopens the device in Playback Engine
   (`output_loss_reason_is_reported` covers the shared error mapping; the UI path is untested).
+- **CL-T3 click placement** — clicks across 97.3 → 133.7 BPM (non-integer beat lengths, 44.1 kHz)
+  and a 7/8 meter change start on the exact tempo-map sample, and irregular varying blocks
+  (1–512 frames) render the identical signal
+  (`click_placement_is_exact_across_tempo_changes_and_irregular_blocks`; test only, no change).
 - **Take read-back memory** — opening every interface input (the new picker) would have made
   `take()` load all inputs (and the raw file a second time) into RAM. Read-back now streams the
   capture file and keeps only the channels armed tracks record; the file still holds every input

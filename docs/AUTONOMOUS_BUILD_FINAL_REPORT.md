@@ -67,7 +67,7 @@ counter available); see "Budget" below.
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
   CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
-  (**612 passed, 0 failed, exit 0**).
+  (**613 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired
