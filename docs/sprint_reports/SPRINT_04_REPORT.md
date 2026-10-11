@@ -84,7 +84,7 @@ exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **N
      was produced for owner testing. Cross-compiling is **not** a Windows runtime pass. WASAPI only
      (ASIO not compiled; needs the ASIO SDK on a Windows build host).
    - Artifacts (gitignored, local): see `artifact-manifest.json` for paths, sizes, sha256.
-     Both were **rebuilt from `3eaef10`** after the follow-up batches (release build, tarball,
+     Both were **rebuilt from `7838032`** after the follow-up batches (release build, tarball,
      clean-extraction CLI smoke and mingw cross-build re-run; logs overwritten with the new runs).
 5. **Docs**: `docs/USER_GUIDE.md` (recording, Nudge, vocal comping, buses/FX returns, slots,
    profile/pan/width, Console/Visual/Split, monitoring/exports, device/latency/tracking, plugin

@@ -12,14 +12,25 @@ Final source commit: see the "Checkpoint" line at the bottom (written after comm
 | Prompt package | verified (`tools/verify_prompt_package.py` PASS), integrated under `docs/` with provenance in `docs/package_provenance/` |
 | Portable build/tests | **PASS** — `cargo xtask ci` exit 0, 616 tests (final: `docs/evidence/sprint_04/regression.log`) |
 | Feature coverage | A1–A4 executed rows PASS; named PARTIAL rows in `docs/AUTONOMOUS_BUILD_FINAL_REPORT.md` |
-| Windows artifact | unsigned cross-built zip (mingw) in `dist/release/` — **never run on Windows** |
-| Linux artifact | tarball in `dist/release/` — headless CLI smoke PASS |
+| Windows artifact | unsigned cross-built zip (mingw) from `7838032` in `dist/release/` — **never run on Windows** |
+| Linux artifact | tarball from `7838032` in `dist/release/` — clean-extraction headless CLI smoke PASS |
 | Native driver/plugin tests (H1–H3) | **NOT EXECUTED — no target access** |
 | Physical latency/calibration/stability | **NOT EXECUTED** |
 | Owner UX/audio review | **PENDING** |
 | Native summing/tape models | **DEFERRED BY OWNER** |
 | Signed/published/installed | No (outside authorization) |
 | Release ready | **NO** |
+
+## Sprint 4 follow-up (after the first checkpoint `d41d690`)
+CL05 optimizations (adaptive strip parallelism, per-block structure hash skipped in playback,
+render allocation guard, replaced sessions freed off the audio thread); carried PARTIAL rows
+closed in software (input device picker, slot I/O meters, Visual list badges/rename, loop-record
+timestamp placement, automation arbitration, V01/V03/V13); review-found H1 risks fixed (input
+channel substitution in recording and monitoring, multi-input take read-back memory, device loss
+for input and output, resampled-take notice); the upstream Count Off control made to work; small-
+screen layout (Console/toolbar scrolling). Details: `docs/sprint_reports/SPRINT_04_REPORT.md`.
+Open: 64-frame deadline misses in the VM profile (unproven cause), CL05 residue (graph `sync`
+on structure change), N07 keypad, native everything.
 
 ## Where things are
 - Reports: `docs/sprint_reports/SPRINT_0{1..4}_REPORT.md`, `docs/AUTONOMOUS_BUILD_FINAL_REPORT.md`.
@@ -29,6 +40,12 @@ Final source commit: see the "Checkpoint" line at the bottom (written after comm
 - Key new code: `crates/playback/src/{capture,clock,device}.rs`, `crates/engine/src/cmd/{nudge,bus,snapshot,slots}.rs`,
   `crates/model/src/{nudge,slots}.rs`, `crates/dsp/src/{mixmath,removed_meta}.rs`, `crates/mix/src/lib.rs`
   (graph v2, slots, profile, f64 sums), `crates/ui-egui/src/{visual_mixer,nudge_keys,plugin_scan}.rs`.
+
+## Artifacts are not in git
+`dist/release/` is gitignored and lived only in the (ephemeral) build container; both files were
+attached to the session output. Their sha256 values are in `docs/evidence/sprint_04/artifact-manifest.json`.
+To rebuild: the Linux package and Windows cross-build rows of
+`docs/evidence/sprint_01/validation-command-index.md` (rebuilding may not be byte-identical).
 
 ## Environment notes for the next run
 Container needed `libasound2-dev pkg-config libudev-dev mesa-vulkan-drivers libvulkan1` and the

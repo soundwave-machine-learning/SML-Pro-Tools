@@ -28,7 +28,7 @@ counter available); see "Budget" below.
 | 1 — Recording, clock, clean baseline (A1) | **PASS (portable)**; H1 pending | `f70ac26` | `docs/sprint_reports/SPRINT_01_REPORT.md` |
 | 2 — Vocal editing + Nudge (A2) | **PASS for executed rows**; V01/V03/V07/V13 closed in the Sprint 4 follow-up (incl. a working Count Off); V14 owner review, V12 owner plugin; N07 physical/N09 native, N10 claim-only | `c11b84f` | `SPRINT_02_REPORT.md` |
 | 3 — Mixer, slots, own plugins, Visual (A3) | **PASS for executed rows** + two carry-over batches; H2/M-T7/SL-T8/VM-T7/8 pending; M-T3/4/8 deferred by owner | `4295a19`, `525d882`, `a130594`, `b1181dc` | `SPRINT_03_REPORT.md` |
-| 4 — Performance, delivery (A4) | **A4 regression PASS**; native H1–H4 BLOCKED; artifacts rebuilt from `3eaef10` (unsigned, untested on Windows) | `d41d690`; follow-ups `903992d`, `6859781`, `1e04af1`, `cefa07b`, `3eaef10` + final docs commit | `SPRINT_04_REPORT.md` |
+| 4 — Performance, delivery (A4) | **A4 regression PASS**; native H1–H4 BLOCKED; artifacts rebuilt from `7838032` (unsigned, untested on Windows) | `d41d690`; follow-ups `903992d` `6859781` `1e04af1` `cefa07b` `3eaef10` `b4db1a9` `c684ece` `4b87c16` `6c45d06` `44f0c70` `f440c87` `17ecf26` `b183c02` `81c5f54` `1e3f16d` `03e1911` `7838032` + final docs commit | `SPRINT_04_REPORT.md` |
 
 ## Requirement coverage (R01–R26)
 | ID | Status | Evidence / gap |
@@ -75,7 +75,9 @@ See `docs/evidence/sprint_01/plugin-removal-inventory.md` (each with rationale):
 ported to test-only providers; bundled-instrument test retired; plugin-state/category/preset tests
 use placeholders; MCP agent test uses the bus workflow; 25 dsp processor tests retired with their
 code; fuzz/unit/offline service tests replaced or ported. No tolerance was loosened and no
-expected output regenerated. Two of my own new tests were corrected after investigation (a pan
+expected output regenerated. My own new tests were corrected where they were wrong, never the
+product to fit them: in Sprint 4 a swapped `Clip::audio` argument in the Tab test and an
+underflow in the click-placement test (beat 0 at sample 0). Earlier, two tests were corrected after investigation (a pan
 reference that used −3.0103 dB where the legacy law is −3.0 dB; an offline-render expectation that
 ignored latency pre-roll) — the product behaviour was right in both cases.
 
@@ -108,11 +110,13 @@ None performed (owner not available). Nothing approved on the owner's behalf.
 ## Artifacts (local, gitignored)
 | Path | sha256 |
 |---|---|
-| `dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz` | `99299e177275f58dead865c8beb6e8091263657f7944d27bacfadaa5a4304c0d` |
-| `dist/release/sml-recording-0.5.0-windows-x64-gnu-unsigned.zip` | `1a08dc2c3239edb07b026a013ccc2954a7c8022689474ea246de7ddac83002fa` |
+| `dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz` | `b3bff56adb04fb354503c0b756cc9cd12f4fcacb6b05eaf64720f84cd64637f1` |
+| `dist/release/sml-recording-0.5.0-windows-x64-gnu-unsigned.zip` | `3bff44b1ecf1fb41f6888519f6cb1befc5cce1991ddbd70256e54502dcfe2b56` |
 
-Both built from source commit `3eaef10` (clean tree; later commits are docs only). Linux CLI smoke
+Both built from source commit `7838032` (clean tree; later commits are docs only). Linux CLI smoke
 PASS from clean extraction; Windows build never executed. Details: `artifact-manifest.json`.
+`dist/` is gitignored: the files existed in the ephemeral build container and were attached to
+the session output; rebuild commands are in the validation command index.
 
 ## Unfinished requirements (exact)
 Software, not done in this run:
@@ -122,6 +126,9 @@ Software, not done in this run:
 - **64-frame deadline misses** in the headless profile: 11–18 per 270 000 callbacks remain
   (consistent with VM pauses, unproven).
 - **N07**: the UI toolkit does not distinguish the numeric keypad and has no Win modifier.
+- **Upstream Options toggles without behaviour**: QuickPunch, TrackPunch, Destructive Record and
+  DestructivePunch only store a setting (outside this package's scope; not claimed). Count Off
+  had the same problem and was fixed.
 - **UI screen/scale matrix**: offscreen renders at 1600×1000 @2x and 1366×768 @150 % only; the
   latter found clipped faders/toolbar groups (fixed by scrolling, not by a redesign). Native
   check pending.
@@ -140,9 +147,11 @@ listening/approval. Deferred by the owner: native summing/tape models (M-T3/4/8)
 5. craftrules (`../../craftrules`) and `plan/` are not present in the container; not inferred.
 
 ## Budget
-Start 15:16:41Z. Sprints 1–3 + carry-overs + Sprint 4 deliverables completed by ≈17:30Z; work
-continued afterwards within the cap (see `docs/PROJECT_HANDOFF.md` for the final timestamp).
-Final 20 minutes reserved for verification/checkpoint as required.
+Start 15:16:41Z (wall-time proxy; no usage counter available). Sprints 1–3 and carry-overs were
+done by ≈17:00Z, and Sprint 4 deliverables by ≈17:30Z. Follow-up batches (CL05 optimizations,
+carried PARTIAL rows, review-found H1 risks, Count Off, small-screen layout) ran until ≈19:40Z.
+The final verification/checkpoint (artifact rebuild, regression, reports) ran from ≈19:40Z,
+ahead of the reserved final 20 minutes (20:56–21:16Z).
 
 ## Exact next action
 On a Windows x64 machine with the owner's interface: extract

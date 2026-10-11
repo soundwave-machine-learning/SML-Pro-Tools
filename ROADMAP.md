@@ -127,7 +127,8 @@ mutated and truncated movies. Field reports from the first public week are track
   placement, exact device/buffer negotiation; upstream bundled effects/instruments removed (old
   sessions keep missing placeholders); dedicated Nudge panel; one-step buses/FX returns; SL02 mixer
   graph v2 with Summing/Tape slots, Logic-style profile, width, f64 sums; Console/Visual/Split
-  mixer views and A/B/C snapshots. Portable CI green; native target validation pending. No
+  mixer views and A/B/C snapshots; input device picker, input-channel integrity, device-loss
+  handling and a working Count Off. Portable CI green; native target validation pending. No
   readiness percentage change (not re-measured). See `docs/AUTONOMOUS_BUILD_FINAL_REPORT.md`.
 - **2026-10-10 (UI docking):** Tracks and Groups, Clips, MIDI Editor, Memory Locations, and Undo History use movable panels. Edit and Mix retain separate arrangements; Clips and MIDI Editor belong to Edit. Transport, plug-in, and specialist utility windows retain their existing hosts. Panel moves and reset are available as UI commands, and saved UI preferences retain arrangements. Common toolbar and track record-enable buttons share interaction, accessible labels and keyboard focus through `craft-ui`, retaining blue tool selection and red record-arm states. No readiness percentage change.
 - **2026-10-10** — Stage re-normalized to **pre-alpha** by the core-workflow gate (interface recording, MIDI recording and session interchange fail). Full re-measure against Pro Tools Ultimate 2026.4.1 and the standard

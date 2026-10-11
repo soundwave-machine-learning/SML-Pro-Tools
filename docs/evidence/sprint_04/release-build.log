@@ -1,9 +1,9 @@
    Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
    Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
    Compiling soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
-   Compiling soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
    Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+   Compiling soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
    Compiling soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
    Compiling soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
-    Finished `release` profile [optimized] target(s) in 2m 43s
-EXIT: 0 (164s)
+    Finished `release` profile [optimized] target(s) in 2m 38s
+EXIT: 0 (159s)

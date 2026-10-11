@@ -1,29 +1,29 @@
 {
-  "source_commit": "3eaef101e6b91d4e0f097a7a2e051e6432b5c621",
-  "note": "executables rebuilt from this commit (clean tree) after the Sprint 4 follow-up batches; the zip's USER_GUIDE.md / TARGET_MACHINE_GAUNTLET.md come from the final docs commit (re-zipped, executables unchanged). Binaries not committed (dist/ is gitignored). Supersedes the earlier b1181dc build.",
+  "source_commit": "7838032e5d42a192e8355b108247d3a7d882fb22",
+  "note": "built from this commit (clean tree; later commits are docs only). Binaries not committed (dist/ is gitignored). Supersedes the earlier b1181dc and 3eaef10 builds.",
   "artifacts": [
     {
       "path": "dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz",
-      "bytes": 15700687,
-      "sha256": "99299e177275f58dead865c8beb6e8091263657f7944d27bacfadaa5a4304c0d",
+      "bytes": 15702323,
+      "sha256": "b3bff56adb04fb354503c0b756cc9cd12f4fcacb6b05eaf64720f84cd64637f1",
       "description": "Linux x86_64 tarball via packaging/linux/package.sh --skip-build --formats tar"
     },
     {
       "path": "dist/release/sml-recording-0.5.0-windows-x64-gnu-unsigned.zip",
-      "bytes": 16314925,
-      "sha256": "1a08dc2c3239edb07b026a013ccc2954a7c8022689474ea246de7ddac83002fa",
+      "bytes": 16321064,
+      "sha256": "3bff44b1ecf1fb41f6888519f6cb1befc5cce1991ddbd70256e54502dcfe2b56",
       "description": "Windows x64 portable zip, cross-built (x86_64-pc-windows-gnu, mingw-w64), unsigned"
     },
     {
       "path": "target/x86_64-pc-windows-gnu/release/soundcraft.exe",
-      "bytes": 37355259,
-      "sha256": "f93bc8239cc8048489e2ce994e652d6d9a3941e34ee0dde1b751762946d83e4d",
+      "bytes": 37372412,
+      "sha256": "851a8fbce57820713f75d55d984c4f87024566deb863fd16a5108bfdf0e8fd40",
       "description": "Windows GUI exe inside the zip"
     },
     {
       "path": "target/x86_64-pc-windows-gnu/release/soundcraft-cli.exe",
-      "bytes": 11161967,
-      "sha256": "4bd825b120e7bda2b88463fdf9f675c659cc9c39d362398e6b2bccd7dfae16e4",
+      "bytes": 11146005,
+      "sha256": "711dc94db85d0606f8e88ff059f89b4935de66522903ba96e5533796328c35b1",
       "description": "Windows CLI exe inside the zip"
     }
   ],

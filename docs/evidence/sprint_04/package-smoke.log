@@ -1,24 +1,25 @@
-# package smoke 2026-10-11T18:42:48Z — source commit 3eaef101e6b91d4e0f097a7a2e051e6432b5c621
-total 38180
-drwxr-xr-x 2 root root     4096 Oct 11 18:42 .
-drwxr-xr-x 4 root root     4096 Oct 11 18:42 ..
--rwxr-xr-x 1 root root 31393896 Oct 11 18:42 soundcraft
--rwxr-xr-x 1 root root  7691528 Oct 11 18:42 soundcraft-cli
-/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft:     ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=d3246f100b70860526dfa2b61f8761a909aa3288, stripped
-/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft-cli: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=2168ffae6b3455cb8b69be6cd22091f0ec9d67d2, stripped
+# package smoke 2026-10-11T19:43:54Z — source commit 7838032e5d42a192e8355b108247d3a7d882fb22
+total 38172
+drwxr-xr-x 2 root root     4096 Oct 11 19:41 .
+drwxr-xr-x 4 root root     4096 Oct 11 19:41 ..
+-rwxr-xr-x 1 root root 31389928 Oct 11 19:41 soundcraft
+-rwxr-xr-x 1 root root  7687176 Oct 11 19:41 soundcraft-cli
+/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft:     ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=4acf96c090b1b010bcada6d59042aa96431e665b, stripped
+/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/soundcraft-0.5.0-linux-x86_64/bin/soundcraft-cli: ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=b9208d994b26a2d4696220c182ebebc01e30979e, stripped
 SoundCraft CLI 0.5.0
 --- plugins catalogue (expect empty)
 exit 0
---- headless demo: bus + width + profile + slot + bounce
+--- headless demo: bus + width + profile + count off setting + signal flow + bounce
 bus.create_from_selection: {"bus":33,"bus_track":34,"name":"Drum Bus","output":"main","rerouted":[{"from":"Main","to":"bus","track":"Kick"},{"from":"Main","to":"bus","track":"Snare"},{"from":"Main","to":"bus","track":"Hats"}]}
 mix.width: {"tracks":1,"width":1.4}
 mix.profile: {"balance_compensated":false,"graph_version":2,"kind":"LogicStyle","law":"-3db","stereo_mode":"Balance"}
+setup.click_countoff: {"accent_note":84.0,"accent_velocity":127.0,"countoff":true,"countoff_bars":2,"normal_note":72.0,"normal_velocity":100.0,"only_during_record":false,"volume_db":-6.0}
 mix.signal_flow: {"inserts":[],"note":"inserts marked post_fader run after the fader (graph v2)","order":["source (comp, clip gain/fades, edits)","utility trim/polarity","Tape [empty]","user Pre inserts","Width 140%","pre-fader send tap","fader","user Post inserts","post-fader send tap","output panner","output route/mute"],"sends":["Bus(BusId(1)) post-fader (follow pan)"],"track":"Pad"}
 {"bytes":8640104,"lufs":-16.83102798461914,"path":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/demo.wav","peak_db":-3.2428340911865234,"seconds":30.0,"true_peak_db":-3.2274599075317383}
 exit 0
--rw-r--r-- 1 root root 8640104 Oct 11 18:42 /tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/demo.wav
+-rw-r--r-- 1 root root 8640104 Oct 11 19:43 /tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/demo.wav
 --- GUI binary launch without display
-2026-10-11T18:42:49.198Z INFO  [main] soundcraft: SoundCraft 0.5.0 (linux x86_64)
-2026-10-11T18:42:49.199Z INFO  [main] soundcraft: log file /root/.config/soundcraft/logs/soundcraft.log
+2026-10-11T19:43:55.942Z INFO  [main] soundcraft: SoundCraft 0.5.0 (linux x86_64)
+2026-10-11T19:43:55.943Z INFO  [main] soundcraft: log file /root/.config/soundcraft/logs/soundcraft.log
 Error: WinitEventLoop(Os(OsError { line: 765, file: "/root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/winit-0.30.13/src/platform_impl/linux/mod.rs", error: Misc("neither WAYLAND_DISPLAY nor WAYLAND_SOCKET nor DISPLAY is set.") }))
 exit 0
