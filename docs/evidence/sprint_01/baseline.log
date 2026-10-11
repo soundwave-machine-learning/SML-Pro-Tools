@@ -1,0 +1,1185 @@
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.17s
+     Running `target/debug/xtask ci`
+    Checking x11rb v0.13.2
+   Compiling alsa-sys v0.3.1
+   Compiling winit v0.30.13
+    Checking egui v0.36.2
+    Checking smithay-client-toolkit v0.19.2
+    Checking zerofrom v0.1.8
+    Checking x11-dl v2.21.0
+   Compiling yoke-derive v0.8.4
+    Checking xkbcommon-dl v0.4.2
+    Checking wayland-protocols-plasma v0.3.12
+   Compiling wgpu-core v30.0.1
+    Checking proc-macro2 v1.0.107
+    Checking futures-io v0.3.34
+    Checking dpi v0.1.2
+    Checking stable_deref_trait v1.2.1
+   Compiling litrs v1.0.0
+    Checking smol_str v0.2.2
+    Checking quote v1.0.47
+    Checking wgpu-core-deps-windows-linux-android v30.0.1
+    Checking event-listener v5.4.2
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling wgpu v30.0.1
+   Compiling document-features v0.2.12
+    Checking concurrent-queue v2.5.0
+   Compiling endi v1.1.1
+   Compiling cpal v0.16.0
+   Compiling zvariant v5.15.0
+    Checking event-listener-strategy v0.5.4
+    Checking alsa v0.9.1
+    Checking syn v3.0.6
+    Checking futures-lite v2.6.1
+   Compiling zmij v1.0.23
+   Compiling zerovec-derive v0.11.6
+    Checking web-time v1.1.0
+    Checking dasp_sample v0.11.0
+    Checking rustc-hash v2.1.3
+   Compiling itoa v1.0.18
+    Checking type-map v0.5.1
+   Compiling serde_json v1.0.151
+    Checking zvariant_utils v4.2.0
+   Compiling zbus_names v4.3.4
+   Compiling displaydoc v0.2.7
+   Compiling async-io v2.6.0
+    Checking yoke v0.8.3
+   Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+    Checking egui-wgpu v0.36.2
+    Checking errno v0.3.14
+   Compiling anyhow v1.0.104
+    Checking async-task v4.7.1
+    Checking pollster v1.0.1
+    Checking signal-hook-registry v1.4.8
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+    Checking async-channel v2.5.0
+    Checking craft-ui v0.1.0 (https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51)
+    Checking is-docker v0.2.0
+    Checking atomic-waker v1.1.2
+    Checking piper v0.2.5
+    Checking is-wsl v0.4.0
+    Checking async-signal v0.2.14
+   Compiling zbus_xml v5.2.1
+    Checking async-lock v3.4.2
+    Checking getopts v0.2.24
+    Checking zerovec v0.11.8
+    Checking accesskit_consumer v0.35.0
+    Checking toml_parser v1.1.3+spec-1.1.0
+    Checking colored v2.2.0
+    Checking toml_datetime v1.1.1+spec-1.1.0
+    Checking serde_spanned v1.1.1
+    Checking litemap v0.8.3
+    Checking writeable v0.6.4
+    Checking toml v1.1.6+spec-1.1.0
+    Checking dify v0.8.0
+    Checking kittest v0.4.0
+    Checking potential_utf v0.1.6
+   Compiling zbus-lockstep v0.5.2
+    Checking async-process v2.5.0
+    Checking open v5.4.4
+    Checking blocking v1.7.0
+    Checking async-executor v1.14.0
+   Compiling zbus_macros v5.19.0
+    Checking tinystr v0.8.4
+    Checking icu_locale_core v2.3.0
+    Checking zerotrie v0.2.5
+    Checking async-broadcast v0.7.2
+    Checking ordered-stream v0.2.0
+   Compiling serde_repr v0.1.21
+   Compiling async-trait v0.1.92
+   Compiling async-recursion v1.2.0
+    Checking hex v0.4.3
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+    Checking utf8_iter v1.0.4
+   Compiling siphasher v1.0.4
+   Compiling phf_shared v0.13.1
+    Checking icu_collections v2.3.0
+    Checking icu_provider v2.3.1
+   Compiling zbus-lockstep-macros v0.5.2
+    Checking egui_kittest v0.36.2
+   Compiling fastrand v2.5.0
+   Compiling phf_generator v0.13.1
+    Checking icu_normalizer v2.3.0
+    Checking icu_properties v2.3.0
+   Compiling phf_macros v0.13.1
+    Checking idna_adapter v1.2.2
+    Checking accesskit_consumer v0.36.0
+    Checking calloop v0.14.5
+   Compiling futures-macro v0.3.34
+    Checking futures-task v0.3.34
+   Compiling smithay-client-toolkit v0.20.0
+    Checking phf v0.13.1
+    Checking calloop-wayland-source v0.4.1
+    Checking idna v1.1.0
+    Checking form_urlencoded v1.2.2
+    Checking wayland-protocols-misc v0.3.12
+    Checking wayland-protocols-experimental v20250721.0.1
+    Checking url v2.5.8
+    Checking webbrowser v1.2.4
+    Checking arboard v3.6.1
+    Checking smithay-clipboard v0.7.3
+   Compiling winresource v0.1.31
+   Compiling rfd v0.17.2
+    Checking soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+    Checking pollster v0.4.0
+    Checking soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
+   Compiling soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
+    Checking futures-util v0.3.34
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+    Checking soundcraft-midi v0.5.0 (/home/user/SML-Pro-Tools/crates/midi)
+    Checking soundcraft-video v0.5.0 (/home/user/SML-Pro-Tools/crates/video)
+    Checking soundcraft-time v0.5.0 (/home/user/SML-Pro-Tools/crates/time)
+    Checking zbus v5.19.0
+    Checking soundcraft-audio-io v0.5.0 (/home/user/SML-Pro-Tools/crates/audio-io)
+    Checking soundcraft-model v0.5.0 (/home/user/SML-Pro-Tools/crates/model)
+    Checking soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Checking soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+    Checking soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+    Checking soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+    Checking xtask v0.5.0 (/home/user/SML-Pro-Tools/xtask)
+    Checking soundcraft-web v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-web)
+    Checking atspi-common v0.13.0
+    Checking atspi-proxies v0.13.0
+    Checking accesskit_atspi_common v0.18.1
+    Checking atspi v0.29.0
+    Checking accesskit_unix v0.21.1
+    Checking accesskit_winit v0.32.2
+    Checking egui-winit v0.36.2
+    Checking eframe v0.36.2
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 01s
+   Compiling unicode-ident v1.0.26
+   Compiling cfg-if v1.0.5
+   Compiling log v0.4.34
+   Compiling bitflags v2.13.2
+   Compiling serde_core v1.0.229
+   Compiling proc-macro2 v1.0.107
+   Compiling libm v0.2.16
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling num-traits v0.2.19
+   Compiling syn v2.0.119
+   Compiling once_cell v1.21.4
+   Compiling libc v0.2.190
+   Compiling linux-raw-sys v0.12.1
+   Compiling libloading v0.8.9
+   Compiling arrayvec v0.7.8
+   Compiling rustix v1.1.5
+   Compiling scopeguard v1.2.0
+   Compiling num-integer v0.1.47
+   Compiling fastrand v2.5.0
+   Compiling lazy_static v1.5.1
+   Compiling strength_reduce v0.2.4
+   Compiling transpose v0.2.3
+   Compiling primal-check v0.3.4
+   Compiling num-complex v0.4.6
+   Compiling rustfft v6.4.1
+   Compiling bitflags v1.3.2
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-utils v0.8.23
+   Compiling serde_json v1.0.151
+   Compiling smallvec v1.16.2
+   Compiling simdutf8 v0.1.5
+   Compiling core_detect v1.0.0
+   Compiling encoding_rs v0.8.42
+   Compiling equivalent v1.0.2
+   Compiling winnow v1.0.4
+   Compiling getrandom v0.4.3
+   Compiling extended v0.1.0
+   Compiling tempfile v3.27.0
+   Compiling com-scrape-types v0.1.1
+   Compiling vst3 v0.3.0
+   Compiling pin-project-lite v0.2.17
+   Compiling either v1.19.0
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling simd-adler32 v0.3.10
+   Compiling adler2 v2.0.1
+   Compiling dlib v0.5.3
+   Compiling foldhash v0.2.0
+   Compiling crc32fast v1.5.2
+   Compiling crossbeam-epoch v0.9.21
+   Compiling miniz_oxide v0.9.1
+   Compiling clap-sys v0.5.0
+   Compiling flate2 v1.1.10
+   Compiling crossbeam-deque v0.8.8
+   Compiling wayland-sys v0.31.11
+   Compiling miniz_oxide v0.8.9
+   Compiling fdeflate v0.3.7
+   Compiling pxfm v0.1.30
+   Compiling zune-core v0.5.3
+   Compiling zune-jpeg v0.5.15
+   Compiling moxcms v0.8.1
+   Compiling serde_derive v1.0.229
+   Compiling thiserror-impl v2.0.21
+   Compiling bytemuck_derive v1.12.1
+   Compiling thiserror v2.0.21
+   Compiling zerocopy-derive v0.8.60
+   Compiling serde v1.0.229
+   Compiling soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+   Compiling bytemuck v1.25.2
+   Compiling symphonia-core v0.5.5
+   Compiling symphonia-metadata v0.5.5
+   Compiling symphonia-utils-xiph v0.5.5
+   Compiling symphonia-bundle-flac v0.5.5
+   Compiling symphonia-format-isomp4 v0.5.5
+   Compiling symphonia-format-mkv v0.5.5
+   Compiling zerocopy v0.8.60
+   Compiling symphonia-format-ogg v0.5.5
+   Compiling symphonia-codec-vorbis v0.5.5
+   Compiling symphonia-bundle-mp3 v0.5.5
+   Compiling symphonia-format-caf v0.5.5
+   Compiling symphonia-format-riff v0.5.5
+   Compiling symphonia-codec-adpcm v0.5.5
+   Compiling symphonia-codec-aac v0.5.5
+   Compiling symphonia-codec-pcm v0.5.5
+   Compiling symphonia-codec-alac v0.5.5
+   Compiling symphonia v0.5.5
+   Compiling soundcraft-audio-io v0.5.0 (/home/user/SML-Pro-Tools/crates/audio-io)
+   Compiling soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+   Compiling soundcraft-midi v0.5.0 (/home/user/SML-Pro-Tools/crates/midi)
+   Compiling soundcraft-time v0.5.0 (/home/user/SML-Pro-Tools/crates/time)
+   Compiling soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+   Compiling png v0.18.1
+   Compiling rayon-core v1.13.0
+   Compiling byteorder-lite v0.1.0
+   Compiling image v0.25.10
+   Compiling rayon v1.12.0
+   Compiling soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+   Compiling soundcraft-model v0.5.0 (/home/user/SML-Pro-Tools/crates/model)
+   Compiling polling v3.11.0
+   Compiling rand_core v0.9.5
+   Compiling scoped-tls v1.0.1
+   Compiling downcast-rs v1.2.1
+   Compiling wayland-backend v0.3.17
+   Compiling slab v0.4.12
+   Compiling wayland-scanner v0.31.11
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+   Compiling ppv-lite86 v0.2.21
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+   Compiling rand_chacha v0.9.0
+   Compiling wayland-client v0.31.15
+   Compiling rand v0.9.5
+   Compiling rand_xorshift v0.4.0
+   Compiling hashbrown v0.17.1
+   Compiling uuid v1.27.0
+   Compiling regex-syntax v0.8.11
+   Compiling unarray v0.1.4
+   Compiling tracing-attributes v0.1.31
+   Compiling proptest v1.11.0
+   Compiling tracing-core v0.1.36
+   Compiling soundcraft-video v0.5.0 (/home/user/SML-Pro-Tools/crates/video)
+   Compiling static_assertions v1.1.0
+   Compiling allocator-api2 v0.2.21
+   Compiling hashbrown v0.16.1
+   Compiling parking_lot_core v0.9.12
+   Compiling tracing v0.1.44
+   Compiling wayland-protocols v0.32.13
+   Compiling lock_api v0.4.14
+   Compiling parking_lot v0.12.5
+   Compiling accesskit v0.24.1
+   Compiling raw-window-handle v0.6.2
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+   Compiling polycool v0.4.0
+   Compiling unicode-width v0.2.2
+   Compiling profiling v1.0.18
+   Compiling indexmap v2.14.2
+   Compiling kurbo v0.13.1
+   Compiling color v0.3.3
+   Compiling font-types v0.12.6
+   Compiling euclid v0.22.14
+   Compiling percent-encoding v2.3.2
+   Compiling rustc-hash v1.1.0
+   Compiling linebender_resource_handle v0.1.1
+   Compiling peniko v0.6.1
+   Compiling naga-types v30.0.1
+   Compiling guillotiere v0.7.0
+   Compiling read-fonts v0.41.0
+   Compiling ahash v0.8.12
+   Compiling toml_edit v0.25.15+spec-1.1.0
+   Compiling thiserror-impl v1.0.69
+   Compiling enumflags2_derive v0.7.12
+   Compiling cursor-icon v1.2.0
+   Compiling xkeysym v0.2.1
+   Compiling xcursor v0.3.11
+   Compiling bit-vec v0.9.1
+   Compiling fearless_simd v0.4.1
+   Compiling linux-raw-sys v0.4.15
+   Compiling rustix v0.38.44
+   Compiling vello_common v0.1.0
+   Compiling thiserror v1.0.69
+   Compiling bit-set v0.10.0
+   Compiling wayland-cursor v0.31.14
+   Compiling wayland-csd-frame v0.3.0
+   Compiling proc-macro-crate v3.5.0
+   Compiling codespan-reporting v0.13.1
+   Compiling zvariant_utils v4.2.0
+   Compiling wayland-protocols-wlr v0.3.12
+   Compiling half v2.7.1
+   Compiling emath v0.36.2
+   Compiling memmap2 v0.9.11
+   Compiling spirv v0.4.0+sdk-1.4.341.0
+   Compiling parking v2.2.1
+   Compiling naga v30.0.1
+   Compiling ecolor v0.36.2
+   Compiling unicode-general-category v1.1.0
+   Compiling calloop v0.13.0
+   Compiling vello_cpu v0.1.0
+   Compiling ash v0.38.0+1.3.281
+   Compiling zvariant_derive v5.15.0
+   Compiling harfrust v0.12.0
+   Compiling skrifa v0.44.0
+   Compiling wgpu-types v30.0.1
+   Compiling gethostname v1.1.0
+   Compiling synstructure v0.14.0
+   Compiling unicode-segmentation v1.13.3
+   Compiling self_cell v1.3.0
+   Compiling x11rb-protocol v0.13.2
+   Compiling futures-core v0.3.34
+   Compiling endi v1.1.1
+   Compiling nohash-hasher v0.2.0
+   Compiling presser v0.3.1
+   Compiling as-raw-xcb-connection v1.0.1
+   Compiling epaint_default_fonts v0.36.2
+   Compiling epaint v0.36.2
+   Compiling x11rb v0.13.2
+   Compiling gpu-allocator v0.28.0
+   Compiling wgpu-naga-bridge v30.0.1
+   Compiling calloop-wayland-source v0.3.0
+   Compiling khronos-egl v6.0.0
+   Compiling itertools v0.15.0
+   Compiling ordered-float v5.5.0
+   Compiling renderdoc-sys v1.1.0
+   Compiling glow v0.17.0
+   Compiling toml v1.1.6+spec-1.1.0
+   Compiling wgpu-hal v30.0.1
+   Compiling egui v0.36.2
+   Compiling smithay-client-toolkit v0.19.2
+   Compiling alsa-sys v0.3.1
+   Compiling x11-dl v2.21.0
+   Compiling zerofrom-derive v0.1.8
+   Compiling xkbcommon-dl v0.4.2
+   Compiling wayland-protocols-plasma v0.3.12
+   Compiling smol_str v0.2.2
+   Compiling dpi v0.1.2
+   Compiling winit v0.30.13
+   Compiling zerofrom v0.1.8
+   Compiling alsa v0.9.1
+   Compiling wgpu-core-deps-windows-linux-android v30.0.1
+   Compiling yoke-derive v0.8.4
+   Compiling futures-io v0.3.34
+   Compiling dasp_sample v0.11.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling cpal v0.16.0
+   Compiling wgpu-core v30.0.1
+   Compiling yoke v0.8.3
+   Compiling event-listener v5.4.2
+   Compiling enumflags2 v0.7.12
+   Compiling zcheapstr v1.1.0
+   Compiling concurrent-queue v2.5.0
+   Compiling web-time v1.1.0
+   Compiling rustc-hash v2.1.3
+   Compiling type-map v0.5.1
+   Compiling zvariant v5.15.0
+   Compiling event-listener-strategy v0.5.4
+   Compiling wgpu v30.0.1
+   Compiling futures-lite v2.6.1
+   Compiling zerovec-derive v0.11.6
+   Compiling zerovec v0.11.8
+   Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+   Compiling egui-wgpu v0.36.2
+   Compiling zbus_names v4.3.4
+   Compiling soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+   Compiling displaydoc v0.2.7
+   Compiling is-docker v0.2.0
+   Compiling pollster v1.0.1
+   Compiling is-wsl v0.4.0
+   Compiling anyhow v1.0.104
+   Compiling craft-ui v0.1.0 (https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51)
+   Compiling getopts v0.2.24
+   Compiling accesskit_consumer v0.35.0
+   Compiling colored v2.2.0
+   Compiling errno v0.3.14
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling async-task v4.7.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling dify v0.8.0
+   Compiling kittest v0.4.0
+   Compiling open v5.4.4
+   Compiling async-io v2.6.0
+   Compiling async-channel v2.5.0
+   Compiling atomic-waker v1.1.2
+   Compiling async-signal v0.2.14
+   Compiling piper v0.2.5
+   Compiling egui_kittest v0.36.2
+   Compiling tinystr v0.8.4
+   Compiling zbus_xml v5.2.1
+   Compiling async-lock v3.4.2
+   Compiling litemap v0.8.3
+   Compiling siphasher v1.0.4
+   Compiling writeable v0.6.4
+   Compiling icu_locale_core v2.3.0
+   Compiling zbus-lockstep v0.5.2
+   Compiling async-process v2.5.0
+   Compiling blocking v1.7.0
+   Compiling async-executor v1.14.0
+   Compiling zerotrie v0.2.5
+   Compiling zbus_macros v5.19.0
+   Compiling potential_utf v0.1.6
+   Compiling async-broadcast v0.7.2
+   Compiling ordered-stream v0.2.0
+   Compiling serde_repr v0.1.21
+   Compiling async-trait v0.1.92
+   Compiling async-recursion v1.2.0
+   Compiling hex v0.4.3
+   Compiling utf8_iter v1.0.4
+   Compiling icu_collections v2.3.0
+   Compiling icu_provider v2.3.1
+   Compiling zbus-lockstep-macros v0.5.2
+   Compiling phf_shared v0.13.1
+   Compiling phf_generator v0.13.1
+   Compiling icu_properties_data v2.3.0
+   Compiling icu_normalizer_data v2.3.0
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling phf_macros v0.13.1
+   Compiling idna_adapter v1.2.2
+   Compiling accesskit_consumer v0.36.0
+   Compiling zbus v5.19.0
+   Compiling phf v0.13.1
+   Compiling calloop v0.14.5
+   Compiling futures-macro v0.3.34
+   Compiling atspi-common v0.13.0
+   Compiling atspi-proxies v0.13.0
+   Compiling futures-task v0.3.34
+   Compiling futures-util v0.3.34
+   Compiling atspi v0.29.0
+   Compiling accesskit_atspi_common v0.18.1
+   Compiling calloop-wayland-source v0.4.1
+   Compiling idna v1.1.0
+   Compiling form_urlencoded v1.2.2
+   Compiling wayland-protocols-experimental v20250721.0.1
+   Compiling wayland-protocols-misc v0.3.12
+   Compiling smithay-client-toolkit v0.20.0
+   Compiling url v2.5.8
+   Compiling accesskit_unix v0.21.1
+   Compiling smithay-clipboard v0.7.3
+   Compiling webbrowser v1.2.4
+   Compiling accesskit_winit v0.32.2
+   Compiling winresource v0.1.31
+   Compiling arboard v3.6.1
+   Compiling soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+   Compiling egui-winit v0.36.2
+   Compiling soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
+   Compiling pollster v0.4.0
+   Compiling rfd v0.17.2
+   Compiling eframe v0.36.2
+   Compiling soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
+   Compiling xtask v0.5.0 (/home/user/SML-Pro-Tools/xtask)
+   Compiling soundcraft-web v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-web)
+    Finished `test` profile [optimized + debuginfo] target(s) in 9m 52s
+     Running unittests src/main.rs (target/debug/deps/soundcraft-44786a4327bd2c02)
+
+running 28 tests
+test config::config_tests::config_empty_override_disables_profile_without_reading_defaults ... ok
+test config::config_tests::config_override_preserves_non_unicode_paths ... ok
+test config::config_tests::config_override_wins_without_reading_user_profile ... ok
+test config::config_tests::config_unset_override_keeps_platform_defaults ... ok
+test graphics::tests::explicit_backend_override_is_preserved ... ok
+test graphics::tests::windows_default_initializes_only_dx12 ... ok
+test logging::tests::a_line_carries_time_level_thread_target_and_message ... ok
+test logging::tests::a_long_audio_thread_record_is_cut_at_a_character_boundary ... ok
+test config::config_tests::future_edit_and_mix_layouts_preserve_other_preferences_and_the_original_file ... ok
+test config::config_tests::native_file_reload_preserves_edit_mix_and_hidden_floating_panels ... ok
+test logging::tests::a_run_without_a_log_file_keeps_nothing_for_one ... ok
+test logging::tests::attaching_to_an_unusable_directory_reports_an_error_and_keeps_logging ... ok
+test logging::tests::directives_follow_env_logger_and_the_most_specific_one_wins ... ok
+test logging::tests::an_audio_thread_record_never_waits_for_the_sink ... ok
+test logging::tests::hostile_specs_never_panic_and_fall_back_sensibly ... ok
+test logging::tests::lines_logged_before_the_file_exists_are_written_when_it_is_attached ... ok
+test logging::tests::exactly_max_pending_lines_drop_nothing ... ok
+test logging::tests::rotation_into_an_unusable_directory_is_an_error_not_a_panic ... ok
+test logging::tests::rotation_keeps_the_previous_logs_and_starts_an_empty_file ... ok
+test logging::tests::the_default_filter_shows_soundcraft_info_and_other_crates_warnings ... ok
+test logging::tests::records_from_many_threads_are_whole_lines ... ok
+test logging::tests::the_file_stops_at_its_size_cap_with_one_note ... ok
+test logging::tests::the_first_audio_thread_record_is_written_later_with_a_count_of_the_rest ... ok
+test logging::tests::the_logger_filters_records_and_writes_them_to_the_attached_file ... ok
+test logging::tests::timestamps_are_utc_with_milliseconds ... ok
+test logging::tests::the_pending_buffer_is_bounded_and_says_how_much_it_dropped ... ok
+test config::config_tests::oversized_settings_are_rejected_and_preserved ... ok
+test logging::tests::a_poisoned_lock_does_not_stop_logging ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.58s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_au_host-ac824c068bcea476)
+
+running 5 tests
+test tests::fourccs_round_trip ... ok
+test tests::foreign_ids_are_rejected_without_scanning ... ok
+test tests::ids_parse_and_format ... ok
+test tests::categories_and_names ... ok
+test tests::unknown_components_are_errors_not_crashes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/system_units.rs (target/debug/deps/system_units-888ae300902af41f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_audio_io-e8e63915565eb4fe)
+
+running 6 tests
+test flac::tests::utf8_numbers ... ok
+test flac::tests::crc_known_values ... ok
+test peaks::tests::degenerate_inputs ... ok
+test peaks::tests::columns_cover_range ... ok
+test peaks::tests::aligned_ranges_are_exact ... ok
+test peaks::tests::unaligned_ranges_contain_truth_and_match_block_cover ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.44s
+
+     Running tests/encode_format.rs (target/debug/deps/encode_format-8c768dd25bf6e7a1)
+
+running 1 test
+test only_formats_the_encoder_writes_are_named ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/malformed.rs (target/debug/deps/malformed-92681aafaf9de5de)
+
+running 14 tests
+test absurd_chunk_sizes ... ok
+test aiff_sowt_little_endian ... ok
+test detect_format_by_magic_and_hint ... ok
+test hand_built_wav_variants ... ok
+test garbage_in_compressed_containers_errors ... ok
+test every_single_byte_corruption_is_handled ... ok
+test many_tiny_chunks_terminate ... ok
+test random_bodies_behind_valid_headers_never_panic ... ok
+test truncated_data_chunk_yields_partial_audio ... ok
+test zero_channels_is_malformed ... ok
+test zero_sample_rate_is_malformed ... ok
+test random_bytes_never_panic ... ok
+test every_truncation_is_handled ... ok
+test random_audio_roundtrips_through_flac ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running tests/roundtrip.rs (target/debug/deps/roundtrip-0f92d6b64e6469f3)
+
+running 12 tests
+test aiff_float_is_aifc ... ok
+test encode_rejects_bad_buffers_and_formats ... ok
+test audio_buffer_helpers ... ok
+test flac_rejects_unsupported_layouts ... ok
+test bwf_roundtrip ... ok
+test multichannel_wav_speaker_masks ... ok
+test serde_types_roundtrip ... ok
+test unusual_sample_rates_roundtrip ... ok
+test wav_header_layout ... ok
+test wav_and_aiff_roundtrip_all_depths_and_layouts ... ok
+test flac_handles_silence_noise_full_scale_and_odd_rates ... ok
+test flac_roundtrip_is_lossless_vs_wav ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_automation-65b04060078d1c22)
+
+running 2 tests
+test tests::remote_reports_unreachable ... ok
+test tests::headless_executes_and_inspects ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_tasks.rs (target/debug/deps/agent_tasks-eaf5de83f51cefad)
+
+running 3 tests
+test errors_are_reported_not_panics ... ok
+test handshake_and_tool_list ... ok
+test agent_builds_and_mixes_a_session ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.25s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_clap_host-23e2671a6c679000)
+
+running 7 tests
+test scan::tests::features_map_to_categories ... ok
+test scan::tests::os_paths_cover_the_standard_locations ... ok
+test tests::ids_parse ... ok
+test tests::non_clap_ids_are_rejected_without_scanning ... ok
+test scan::tests::bundle_executable_falls_back_to_first_file ... ok
+test tests::garbage_files_are_errors_not_crashes ... ok
+test scan::tests::finds_files_and_bundles_recursively_but_not_inside_bundles ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/editor_main_thread.rs (target/debug/deps/editor_main_thread-1bffbdf9edb1272d)
+editor_main_thread: ok
+     Running tests/fixture_e2e.rs (target/debug/deps/fixture_e2e-6656183ca0c2a9cb)
+
+running 7 tests
+test info_exposes_visible_params_with_names ... ok
+test gain_processes_audio_and_follows_params ... ok
+test scan_lists_both_fixture_plugins ... ok
+test synth_plays_notes_at_their_offsets ... ok
+test state_saves_and_restores_into_a_new_instance ... ok
+test editors_refuse_to_open_off_the_main_thread ... ok
+test many_instances_create_and_drop_cleanly ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running unittests src/main.rs (target/debug/deps/soundcraft_cli-398463482160b96a)
+
+running 4 tests
+test tests::cmd_spec_rejects_truncated_json ... ok
+test tests::missing_media_gets_one_warning_each ... ok
+test tests::cmd_spec_parses_id_and_json ... ok
+test tests::help_text_is_only_the_usage_block ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_dsp-20f1d96d468c64a7)
+
+running 13 tests
+test biquad::tests::hostile_inputs ... ok
+test biquad::tests::lowpass_minus3_at_cutoff ... ok
+test biquad::tests::peak_gain_at_center ... ok
+test offline::tests::fade_hits_zero_at_edges ... ok
+test offline::tests::fade_shapes_endpoints ... ok
+test pan::tests::center_levels ... ok
+test pan::tests::surround_point_positions ... ok
+test pitch_detect::tests::silence_and_garbage ... ok
+test spectrum::tests::sine_peak_near_zero_db ... ok
+test pitch_detect::tests::yin_finds_a440 ... ok
+test trait_default_tests::built_ins_have_no_state_or_editor ... ok
+test pan::tests::surround_energy_is_constant ... ok
+test pitch_detect::tests::melody_to_notes ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+
+     Running tests/fuzz.rs (target/debug/deps/fuzz-a3a65ec47b501b2a)
+
+running 2 tests
+test plugins_survive_random_params ... ok
+test offline_survives_random_args ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/offline_meters.rs (target/debug/deps/offline_meters-ccaa6a11ef578041)
+
+running 17 tests
+test db_helpers ... ok
+test apply_plugin_compensates_latency ... ok
+test non_silent_ranges_finds_bursts ... ok
+test normalize_hits_target_peak ... ok
+test pan_law_hard_right ... ok
+test peak_meter_ballistics ... ok
+test loudness_997hz_minus20_stereo_reads_minus20 ... ok
+test loudness_full_scale_mono_and_44k ... ok
+test signal_generator_offline ... ok
+test simple_offline_ops ... ok
+test spectrum_edge_cases ... ok
+test loudness_gating_ignores_silence ... ok
+test transients_detected_near_onsets ... ok
+test true_peak_catches_intersample_overs ... ok
+test resample_preserves_frequency_and_length ... ok
+test pitch_shift_preserves_length_and_shifts ... ok
+test time_stretch_length_and_pitch ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.18s
+
+     Running tests/plugins.rs (target/debug/deps/plugins-10b5d2c250f57f78)
+
+running 25 tests
+test dc_removal_removes_dc ... ok
+test de_esser_reduces_sibilance_only ... ok
+test delay_repeats_at_time ... ok
+test compressor_steady_state_gain_reduction ... ok
+test eq_magnitude_at_center_matches_gain ... ok
+test gate_closes_below_threshold ... ok
+test latency_reporting_aligns_pitch_shifter ... ok
+test lofi_quantizes ... ok
+test maximizer_respects_ceiling_and_reports_latency ... ok
+test drum_kit_notes_sound_and_end ... ok
+test param_changes_are_smooth ... ok
+test params_well_formed ... ok
+test pitch_shifter_moves_pitch ... ok
+test registry_ids_unique_and_creatable ... ok
+test reverb_has_tail_and_decays ... ok
+test saturator_adds_harmonics_and_stays_bounded ... ok
+test signal_generator_level ... ok
+test hostile_params_never_break_processing ... ok
+test odd_host_calls_do_not_panic ... ok
+test synth_event_offsets_are_sample_accurate ... ok
+test time_shift_delays ... ok
+test trim_and_invert ... ok
+test impulse_response_finite_and_bounded ... ok
+test synth_note_on_sounds_and_note_off_decays ... ok
+test silence_in_silence_out ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-9fd8f5a34ab6208d)
+
+running 108 tests
+test catalog_more::tests::change_width_aliases_name_real_formats ... ok
+test catalog::tests::parity_floor ... ok
+test catalog::tests::aliases_point_at_real_commands ... ok
+test cmd::clap::tests::clap_plugins_query_returns_a_list ... ok
+test cmd::clap::tests::unknown_clap_insert_is_an_error ... ok
+test cmd::audio_midi::tests::copies_a_melody_as_midi_and_pastes_it ... ok
+test cmd::clip::tests::gain_nudges_one_db_at_a_time_up_to_the_ceiling ... ok
+test cmd::clip_more::tests::conform_follows_tempo ... ok
+test cmd::clip_more::tests::effects_bypass_and_clear ... ok
+test cmd::clip_more::tests::regroup_reuses_group ... ok
+test clip_group_file::tests::rejects_foreign_files_and_escaping_paths ... ok
+test cmd::clip_more::tests::unloop_removes_copies ... ok
+test cmd::edit_more::tests::clip_gain_copy_paste ... ok
+test cmd::edit_more::tests::coalesce_volume_into_clip_gain_and_back ... ok
+test cmd::edit_more::tests::copy_and_paste_automation_only ... ok
+test cmd::edit_more::tests::cut_all_automation_can_be_pasted ... ok
+test cmd::edit_more::tests::duplicate_and_extend ... ok
+test cmd::edit_more::tests::extend_to_members ... ok
+test cmd::edit_more::tests::glide_and_trim ... ok
+test cmd::edit_more::tests::marker_lane_selection ... ok
+test cmd::edit_more::tests::merge_markers_pastes_copied_markers_once ... ok
+test cmd::edit_more::tests::merge_midi_keeps_existing_notes ... ok
+test cmd::edit_more::tests::move_to_new_playlist_clears_main ... ok
+test cmd::edit_more::tests::snap_next_and_previous ... ok
+test cmd::edit_more::tests::snap_selected_neighbours_keeps_both_clips ... ok
+test cmd::edit_more::tests::space_clips_butts_with_gap ... ok
+test cmd::clip_more::tests::remove_pitch_shift_renders ... ok
+test cmd::event::tests::tempo_change_at_position_is_applied ... ok
+test cmd::edit_more::tests::tce_fits_timeline ... ok
+test cmd::event_more::tests::chord_names ... ok
+test cmd::event_more::tests::chords_from_demo_become_markers ... ok
+test cmd::event_more::tests::flatten_then_restore ... ok
+test cmd::event_more::tests::identify_beat_sets_tempo ... ok
+test cmd::event_more::tests::move_song_start_moves_tick_material ... ok
+test cmd::event_more::tests::retro_record_quantizes_and_restores ... ok
+test cmd::event_more::tests::rtp_and_offsets_are_settings ... ok
+test cmd::event_more::tests::split_notes_to_new_track ... ok
+test cmd::event_more::tests::step_input_appends_and_advances ... ok
+test cmd::event_more::tests::tempo_curves ... ok
+test cmd::file::tests::bounce_refuses_formats_it_cannot_write ... ok
+test cmd::file::tests::import_audio_honours_new_tracks ... ok
+test cmd::file::tests::same_named_clips_export_as_separate_files ... ok
+test cmd::event_more::tests::beat_detective_finds_demo_tempo ... ok
+test cmd::health::tests::checks_loaded_bounds_and_stretch_not_stale_metadata ... ok
+test cmd::health::tests::empty_and_demo_are_healthy_and_query_is_read_only ... ok
+test cmd::health::tests::malformed_and_empty_audio_are_reported_without_panicking ... ok
+test cmd::health::tests::reports_missing_media_in_inactive_takes ... ok
+test cmd::health::tests::zero_rate_has_unknown_duration_and_uneven_channels_use_shortest ... ok
+test cmd::instrument::tests::refuses_effects_unknown_plugins_and_other_track_kinds ... ok
+test cmd::instrument::tests::sets_an_instrument_tracks_instrument_with_defaults_and_undoes ... ok
+test cmd::midi::tests::create_clip_add_edit_move_delete ... ok
+test cmd::midi::tests::rejects_audio_tracks ... ok
+test cmd::more_util::tests::envelope_interpolates ... ok
+test cmd::more_util::tests::text_settings_round_trip ... ok
+test cmd::plugin_state::tests::hostile_params_are_errors ... ok
+test cmd::plugin_state::tests::stores_and_clears_state_without_undo ... ok
+test cmd::setup_more::tests::click_countoff_settings ... ok
+test cmd::setup_more::tests::current_timecode_sets_start ... ok
+test cmd::setup_more::tests::engine_and_midi_settings ... ok
+test clip_group_file::tests::export_then_import_round_trips_audio_clips ... ok
+test cmd::setup_more::tests::io_bus_lifecycle ... ok
+test cmd::setup_more::tests::option_flags_toggle ... ok
+test cmd::setup_more::tests::shortcuts_listed ... ok
+test cmd::surround::tests::main_format_resizes_masters_and_renames_the_path ... ok
+test cmd::surround::tests::surround_bounce_writes_every_channel_with_its_mask ... ok
+test cmd::surround::tests::surround_pan_commands ... ok
+test cmd::setup_more::tests::import_session_data_brings_tracks_and_audio ... ok
+test cmd::tests::ids_are_unique_and_documented ... ok
+test cmd::track::tests::comp_from_alternate_playlist ... ok
+test cmd::track::tests::folder_routes_members_through_its_bus ... ok
+test cmd::track_more::tests::bypass_by_category_and_range ... ok
+test cmd::track_more::tests::convert_aux_adopts_members ... ok
+test cmd::track_more::tests::extract_midi_copies_clips ... ok
+test cmd::track_more::tests::mute_sends_subset ... ok
+test cmd::track_more::tests::preset_round_trip ... ok
+test cmd::track_more::tests::rtp_written_into_notes ... ok
+test cmd::track_more::tests::target_and_recent_playlists ... ok
+test cmd::track_more::tests::trim_and_vca_coalesce ... ok
+test cmd::video::tests::import_video_adds_a_video_track_and_survives_save_and_open ... ok
+test cmd::video::tests::offset_moves_the_picture_and_undoes ... ok
+test cmd::video::tests::online_toggles_and_list_reports_missing_files ... ok
+test cmd::video::tests::video_clips_are_silent_in_the_mix ... ok
+test cmd::view::tests::grid_values_parse ... ok
+test cmd::view_more::tests::all_and_minimal ... ok
+test cmd::view_more::tests::flags_toggle_and_persist ... ok
+test cmd::view_more::tests::radio_groups_are_exclusive ... ok
+test cmd::view_more::tests::rulers ... ok
+test cmd::vst3::tests::unknown_vst3_insert_is_an_error ... ok
+test cmd::vst3::tests::vst3_plugins_query_returns_a_list ... ok
+test cmd::file::tests::session_open_reports_missing_media ... ok
+test edit::tests::clear_slip_and_shuffle ... ok
+test edit::tests::copy_paste_overwrites ... ok
+test edit::tests::fades_and_crossfades ... ok
+test edit::tests::insert_silence_and_trim ... ok
+test edit::tests::moves_overwrite_and_respect_locks ... ok
+test edit::tests::paste_shuffle_ripples ... ok
+test edit::tests::separate_splits_and_heal_rejoins ... ok
+test inspect::tests::sources_report_whether_audio_is_loaded ... ok
+test cmd::tests::every_command_survives_empty_params ... ok
+test io::save_tests::autosave_copy_leaves_document_untouched_and_reuses_audio ... ok
+test merge_tests::merged_gesture_is_one_undo_step ... ok
+test score::tests::demo_exports_well_formed_documents ... ok
+test score::tests::measures_fill_exactly_and_tie_across_bars ... ok
+test score::tests::spelling_and_staff_steps ... ok
+test score::tests::split_units_uses_representable_values ... ok
+test demo::tests::demo_builds_and_renders_sound ... ok
+test io::stem_tests::stems_one_file_per_track ... ok
+test cmd::clip::tests::elastic_warp_renders_and_remove_warp_restores ... ok
+
+test result: ok. 108 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.86s
+
+     Running tests/clap_e2e.rs (target/debug/deps/clap_e2e-283b25c4b8931e5d)
+
+running 2 tests
+test clap_insert_renders_through_the_mix ... ok
+test clap_state_is_captured_stored_and_restored_before_the_first_block ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/hostile_params.rs (target/debug/deps/hostile_params-90cb787d5a66bd80)
+
+running 1 test
+test no_command_panics_on_hostile_params ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 18.89s
+
+     Running tests/hostile_sessions.rs (target/debug/deps/hostile_sessions-d6175fe2975f2fed)
+
+running 1 test
+test mutated_sessions_never_panic ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.81s
+
+     Running tests/random_edits.rs (target/debug/deps/random_edits-5baa64feea260d39)
+
+running 1 test
+test random_edits_keep_the_session_sane ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.42s
+
+     Running tests/session_transport.rs (target/debug/deps/session_transport-10e318b8e731d149)
+
+running 2 tests
+test failed_new_session_keeps_the_current_transport ... ok
+test replacing_session_resets_status_and_discards_old_transport_requests ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_midi-ee3d8a8925bd32d1)
+
+running 3 tests
+test names::tests::names ... ok
+test smf::tests::spec_vlq_examples ... ok
+test smf::tests::vlq_round_trip ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ops.rs (target/debug/deps/ops-36c3ffc12d51becb)
+
+running 13 tests
+test duration_ops ... ok
+test quantize_degenerate_options ... ok
+test quantize_half_strength ... ok
+test quantize_full_strength ... ok
+test quantize_ends_and_duration ... ok
+test quantize_random_is_deterministic_and_bounded ... ok
+test quantize_swing ... ok
+test sequence_helpers ... ok
+test sequence_serde_round_trip ... ok
+test split_by_pitch ... ok
+test transpose_clamps ... ok
+test velocity_ops ... ok
+test quantize_include_exclude ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smf.rs (target/debug/deps/smf-11c0c3dbb2d8508c)
+
+running 15 tests
+test division_conversion_480_to_960 ... ok
+test division_conversion_96_and_smpte ... ok
+test format1_conductor_folded_and_unknown_chunks_skipped ... ok
+test meta_cancels_running_status ... ok
+test overlapping_same_pitch_fifo_and_zero_length ... ok
+test malformed_inputs_are_errors ... ok
+test random_bytes_never_panic ... ok
+test running_status_and_velocity_zero_note_off ... ok
+test sysex_skipped ... ok
+test round_trip ... ok
+test unmatched_note_off_ignored_and_hanging_notes_closed ... ok
+test write_rejects_bad_values ... ok
+test random_track_bodies_never_panic ... ok
+test written_files_read_back ... ok
+test event_cap_reached_is_error ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.20s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_mix-29eb791f126824aa)
+
+running 23 tests
+test audio_thread_tests::only_a_marked_thread_is_the_audio_thread ... ok
+test tests::click_only_during_record_follows_recording ... ok
+test tests::clip_effects_gain_and_trim_automation_apply ... ok
+test tests::empty_session_is_silent ... ok
+test tests::external_instances_are_adopted_retired_and_captured ... ok
+test tests::fader_mute_and_solo ... ok
+test tests::fades_and_clip_gain_apply ... ok
+test tests::hard_pans ... ok
+test tests::input_monitoring_replaces_clips ... ok
+test tests::inserts_process_and_survive_unknown_plugins ... ok
+test tests::mono_center_pan_is_minus_3db ... ok
+test tests::mono_track_on_surround_main_pans ... ok
+test tests::sends_feed_aux_via_bus ... ok
+test tests::stopped_monitoring_does_not_click ... ok
+test tests::stored_state_comes_first_then_session_params ... ok
+test tests::delay_compensation_aligns_latent_tracks ... ok
+test tests::surround_busses_and_master_fader ... ok
+test tests::surround_to_stereo_folds_down_itu ... ok
+test tests::surround_track_passes_through_bit_exact ... ok
+test tests::surround_upmix_and_downmix_between_layouts ... ok
+test tests::volume_automation_ramps ... ok
+test tests::click_sounds_on_every_beat_only_in_playback ... ok
+test audio_thread_tests::strips_rendered_for_the_audio_thread_count_as_the_audio_thread_and_only_then ... ok
+
+test result: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_model-362f725536ba77e5)
+
+running 25 tests
+test automation::tests::interpolation_and_steps ... ok
+test automation::tests::param_ids ... ok
+test automation::tests::thin_removes_collinear ... ok
+test automation::tests::set_point_clamps_nan ... ok
+test automation::tests::write_range_preserves_outside ... ok
+test b64::tests::hostile_input_is_rejected ... ok
+test b64::tests::rfc4648_vectors_round_trip ... ok
+test clip::tests::fade_shapes_hit_endpoints ... ok
+test clip::tests::gain_envelope_interpolates ... ok
+test clip::tests::gain_with_fades ... ok
+test clip::tests::trims_keep_material_anchored ... ok
+test mixer::tests::fader_taper_round_trips ... ok
+test mixer::tests::formats ... ok
+test mixer::tests::mixer_defaults_and_sanitize ... ok
+test mixer::tests::speaker_layouts_match_channel_counts_and_masks ... ok
+test mixer::tests::surround_pan_defaults_and_old_sessions ... ok
+test session::tests::add_tracks_names_and_order ... ok
+test mixer::tests::insert_state_round_trips_through_json ... ok
+test session::tests::sanitize_repairs ... ok
+test session::tests::rejects_garbage_and_future_versions ... ok
+test track::tests::kind_ids ... ok
+test track::tests::lane_mut_creates_once ... ok
+test track::tests::new_track_defaults ... ok
+test session::tests::json_round_trip ... ok
+test session::tests::video_clip_round_trips_and_old_sessions_load ... ok
+
+test result: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_playback-a709e971ad19c145)
+
+running 10 tests
+test record::ring_tests::monitor_converts_input_rate_to_session_rate ... ok
+test record::ring_tests::monitor_passes_through_at_equal_rates ... ok
+test record::ring_tests::monitor_decimates_when_input_is_faster ... ok
+test record::tests::deinterleaves ... ok
+test record::ring_tests::monitor_underrun_is_silence ... ok
+test tests::audio_state_plays_and_stops_at_end ... ok
+test tests::instances_arrive_with_the_session_and_leave_through_the_return_channel ... ok
+test tests::side_creates_each_missing_instance_once ... ok
+test tests::looping_wraps ... ok
+test tests::surround_main_maps_to_device_channels_or_folds_down ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_time-2d2dbfe400d0c0cb)
+
+running 22 tests
+test format::tests::bar_lengths ... ok
+test format::tests::formats_like_pro_tools_counters ... ok
+test format::tests::parse_round_trips ... ok
+test grid::tests::absolute_grids ... ok
+test format::tests::parse_rejects_garbage ... ok
+test grid::tests::lines_are_capped ... ok
+test grid::tests::triplets_and_dots ... ok
+test tempo::tests::default_map_is_120_4_4 ... ok
+test tempo::tests::eighth_note_meters ... ok
+test tempo::tests::negative_positions ... ok
+test tempo::tests::rejects_bad_values ... ok
+test tests::range_ops ... ok
+test grid::tests::sixteenth_grid_at_120 ... ok
+test tempo::tests::tempo_change_is_integrated ... ok
+test tempo::tests::meter_change_counts_bars ... ok
+test tests::sample_rate_bounds ... ok
+test tests::seconds_round_trip ... ok
+test tests::to_samples_is_total ... ok
+test timecode::tests::drop_frame_labels ... ok
+test timecode::tests::feet_and_frames ... ok
+test timecode::tests::non_drop_round_trip ... ok
+test timecode::tests::parse_variants ... ok
+
+test result: ok. 22 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_ui_egui-51d4b01e8b642c05)
+
+running 38 tests
+test control::tests::base64_known ... ok
+test credits::tests::formatting ... ok
+test credits::tests::delta_and_dates ... ok
+test credits::tests::alphabetical_ignores_at_and_case ... ok
+test credits::tests::names_fall_back_to_the_username ... ok
+test edit_window::tests::follow_jumps_to_offscreen_playhead_while_playing ... ok
+test edit_window::tests::follow_leaves_onscreen_playhead_alone ... ok
+test dialogs::tests::tempo_change_dialog_runs_a_real_command_at_its_position ... ok
+test edit_window::tests::follow_never_scrolls_when_stopped_nor_in_free_modes ... ok
+test edit_window::tests::hold_clears_when_playhead_returns_or_transport_stops ... ok
+test edit_window::tests::outside_view_move_pauses_the_follow ... ok
+test edit_window::tests::own_follow_jump_is_not_mistaken_for_a_takeover ... ok
+test menus::tests::mix_view_aliases_are_allocated_once ... ok
+test ops_windows::tests::stretch_uses_start_over_end_and_scale_uses_end_over_start ... ok
+test palette::tests::scoring_prefers_substrings ... ok
+test menus::tests::programmatic_dialog_commands_stay_closed_and_the_menu_opens_them ... ok
+test score_editor::tests::diatonic_steps ... ok
+test shortcuts::label_tests::cmd_becomes_ctrl_off_mac ... ok
+test shortcuts::tests::cmd_and_ctrl_stay_apart_on_macos ... ok
+test shortcuts::tests::ctrl_is_cmd_off_macos ... ok
+test shortcuts::label_tests::unchanged_on_mac ... ok
+test tests::automation_first_pass_after_start_is_due_without_overflow ... ok
+test tests::automation_write_fires_after_loop_wrap ... ok
+test tests::automation_write_throttles_to_step ... ok
+test dialogs::tests::file_commands_get_path_prompts_with_sensible_names ... ok
+test tests::new_session_cancels_play_queued_before_the_next_frame ... ok
+test tests::session_reset_does_not_apply_old_stop_edits_to_the_new_session ... ok
+test theme::tests::dark_is_the_default ... ok
+test theme::tests::modes_round_trip_through_prefs ... ok
+test theme::tests::theme_command_sets_and_reports_the_mode ... ok
+test theme::tests::application_frames_follow_system_appearance_and_preserve_manual_palettes ... ok
+test tests::new_session_stops_playback_and_the_old_clock ... ok
+test widgets::selector_visual_regressions::actual_mixer_keeps_every_active_automation_mode_legible ... ok
+test widgets::selector_visual_regressions::capture_actual_mixer_visual_fixtures ... ok
+test widgets::selector_visual_regressions::capture_selector_visual_fixtures ... ok
+test widgets::tests::clip_gain_taper_spans_minus_144_to_plus_36_and_round_trips ... ok
+test windows::audio_health_tests::window_command_renders_report_and_close_clears_snapshot ... ok
+test widgets::selector_visual_regressions::compact_mixer_selectors_keep_labels_on_one_visible_line ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.93s
+
+     Running tests/clip_gain_fader.rs (target/debug/deps/clip_gain_fader-56e5384f6df376da)
+
+running 1 test
+test the_clip_gain_icon_drags_with_the_pointer_in_one_undo_step ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+     Running tests/clip_menu.rs (target/debug/deps/clip_menu-436cdd39f58d139c)
+
+running 1 test
+test clip_menu_stays_open_while_moving_onto_delete ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+     Running tests/docking_workflows.rs (target/debug/deps/docking_workflows-40e7d62df3891472)
+
+running 5 tests
+test legacy_preferences_restore_the_theme_and_validate_default_docking ... ok
+test reset_is_enabled_and_resolves_in_native_and_in_window_menu_trees ... ok
+test invalid_docking_requests_are_atomic_in_edit_and_mix ... ok
+test real_drag_float_close_reopen_reload_retains_transport_and_mixer_commands ... ok
+test docking_renders_edit_and_mix_default_floating_and_redocked ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.90s
+
+     Running tests/midi_panel.rs (target/debug/deps/midi_panel-d51c0d40a71ac5be)
+
+running 5 tests
+test arrange_cancels_a_held_midi_divider_without_editing_the_session ... ok
+test layout_reset_cancels_a_held_midi_divider_without_editing_the_session ... ok
+test legacy_visibility_sync_cancels_a_held_midi_divider_without_editing_the_session ... ok
+test midi_panel_resizes_with_a_selected_clip ... ok
+test midi_panel_resizes_without_a_selected_clip ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.64s
+
+     Running tests/shared_controls.rs (target/debug/deps/shared_controls-753a4a9b9240e55d)
+
+running 5 tests
+test shared_controls_visuals ... ok
+test tool_and_record_buttons_preserve_distinct_selected_colors_and_caller_state ... ok
+test tool_and_record_buttons_handle_keyboard_disabled_state_and_cancelled_clicks ... ok
+test track_record_button_arms_the_track_without_starting_transport ... ok
+test toolbar_keyboard_activation_changes_tools_without_transport_or_marker_actions ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/shortcuts.rs (target/debug/deps/shortcuts-ae78ecce761ef9a5)
+
+running 1 test
+test ctrl_shift_arrows_nudge_the_selected_clip_gain ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+
+     Running tests/theme_docking.rs (target/debug/deps/theme_docking-a6787e77873560cf)
+
+running 1 test
+test shared_panels_and_controls_follow_manual_and_live_system_appearance ... FAILED
+
+failures:
+
+---- shared_panels_and_controls_follow_manual_and_live_system_appearance stdout ----
+
+thread 'shared_panels_and_controls_follow_manual_and_live_system_appearance' (20513) panicked at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_kittest-0.36.2/src/wgpu.rs:77:6:
+Failed to create render state: CustomNativeAdapterSelectionError("No adapter found")
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: core::result::unwrap_failed
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/result.rs:1867:5
+   3: <core::result::Result<egui_wgpu::RenderState, egui_wgpu::WgpuError>>::expect
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/result.rs:1185:23
+   4: egui_kittest::wgpu::create_render_state
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_kittest-0.36.2/src/wgpu.rs:77:6
+   5: <egui_kittest::wgpu::WgpuTestRenderer>::with_render_options
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_kittest-0.36.2/src/wgpu.rs:128:27
+   6: <egui_kittest::builder::HarnessBuilder<soundcraft_ui_egui::SoundApp>>::wgpu
+             at /root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/egui_kittest-0.36.2/src/builder.rs:170:29
+   7: theme_docking::shared_panels_and_controls_follow_manual_and_live_system_appearance
+             at ./tests/theme_docking.rs:17:101
+   8: theme_docking::shared_panels_and_controls_follow_manual_and_live_system_appearance::{closure#0}
+             at ./tests/theme_docking.rs:8:73
+   9: <theme_docking::shared_panels_and_controls_follow_manual_and_live_system_appearance::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+  10: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    shared_panels_and_controls_follow_manual_and_live_system_appearance
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+error: test failed, to rerun pass `-p soundcraft-ui-egui --test theme_docking`
+ok    fmt
+ok    clippy
+FAIL  test
+xtask: cargo test --workspace failed
+
+real	11m32.913s
+user	38m57.144s
+sys	2m53.376s
+EXIT: 1

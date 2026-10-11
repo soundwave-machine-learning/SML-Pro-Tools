@@ -204,6 +204,9 @@ pub struct EditState {
     /// Numeric settings keyed by id (e.g. `click.volume_db`, `engine.buffer_size`).
     #[serde(default)]
     pub values: std::collections::BTreeMap<String, f64>,
+    /// Dedicated Nudge panel (value/unit/target and exact accumulation anchor).
+    #[serde(default)]
+    pub nudge_panel: crate::NudgePanel,
 }
 
 impl EditState {
@@ -272,6 +275,7 @@ impl Default for EditState {
                 .map(|s| s.to_string())
                 .collect(),
             values: std::collections::BTreeMap::new(),
+            nudge_panel: crate::NudgePanel::default(),
         }
     }
 }
@@ -306,6 +310,15 @@ pub struct Session {
     /// Performance). Independent of undo so a restore survives later edits.
     #[serde(default)]
     pub midi_originals: std::collections::BTreeMap<u64, soundcraft_midi::Sequence>,
+    /// Mixer graph/arithmetic version and mix profile. Absent in legacy files (= version 1).
+    #[serde(default)]
+    pub mix_profile: crate::MixProfile,
+    /// A/B/C mix snapshots (VM05).
+    #[serde(default)]
+    pub mix_snapshots: std::collections::BTreeMap<String, crate::MixSnapshot>,
+    /// Temporary audition bypass (never saved; exports ignore it).
+    #[serde(skip)]
+    pub audition: crate::AuditionBypass,
     #[serde(skip)]
     pub pool: SourcePool,
 }
@@ -340,6 +353,10 @@ impl Session {
             next_id: 1,
             comments: String::new(),
             midi_originals: std::collections::BTreeMap::new(),
+            // New sessions use the current (SL02) graph; legacy files load as version 1.
+            mix_profile: crate::MixProfile { graph_version: crate::GRAPH_VERSION, ..crate::MixProfile::default() },
+            mix_snapshots: std::collections::BTreeMap::new(),
+            audition: crate::AuditionBypass::default(),
             pool: SourcePool::default(),
         };
         s.edit.pre_roll = sample_rate.samples(2.0);

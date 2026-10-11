@@ -22,6 +22,9 @@
 //! through handles taken from each instance before it leaves ([`Player::open_editor`]).
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod capture;
+pub mod clock;
+pub mod device;
 pub mod record;
 
 use soundcraft_dsp::{Plugin, PluginEditor};
@@ -74,6 +77,24 @@ struct Shared {
     /// Speed × 1000.
     speed: AtomicU32,
     meters: Mutex<MeterSnapshot>,
+    /// Stream clock telemetry (written by the callback with atomics only).
+    stream_generation: std::sync::atomic::AtomicU64,
+    stream_frames: std::sync::atomic::AtomicU64,
+    last_callback_frames: AtomicU32,
+}
+
+impl Shared {
+    fn new() -> Shared {
+        Shared {
+            position: AtomicI64::new(0),
+            playing: AtomicBool::new(false),
+            speed: AtomicU32::new(1000),
+            meters: Mutex::new(MeterSnapshot::default()),
+            stream_generation: std::sync::atomic::AtomicU64::new(0),
+            stream_frames: std::sync::atomic::AtomicU64::new(0),
+            last_callback_frames: AtomicU32::new(0),
+        }
+    }
 }
 
 /// State owned by the audio callback.
@@ -98,6 +119,8 @@ struct AudioState {
     recording: bool,
     /// Retired plugin instances go back to the UI thread to be dropped there.
     garbage: Sender<Vec<Box<dyn Plugin>>>,
+    /// Device-frame clock of this stream (CL01).
+    clock: clock::StreamClock,
 }
 
 fn new_engine(sr: f32) -> MixEngine {
@@ -129,6 +152,7 @@ impl AudioState {
             device_rate,
             input: None,
             recording: false,
+            clock: clock::StreamClock::new(device_rate as u32),
         }
     }
 
@@ -196,9 +220,9 @@ impl AudioState {
         }
     }
 
-    /// Render the next block at the session rate into `pending`.
-    fn render_next(&mut self) {
-        let mut n = BLOCK;
+    /// Render the next block (at most `want` ≤ BLOCK frames) at the session rate into `pending`.
+    fn render_next(&mut self, want: usize) {
+        let mut n = want.clamp(1, BLOCK);
         if let Some(l) = self.looped
             && self.pos >= l.end
         {
@@ -261,6 +285,11 @@ impl AudioState {
     fn fill(&mut self, out: &mut [f32], channels: usize) {
         self.drain();
         let channels = channels.max(1);
+        let total = out.len() / channels;
+        let stamp = self.clock.advance(total);
+        self.shared.stream_generation.store(stamp.generation, Ordering::Relaxed);
+        self.shared.stream_frames.store(self.clock.frames(), Ordering::Relaxed);
+        self.shared.last_callback_frames.store(stamp.frames, Ordering::Relaxed);
         let monitoring = self.input.is_some() && self.session.tracks.iter().any(|t| t.mixer.input_monitor || t.mixer.record_arm);
         if !self.playing && !monitoring {
             out.iter_mut().for_each(|x| *x = 0.0);
@@ -272,13 +301,16 @@ impl AudioState {
         }
         let speed = f64::from(self.shared.speed.load(Ordering::Relaxed)) / 1000.0;
         let step = self.session.sample_rate.as_f64() / self.device_rate.max(1.0) * speed.clamp(0.1, 4.0);
-        for frame in out.chunks_mut(channels) {
+        // Same rate, normal speed: render exactly what this callback still needs, so no audio is
+        // queued past the callback (CL02); otherwise fixed blocks feed the interpolating reader.
+        let exact = step == 1.0;
+        for (f, frame) in out.chunks_mut(channels).enumerate() {
             while self.read >= self.pending_len as f64 {
                 self.read -= self.pending_len as f64;
                 if !self.playing && !monitoring {
                     break;
                 }
-                self.render_next();
+                self.render_next(if exact { total - f } else { BLOCK });
                 if self.pending_len == 0 {
                     break;
                 }
@@ -381,12 +413,7 @@ impl Player {
     fn open(session: Arc<Session>) -> Player {
         let (gtx, grx) = channel();
         let side = Mutex::new(Side { shadow: HashMap::new(), rate: session.sample_rate.as_f64() as f32, editors: HashMap::new(), garbage: grx });
-        let shared = Arc::new(Shared {
-            position: AtomicI64::new(0),
-            playing: AtomicBool::new(false),
-            speed: AtomicU32::new(1000),
-            meters: Mutex::new(MeterSnapshot::default()),
-        });
+        let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let want = session.sample_rate.hz();
         let want_ch = u16::try_from(main_channels(&session)).unwrap_or(2);
@@ -630,6 +657,15 @@ impl Player {
         self.shared.playing.load(Ordering::Relaxed)
     }
 
+    /// Stream clock telemetry: (generation, device frames serviced, last callback size).
+    pub fn stream_clock(&self) -> (u64, u64, u32) {
+        (
+            self.shared.stream_generation.load(Ordering::Relaxed),
+            self.shared.stream_frames.load(Ordering::Relaxed),
+            self.shared.last_callback_frames.load(Ordering::Relaxed),
+        )
+    }
+
     pub fn meters(&self) -> MeterSnapshot {
         self.shared.meters.lock().unwrap_or_else(PoisonError::into_inner).clone()
     }
@@ -733,12 +769,7 @@ mod tests {
     #[test]
     fn audio_state_plays_and_stops_at_end() {
         let s = Arc::new(soundcraft_model::Session::default());
-        let shared = Arc::new(Shared {
-            position: AtomicI64::new(0),
-            playing: AtomicBool::new(false),
-            speed: AtomicU32::new(1000),
-            meters: Mutex::new(MeterSnapshot::default()),
-        });
+        let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), s, 48_000.0, channel().0);
         tx.send(Cmd::Play { from: 0, end: Some(1000), looped: None }).unwrap();
@@ -759,12 +790,7 @@ mod tests {
         let id = s.new_clip_id();
         s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "x", SourceId(5), 0, 0, 48_000));
         let s = Arc::new(s);
-        let shared = Arc::new(Shared {
-            position: AtomicI64::new(0),
-            playing: AtomicBool::new(false),
-            speed: AtomicU32::new(1000),
-            meters: Mutex::new(MeterSnapshot::default()),
-        });
+        let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::clone(&s), 48_000.0, channel().0);
         tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
@@ -818,12 +844,7 @@ mod tests {
         let t = s.add_track(TrackKind::Audio, ChannelFormat::Stereo, None);
         s.track_mut(t).unwrap().mixer.inserts[1] = Some(Insert::new("clap:test.fake"));
         let s = Arc::new(s);
-        let shared = Arc::new(Shared {
-            position: AtomicI64::new(0),
-            playing: AtomicBool::new(false),
-            speed: AtomicU32::new(1000),
-            meters: Mutex::new(MeterSnapshot::default()),
-        });
+        let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let (gtx, grx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::new(soundcraft_model::Session::default()), 48_000.0, gtx);
@@ -878,15 +899,34 @@ mod tests {
         assert!(side.shadow.is_empty());
     }
 
+    /// CL02: at equal rates the live path renders exactly each callback's frames: after a 64-frame
+    /// callback the transport is at 64 (not a 512-frame block ahead) and nothing stays queued.
+    /// Variable callback sizes keep exact frame accounting and a monotonic stream clock.
+    #[test]
+    fn live_path_renders_exactly_the_callback_size() {
+        let s = Arc::new(soundcraft_model::Session::default());
+        let shared = Arc::new(Shared::new());
+        let (tx, rx) = channel();
+        let mut st = AudioState::new(rx, Arc::clone(&shared), s, 48_000.0, channel().0);
+        tx.send(Cmd::Play { from: 1000, end: None, looped: None }).unwrap();
+        let mut total = 0i64;
+        let g = st.clock.generation();
+        for n in [64usize, 64, 127, 128, 32, 256, 1024, 7] {
+            let mut out = vec![0.0f32; n * 2];
+            st.fill(&mut out, 2);
+            total += n as i64;
+            assert_eq!(shared.position.load(Ordering::Relaxed), 1000 + total, "after a {n}-frame callback");
+            assert_eq!(st.pending_len as f64 - st.read, 0.0, "no audio queued past the callback");
+        }
+        assert_eq!(st.clock.frames(), total as u64);
+        assert_eq!(st.clock.generation(), g);
+        assert_eq!(shared.stream_frames.load(Ordering::Relaxed), total as u64);
+    }
+
     #[test]
     fn looping_wraps() {
         let s = Arc::new(soundcraft_model::Session::default());
-        let shared = Arc::new(Shared {
-            position: AtomicI64::new(0),
-            playing: AtomicBool::new(false),
-            speed: AtomicU32::new(1000),
-            meters: Mutex::new(MeterSnapshot::default()),
-        });
+        let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), s, 48_000.0, channel().0);
         tx.send(Cmd::Play { from: 0, end: None, looped: Some(Range::new(0, 1000)) }).unwrap();

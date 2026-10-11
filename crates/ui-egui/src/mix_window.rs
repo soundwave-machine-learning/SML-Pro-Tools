@@ -474,14 +474,14 @@ pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, oc
         ui.separator();
     }
     let mut cats: Vec<soundcraft_dsp::Category> = Vec::new();
-    for p in soundcraft_dsp::plugins() {
+    for p in soundcraft_dsp::catalogue() {
         if !p.is_instrument && !cats.contains(&p.category) {
             cats.push(p.category);
         }
     }
     for c in cats {
         ui.menu_button(format!("{c:?}"), |ui| {
-            for p in soundcraft_dsp::plugins().iter().filter(|p| p.category == c && !p.is_instrument) {
+            for p in soundcraft_dsp::catalogue().iter().filter(|p| p.category == c && !p.is_instrument) {
                 if ui.button(p.name).clicked() {
                     let _ = app.run("mix.insert", json!({"track": id.0, "slot": slot, "plugin": p.id}));
                 }
@@ -519,7 +519,7 @@ pub fn instrument_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId) {
     }
     let mut picked = None;
     ui.menu_button("Built-in", |ui| {
-        for p in soundcraft_dsp::plugins().iter().filter(|p| p.is_instrument) {
+        for p in soundcraft_dsp::catalogue().iter().filter(|p| p.is_instrument) {
             if ui.button(p.name).clicked() {
                 picked = Some(p.id.to_string());
             }

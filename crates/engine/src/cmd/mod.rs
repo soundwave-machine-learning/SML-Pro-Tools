@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 
 mod audio_midi;
 mod audiosuite;
+mod bus;
 mod clap;
 mod clip;
 mod clip_more;
@@ -21,10 +22,12 @@ mod instrument;
 mod midi;
 mod mix;
 mod more_util;
+mod nudge;
 mod options;
 mod plugin_state;
 mod query;
 mod setup_more;
+mod snapshot;
 mod surround;
 mod track;
 mod track_more;
@@ -124,6 +127,9 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(plugin_state::specs());
         v.extend(instrument::specs());
         v.extend(video::specs());
+        v.extend(nudge::specs());
+        v.extend(bus::specs());
+        v.extend(snapshot::specs());
         v
     })
 }
@@ -166,6 +172,58 @@ pub fn can_redo(e: &Engine) -> std::result::Result<(), String> {
 
 pub fn has_clipboard(e: &Engine) -> std::result::Result<(), String> {
     if e.clipboard.tracks.is_empty() { Err("the clipboard is empty".into()) } else { Ok(()) }
+}
+
+// ---- missing plugins (R05) ---------------------------------------------------------------
+
+/// Every active processor the session references that this build cannot run (removed upstream
+/// built-ins, or external plugins that are not installed), as `(track, location, plugin id)`.
+pub fn missing_plugins(s: &soundcraft_model::Session) -> Vec<(String, String, String)> {
+    let mut out = Vec::new();
+    for t in &s.tracks {
+        for (i, ins) in t.mixer.inserts.iter().enumerate() {
+            if let Some(ins) = ins
+                && ins.active
+                && !ins.bypass
+                && soundcraft_mix::is_missing_plugin(&ins.plugin)
+            {
+                out.push((t.name.clone(), format!("insert {}", (b'a' + i as u8) as char), ins.plugin.clone()));
+            }
+        }
+        if let Some(ins) = &t.instrument
+            && soundcraft_mix::is_missing_plugin(&ins.plugin)
+        {
+            out.push((t.name.clone(), "instrument".into(), ins.plugin.clone()));
+        }
+        for k in soundcraft_model::SlotKind::ALL {
+            if let Some(slot) = t.mixer.slots.get(k)
+                && !slot.bypass
+                && let Some(p) = &slot.provider
+                && soundcraft_mix::is_missing_plugin(&p.plugin)
+            {
+                out.push((t.name.clone(), k.id().into(), p.plugin.clone()));
+            }
+        }
+    }
+    out
+}
+
+/// Exports refuse to render a session with missing processors unless the caller explicitly
+/// acknowledges that the result will not contain their sound (`acknowledge_missing: true`).
+pub fn missing_plugin_guard(e: &Engine, cmd: &str, p: &Value) -> Result<()> {
+    let missing = missing_plugins(e.session());
+    if missing.is_empty() || p.get("acknowledge_missing").and_then(Value::as_bool) == Some(true) {
+        return Ok(());
+    }
+    let list: Vec<String> = missing.iter().map(|(t, at, id)| format!("{t} {at}: {id}")).collect();
+    Err(bad(
+        cmd,
+        format!(
+            "{} missing plugin(s) would be bypassed in this export ({}); pass acknowledge_missing: true to export without their sound",
+            missing.len(),
+            list.join("; ")
+        ),
+    ))
 }
 
 // ---- params ------------------------------------------------------------------------------

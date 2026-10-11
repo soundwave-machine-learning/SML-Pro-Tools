@@ -1,0 +1,200 @@
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/xtask wasm`
+ Downloading crates ...
+  Downloaded slotmap v1.1.1
+  Downloaded wasm-bindgen-macro v0.2.129
+  Downloaded wasm-bindgen-futures v0.4.79
+  Downloaded bumpalo v3.20.3
+  Downloaded wgpu-core-deps-wasm v30.0.1
+  Downloaded wasm-bindgen-shared v0.2.129
+  Downloaded pin-project-internal v1.1.13
+  Downloaded pin-project v1.1.13
+  Downloaded wasm-bindgen v0.2.129
+  Downloaded js-sys v0.3.106
+  Downloaded wasm-bindgen-macro-support v0.2.129
+  Downloaded web-sys v0.3.106
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+    Checking cfg-if v1.0.5
+   Compiling rustversion v1.0.23
+    Checking log v0.4.34
+    Checking arrayvec v0.7.8
+   Compiling autocfg v1.5.1
+   Compiling libm v0.2.16
+   Compiling syn v3.0.6
+   Compiling num-traits v0.2.19
+    Checking scopeguard v1.2.0
+   Compiling thiserror v2.0.21
+   Compiling wasm-bindgen-shared v0.2.129
+    Checking once_cell v1.21.4
+    Checking bitflags v1.3.2
+    Checking lazy_static v1.5.1
+   Compiling bumpalo v3.20.3
+    Checking unicode-ident v1.0.26
+   Compiling wasm-bindgen v0.2.129
+   Compiling encoding_rs v0.8.42
+   Compiling multiversion_no_op v1.0.0
+   Compiling serde_core v1.0.229
+    Checking futures-core v0.3.34
+    Checking futures-task v0.3.34
+    Checking bitflags v2.13.2
+    Checking pin-project-lite v0.2.17
+    Checking slab v0.4.12
+    Checking futures-util v0.3.34
+   Compiling wasm-bindgen-macro-support v0.2.129
+   Compiling version_check v0.9.5
+    Checking smallvec v1.16.2
+   Compiling serde v1.0.229
+    Checking foldhash v0.2.0
+    Checking hashbrown v0.17.1
+   Compiling syn v2.0.119
+   Compiling zerocopy v0.8.60
+   Compiling cfg_aliases v0.2.2
+   Compiling zmij v1.0.23
+   Compiling parking_lot_core v0.9.12
+    Checking num-integer v0.1.47
+   Compiling serde_json v1.0.151
+    Checking lock_api v0.4.14
+    Checking strength_reduce v0.2.4
+    Checking equivalent v1.0.2
+    Checking simd-adler32 v0.3.10
+    Checking indexmap v2.14.2
+    Checking transpose v0.2.3
+    Checking parking_lot v0.12.5
+    Checking primal-check v0.3.4
+    Checking num-complex v0.4.6
+    Checking polycool v0.4.0
+   Compiling crc32fast v1.5.2
+    Checking adler2 v2.0.1
+    Checking rustc-hash v1.1.0
+    Checking profiling v1.0.18
+    Checking kurbo v0.13.1
+    Checking rustfft v6.4.1
+   Compiling naga v30.0.1
+   Compiling slotmap v1.1.1
+    Checking euclid v0.22.14
+    Checking extended v0.1.0
+    Checking unicode-width v0.2.2
+    Checking bit-vec v0.9.1
+    Checking linebender_resource_handle v0.1.1
+    Checking bit-set v0.10.0
+    Checking codespan-reporting v0.13.1
+    Checking guillotiere v0.7.0
+    Checking miniz_oxide v0.9.1
+   Compiling ahash v0.8.12
+    Checking static_assertions v1.1.0
+   Compiling unicode-general-category v1.1.0
+    Checking fearless_simd v0.4.1
+    Checking raw-window-handle v0.6.2
+    Checking flate2 v1.1.10
+    Checking miniz_oxide v0.8.9
+    Checking fdeflate v0.3.7
+   Compiling wgpu-hal v30.0.1
+    Checking itoa v1.0.18
+    Checking memchr v2.8.3
+    Checking pxfm v0.1.30
+    Checking zune-core v0.5.3
+    Checking zune-jpeg v0.5.15
+    Checking moxcms v0.8.1
+    Checking png v0.18.1
+    Checking nohash-hasher v0.2.0
+    Checking byteorder-lite v0.1.0
+    Checking either v1.19.0
+    Checking unicode-segmentation v1.13.3
+    Checking self_cell v1.3.0
+    Checking epaint_default_fonts v0.36.2
+    Checking uuid v1.27.0
+    Checking accesskit v0.24.1
+    Checking itertools v0.15.0
+   Compiling wgpu-core v30.0.1
+   Compiling winnow v1.0.4
+   Compiling litrs v1.0.0
+   Compiling document-features v0.2.12
+   Compiling toml_parser v1.1.3+spec-1.1.0
+   Compiling zerocopy-derive v0.8.60
+   Compiling toml_datetime v1.1.1+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling wgpu v30.0.1
+   Compiling bytemuck_derive v1.12.1
+   Compiling thiserror-impl v2.0.21
+    Checking bytemuck v1.25.2
+    Checking symphonia-core v0.5.5
+    Checking symphonia-metadata v0.5.5
+   Compiling serde_derive v1.0.229
+    Checking symphonia-utils-xiph v0.5.5
+    Checking naga-types v30.0.1
+    Checking color v0.3.3
+    Checking font-types v0.12.6
+    Checking read-fonts v0.41.0
+    Checking half v2.7.1
+    Checking peniko v0.6.1
+    Checking symphonia-format-ogg v0.5.5
+    Checking symphonia-format-isomp4 v0.5.5
+    Checking symphonia-bundle-flac v0.5.5
+    Checking symphonia-format-mkv v0.5.5
+    Checking symphonia-codec-vorbis v0.5.5
+    Checking symphonia-format-caf v0.5.5
+    Checking symphonia-bundle-mp3 v0.5.5
+    Checking symphonia-format-riff v0.5.5
+    Checking symphonia-codec-adpcm v0.5.5
+    Checking symphonia-codec-pcm v0.5.5
+    Checking symphonia-codec-aac v0.5.5
+    Checking symphonia-codec-alac v0.5.5
+    Checking symphonia v0.5.5
+    Checking vello_common v0.1.0
+    Checking emath v0.36.2
+    Checking ecolor v0.36.2
+    Checking vello_cpu v0.1.0
+    Checking skrifa v0.44.0
+    Checking harfrust v0.12.0
+    Checking image v0.25.10
+    Checking epaint v0.36.2
+   Compiling cpal v0.16.0
+   Compiling toml_writer v1.1.2+spec-1.1.0
+   Compiling toml v1.1.6+spec-1.1.0
+    Checking dasp_sample v0.11.0
+    Checking rustc-hash v2.1.3
+    Checking type-map v0.5.1
+    Checking percent-encoding v2.3.2
+   Compiling wasm-bindgen-macro v0.2.129
+   Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+    Checking js-sys v0.3.106
+    Checking soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+    Checking soundcraft-midi v0.5.0 (/home/user/SML-Pro-Tools/crates/midi)
+    Checking soundcraft-audio-io v0.5.0 (/home/user/SML-Pro-Tools/crates/audio-io)
+    Checking soundcraft-time v0.5.0 (/home/user/SML-Pro-Tools/crates/time)
+    Checking soundcraft-video v0.5.0 (/home/user/SML-Pro-Tools/crates/video)
+    Checking soundcraft-model v0.5.0 (/home/user/SML-Pro-Tools/crates/model)
+    Checking soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+    Checking soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+    Checking soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+    Checking soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+    Checking web-sys v0.3.106
+    Checking wasm-bindgen-futures v0.4.79
+    Checking web-time v1.1.0
+    Checking wgpu-types v30.0.1
+    Checking glow v0.17.0
+    Checking egui v0.36.2
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+warning: variant `CaptureStates` is never constructed
+  --> crates/playback/src/lib.rs:59:5
+   |
+55 | enum Cmd {
+   |      --- variant in this enum
+...
+59 |     CaptureStates(Sender<PluginStates>),
+   |     ^^^^^^^^^^^^^
+   |
+   = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `soundcraft-playback` (lib) generated 1 warning
+    Checking wgpu-naga-bridge v30.0.1
+    Checking wgpu-core-deps-wasm v30.0.1
+    Checking craft-ui v0.1.0 (https://github.com/storytold/craft-libs?rev=5c874d51eeb3de70e735c8ce87a59a7dedd47675#5c874d51)
+    Checking egui-wgpu v0.36.2
+    Checking eframe v0.36.2
+    Checking soundcraft-web v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-web)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 2m 18s
+EXIT: 0

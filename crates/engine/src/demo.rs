@@ -1,10 +1,13 @@
 //! A demo session whose audio is synthesised in code (no third-party media):
-//! a 24-bar groove at 104 BPM with drums, bass, keys, pad, lead, a reverb aux and a master.
+//! a 24-bar groove at 104 BPM with drums, bass, pad, MIDI keys/lead parts, an empty reverb FX
+//! return and a master. SML Recording ships no bundled effects or instruments, so the demo is
+//! dry: the MIDI tracks carry notes but no instrument (assign an installed VST3/CLAP one), the
+//! "Verb" return is empty with its sends off, and no inserts are loaded.
 
 use crate::Engine;
 use soundcraft_audio_io::{AudioBuffer, FileFormat};
 use soundcraft_midi::{Note, Sequence};
-use soundcraft_model::{ChannelFormat, Clip, Fade, FadeShape, Insert, MarkerKind, Route, SendSlot, Session, TrackKind};
+use soundcraft_model::{ChannelFormat, Clip, Fade, FadeShape, MarkerKind, Route, SendSlot, Session, TrackKind};
 use soundcraft_time::{SampleRate, TICKS_PER_QUARTER};
 
 const BPM: f64 = 104.0;
@@ -19,16 +22,6 @@ impl Rng {
         self.0 ^= self.0 << 17;
         ((self.0 >> 40) as f32 / (1u64 << 24) as f32) * 2.0 - 1.0
     }
-}
-
-fn insert(id: &str) -> Insert {
-    let mut i = Insert::new(id);
-    if let Some(info) = soundcraft_dsp::plugin_info(id) {
-        for p in info.params {
-            i.params.insert(p.id.to_string(), p.default);
-        }
-    }
-    i
 }
 
 fn beat_len(sr: f64) -> usize {
@@ -256,7 +249,6 @@ pub fn demo_session() -> Session {
         let name = s.track(t).map(|x| x.name.clone()).unwrap_or_default();
         crate::edit::place_clip(&mut s, t, Clip::midi(cid, name, start, len, seq));
         if let Some(tr) = s.track_mut(t) {
-            tr.instrument = Some(insert("subtractive_synth"));
             tr.color = soundcraft_model::TRACK_COLORS[color];
             tr.mixer.volume_db = if t == keys { -9.0 } else { -12.0 };
         }
@@ -265,14 +257,15 @@ pub fn demo_session() -> Session {
     let aux = s.add_track(TrackKind::Aux, ChannelFormat::Stereo, Some("Verb"));
     if let Some(tr) = s.track_mut(aux) {
         tr.mixer.input = Route::Bus(verb_bus);
-        tr.mixer.inserts[0] = Some(insert("plate_reverb"));
         tr.mixer.volume_db = -4.0;
         tr.color = soundcraft_model::TRACK_COLORS[12];
     }
     for (t, lvl) in [(ts, -10.0f32), (tp, -8.0), (keys, -12.0), (lead, -6.0)] {
         if let Some(tr) = s.track_mut(t) {
             let mut snd = SendSlot::new(Route::Bus(verb_bus));
-            snd.level_db = lvl;
+            // Sends start off (-inf): an empty return would only duplicate the dry signal.
+            let _ = lvl;
+            snd.level_db = -144.0;
             tr.mixer.sends[0] = Some(snd);
         }
     }
@@ -285,16 +278,7 @@ pub fn demo_session() -> Session {
             }
         }
     }
-    if let Some(tr) = s.track_mut(tk) {
-        tr.mixer.inserts[0] = Some(insert("eq_7band"));
-        tr.mixer.inserts[1] = Some(insert("compressor"));
-    }
-    if let Some(tr) = s.track_mut(tb) {
-        tr.mixer.inserts[0] = Some(insert("compressor"));
-        tr.mixer.inserts[1] = Some(insert("saturator"));
-    }
     if let Some(tr) = s.track_mut(tp) {
-        tr.mixer.inserts[0] = Some(insert("chorus"));
         // Pad swells in with volume automation.
         let l = tr.lane_mut(&soundcraft_model::AutoParam::Volume);
         l.set_point(0, -30.0);
@@ -302,10 +286,7 @@ pub fn demo_session() -> Session {
         l.set_point((20 * bar) as i64, -8.0);
         l.set_point((24 * bar) as i64, -24.0);
     }
-    let m = s.add_track(TrackKind::Master, ChannelFormat::Stereo, Some("Master"));
-    if let Some(tr) = s.track_mut(m) {
-        tr.mixer.inserts[0] = Some(insert("maximizer"));
-    }
+    s.add_track(TrackKind::Master, ChannelFormat::Stereo, Some("Master"));
     // Markers.
     for (name, at) in [("Intro", 1i64), ("Verse", 5), ("Chorus", 13), ("Outro", 21)] {
         let pos = s.tempo.samples_at_bar_beat(soundcraft_time::BarBeat { bar: at, beat: 1, tick: 0 }, sr);

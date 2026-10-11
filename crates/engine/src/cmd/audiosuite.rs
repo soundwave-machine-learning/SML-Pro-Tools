@@ -27,12 +27,12 @@ fn process(e: &mut Engine, p: &Value) -> Result<Value> {
         .map(|o| o.iter().filter_map(|(k, v)| v.as_f64().filter(|x| x.is_finite()).map(|x| (k.clone(), x as f32))).collect())
         .unwrap_or_default();
     let get = |k: &str, d: f32| params.iter().find(|(n, _)| n == k).map_or(d, |(_, v)| *v);
-    let known = soundcraft_dsp::plugin_info(&name).is_some()
-        || matches!(
-            name.as_str(),
-            "normalize" | "reverse" | "invert" | "gain" | "duplicate" | "time_stretch" | "pitch_shift" | "varispeed" | "dc_offset_removal"
-        );
+    // Retained offline editing services only; the upstream AudioSuite plugin catalogue is removed.
+    let known = matches!(name.as_str(), "normalize" | "reverse" | "invert" | "gain" | "duplicate" | "time_stretch" | "pitch_shift" | "varispeed");
     if !known {
+        if soundcraft_dsp::is_removed_builtin(&name) {
+            return Err(bad("audiosuite.process", format!("`{name}` was an upstream bundled processor and is not part of SML Recording")));
+        }
         return Err(bad("audiosuite.process", format!("unknown process `{name}`")));
     }
     let ids = clip_ids_param(e, p);
@@ -73,7 +73,7 @@ fn process(e: &mut Engine, p: &Value) -> Result<Value> {
                 soundcraft_dsp::offline::invert(&mut audio);
                 audio
             }
-            "gain" if soundcraft_dsp::plugin_info("gain").is_none() || params.iter().any(|(k, _)| k == "db") => {
+            "gain" => {
                 soundcraft_dsp::offline::gain(&mut audio, get("db", 0.0));
                 audio
             }
@@ -85,15 +85,7 @@ fn process(e: &mut Engine, p: &Value) -> Result<Value> {
                 let to = (sr.as_f64() / f64::from(speed)).round().max(1.0) as u32;
                 soundcraft_dsp::offline::resample(&audio, sr.hz(), to)
             }
-            plugin => {
-                let Some(mut pl) = soundcraft_dsp::create(plugin) else { return Err(bad("audiosuite.process", format!("cannot create `{plugin}`"))) };
-                pl.prepare(srf, 1024, audio.len().max(1));
-                for (k, v) in &params {
-                    pl.set_param(k, *v);
-                }
-                soundcraft_dsp::offline::apply_plugin(&mut audio, pl.as_mut(), srf);
-                audio
-            }
+            other => return Err(bad("audiosuite.process", format!("unknown process `{other}`"))),
         };
         let frames = out.first().map_or(0, Vec::len);
         if frames == 0 {

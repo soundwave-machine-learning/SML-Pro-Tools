@@ -52,14 +52,11 @@ fn agent_builds_and_mixes_a_session() {
     assert_eq!(track(&sess, "Kick")["volume_db"], json!(-8.5));
     assert_eq!(track(&sess, "Hats")["pan"][0], json!(-0.5));
 
-    // 3. Put an EQ on the bass with a low-shelf boost, then bypass it.
-    let r = tool(&mut s, "execute", json!({"command": "mix.insert", "params": {"track": "Bass", "slot": "c", "plugin": "eq_7band"}}));
-    assert_eq!(r["slot"], 2);
+    // 3. SML Recording ships no bundled effects: the agent groups the drums with the one-step
+    //    bus workflow instead (was: insert the removed bundled EQ and bypass it).
+    let r = tool(&mut s, "execute", json!({"command": "bus.create_from_selection", "params": {"tracks": ["Kick", "Snare"], "name": "Drums"}}));
     let sess = session(&mut s);
-    assert_eq!(track(&sess, "Bass")["inserts"].as_array().unwrap().iter().filter(|i| i["plugin"] == "eq_7band").count(), 1);
-    tool(&mut s, "execute", json!({"command": "mix.insert_bypass", "params": {"track": "Bass", "slot": 2}}));
-    let sess = session(&mut s);
-    assert_eq!(track(&sess, "Bass")["inserts"].as_array().unwrap().iter().find(|i| i["slot"] == 2).unwrap()["bypass"], true);
+    assert!(sess["tracks"].as_array().unwrap().iter().any(|t| t["name"] == "Drums"), "{r}");
 
     // 4. New stereo aux fed from a send.
     tool(
@@ -68,7 +65,6 @@ fn agent_builds_and_mixes_a_session() {
         json!({"calls": [
             {"command": "track.new", "params": {"kind": "aux", "format": "stereo", "name": "Delay"}},
             {"command": "track.input", "params": {"track": "Delay", "input": "DelayBus"}},
-            {"command": "mix.insert", "params": {"track": "Delay", "plugin": "mod_delay"}},
             {"command": "mix.send", "params": {"track": "Lead", "slot": 1, "bus": "DelayBus", "level_db": -6}},
         ]}),
     );

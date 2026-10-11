@@ -11,7 +11,9 @@ mod clip;
 mod ids;
 mod markers;
 mod mixer;
+mod nudge;
 mod session;
+mod slots;
 mod source;
 mod track;
 
@@ -22,7 +24,12 @@ pub use markers::{Group, MarkerKind, MemoryLocation};
 pub use mixer::{
     Bus, ChannelFormat, INSERT_SLOTS, Insert, Mixer, OutputPath, Route, SEND_SLOTS, SendSlot, Speaker, SurroundPan, fader_db_to_pos, fader_pos_to_db,
 };
+pub use nudge::{NUDGE_PRESETS, NudgeAnchor, NudgePanel, NudgeTarget, NudgeUnit};
 pub use session::{BitDepthSetting, EditMode, EditState, SESSION_EXTENSION, Session, SessionError, Tool, TrackView, ZoomState};
+pub use slots::{
+    AuditionBypass, ChannelSlots, DedicatedSlot, GRAPH_VERSION, MixProfile, MixSnapshot, ProfileKind, SlotKind, SnapshotChannel, StereoPanMode,
+    TapePosition,
+};
 pub use source::{Source, SourceAudio, SourcePool, VideoSource};
 pub use track::{Playlist, TRACK_COLORS, Track, TrackHeight, TrackKind};
 

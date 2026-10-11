@@ -24,6 +24,7 @@ thiserror.workspace = true
 log.workspace = true
 
 [dev-dependencies]
+soundcraft-mix = { workspace = true, features = ["test-providers"] }
 proptest.workspace = true
 
 [lints]

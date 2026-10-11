@@ -215,7 +215,7 @@ fn main() -> eframe::Result {
     let engine = if demo { soundcraft_engine::demo::demo_engine() } else { Engine::default() };
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("SoundCraft")
+            .with_title("SML Recording")
             .with_inner_size([1600.0, 1000.0])
             .with_min_inner_size([960.0, 600.0])
             .with_drag_and_drop(true)

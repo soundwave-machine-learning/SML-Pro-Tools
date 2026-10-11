@@ -1,0 +1,185 @@
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.12s
+     Running `target/debug/xtask ci`
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.42s
+   Compiling soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+   Compiling soundcraft-model v0.5.0 (/home/user/SML-Pro-Tools/crates/model)
+   Compiling soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+   Compiling soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+   Compiling soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+   Compiling soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+   Compiling soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+   Compiling soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+   Compiling soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
+   Compiling soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 02s
+     Running unittests src/main.rs (target/debug/deps/soundcraft-4055fc9a7bef8487)
+
+running 28 tests
+test config::config_tests::config_empty_override_disables_profile_without_reading_defaults ... ok
+test config::config_tests::config_override_preserves_non_unicode_paths ... ok
+test config::config_tests::config_unset_override_keeps_platform_defaults ... ok
+test config::config_tests::config_override_wins_without_reading_user_profile ... ok
+test graphics::tests::explicit_backend_override_is_preserved ... ok
+test graphics::tests::windows_default_initializes_only_dx12 ... ok
+test logging::tests::a_line_carries_time_level_thread_target_and_message ... ok
+test logging::tests::a_long_audio_thread_record_is_cut_at_a_character_boundary ... ok
+test config::config_tests::oversized_settings_are_rejected_and_preserved ... ok
+test logging::tests::a_run_without_a_log_file_keeps_nothing_for_one ... ok
+test config::config_tests::future_edit_and_mix_layouts_preserve_other_preferences_and_the_original_file ... ok
+test logging::tests::attaching_to_an_unusable_directory_reports_an_error_and_keeps_logging ... ok
+test logging::tests::directives_follow_env_logger_and_the_most_specific_one_wins ... ok
+test logging::tests::an_audio_thread_record_never_waits_for_the_sink ... ok
+test logging::tests::exactly_max_pending_lines_drop_nothing ... ok
+test logging::tests::hostile_specs_never_panic_and_fall_back_sensibly ... ok
+test config::config_tests::native_file_reload_preserves_edit_mix_and_hidden_floating_panels ... ok
+test logging::tests::lines_logged_before_the_file_exists_are_written_when_it_is_attached ... ok
+test logging::tests::rotation_into_an_unusable_directory_is_an_error_not_a_panic ... ok
+test logging::tests::the_default_filter_shows_soundcraft_info_and_other_crates_warnings ... ok
+test logging::tests::records_from_many_threads_are_whole_lines ... ok
+test logging::tests::the_file_stops_at_its_size_cap_with_one_note ... ok
+test logging::tests::rotation_keeps_the_previous_logs_and_starts_an_empty_file ... ok
+test logging::tests::the_logger_filters_records_and_writes_them_to_the_attached_file ... ok
+test logging::tests::timestamps_are_utc_with_milliseconds ... ok
+test logging::tests::the_first_audio_thread_record_is_written_later_with_a_count_of_the_rest ... ok
+test logging::tests::the_pending_buffer_is_bounded_and_says_how_much_it_dropped ... ok
+test logging::tests::a_poisoned_lock_does_not_stop_logging ... ok
+
+test result: ok. 28 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.73s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_au_host-ac824c068bcea476)
+
+running 5 tests
+test tests::fourccs_round_trip ... ok
+test tests::foreign_ids_are_rejected_without_scanning ... ok
+test tests::ids_parse_and_format ... ok
+test tests::categories_and_names ... ok
+test tests::unknown_components_are_errors_not_crashes ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/system_units.rs (target/debug/deps/system_units-888ae300902af41f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_audio_io-e8e63915565eb4fe)
+
+running 6 tests
+test flac::tests::crc_known_values ... ok
+test flac::tests::utf8_numbers ... ok
+test peaks::tests::degenerate_inputs ... ok
+test peaks::tests::columns_cover_range ... ok
+test peaks::tests::aligned_ranges_are_exact ... ok
+test peaks::tests::unaligned_ranges_contain_truth_and_match_block_cover ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.43s
+
+     Running tests/encode_format.rs (target/debug/deps/encode_format-8c768dd25bf6e7a1)
+
+running 1 test
+test only_formats_the_encoder_writes_are_named ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/malformed.rs (target/debug/deps/malformed-92681aafaf9de5de)
+
+running 14 tests
+test absurd_chunk_sizes ... ok
+test detect_format_by_magic_and_hint ... ok
+test aiff_sowt_little_endian ... ok
+test hand_built_wav_variants ... ok
+test garbage_in_compressed_containers_errors ... ok
+test many_tiny_chunks_terminate ... ok
+test every_single_byte_corruption_is_handled ... ok
+test random_bodies_behind_valid_headers_never_panic ... ok
+test truncated_data_chunk_yields_partial_audio ... ok
+test zero_channels_is_malformed ... ok
+test zero_sample_rate_is_malformed ... ok
+test every_truncation_is_handled ... ok
+test random_audio_roundtrips_through_flac ... ok
+test random_bytes_never_panic ... ok
+
+test result: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+
+     Running tests/roundtrip.rs (target/debug/deps/roundtrip-0f92d6b64e6469f3)
+
+running 12 tests
+test aiff_float_is_aifc ... ok
+test audio_buffer_helpers ... ok
+test flac_rejects_unsupported_layouts ... ok
+test encode_rejects_bad_buffers_and_formats ... ok
+test bwf_roundtrip ... ok
+test serde_types_roundtrip ... ok
+test multichannel_wav_speaker_masks ... ok
+test unusual_sample_rates_roundtrip ... ok
+test wav_header_layout ... ok
+test flac_handles_silence_noise_full_scale_and_odd_rates ... ok
+test wav_and_aiff_roundtrip_all_depths_and_layouts ... ok
+test flac_roundtrip_is_lossless_vs_wav ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_automation-5c979a6a3b6fed3f)
+
+running 2 tests
+test tests::headless_executes_and_inspects ... ok
+test tests::remote_reports_unreachable ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/agent_tasks.rs (target/debug/deps/agent_tasks-5af6dca199a0f74e)
+
+running 3 tests
+test handshake_and_tool_list ... ok
+test errors_are_reported_not_panics ... ok
+test agent_builds_and_mixes_a_session ... FAILED
+
+failures:
+
+---- agent_builds_and_mixes_a_session stdout ----
+
+thread 'agent_builds_and_mixes_a_session' (11653) panicked at crates/automation/tests/agent_tasks.rs:14:5:
+assertion `left == right` failed: execute failed: {"content":[{"text":"bad parameters for `mix.insert`: `eq_7band` was an upstream bundled processor and is not part of SML Recording; insert an installed VST3/CLAP plugin","type":"text"}],"isError":true}
+  left: Bool(true)
+ right: Bool(false)
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+   2: core::panicking::assert_failed_inner
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:434:23
+   3: core::panicking::assert_failed::<serde_json::value::Value, serde_json::value::Value>
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:394:5
+   4: agent_tasks::tool
+             at ./tests/agent_tasks.rs:14:5
+   5: agent_tasks::agent_builds_and_mixes_a_session
+             at ./tests/agent_tasks.rs:56:13
+   6: agent_tasks::agent_builds_and_mixes_a_session::{closure#0}
+             at ./tests/agent_tasks.rs:40:38
+   7: <agent_tasks::agent_builds_and_mixes_a_session::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   8: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+note: Some details are omitted, run with `RUST_BACKTRACE=full` for a verbose backtrace.
+
+
+failures:
+    agent_builds_and_mixes_a_session
+
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.57s
+
+error: test failed, to rerun pass `-p soundcraft-automation --test agent_tasks`
+ok    fmt
+ok    clippy
+FAIL  test
+xtask: cargo test --workspace failed
+
+real	2m6.310s
+user	7m2.697s
+sys	0m35.616s
+EXIT: 1

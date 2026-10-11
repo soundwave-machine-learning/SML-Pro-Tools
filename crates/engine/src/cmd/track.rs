@@ -235,8 +235,12 @@ fn new_track(e: &mut Engine, p: &Value) -> Result<Value> {
             if let Some(tb) = ticks {
                 t.ticks_timebase = tb;
             }
-            if kind == TrackKind::Instrument {
-                t.instrument = Some(soundcraft_model::Insert::new(instrument.clone().unwrap_or_else(|| "subtractive_synth".into())));
+            // No bundled default instrument: an explicitly named one only (assign an installed
+            // VST3/CLAP instrument with `mix.instrument`).
+            if kind == TrackKind::Instrument
+                && let Some(i) = instrument.clone().filter(|i| !soundcraft_dsp::is_removed_builtin(i))
+            {
+                t.instrument = Some(soundcraft_model::Insert::new(i));
             }
         }
         ids.push(id);

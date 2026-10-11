@@ -1,0 +1,7 @@
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.13s
+     Running `target/debug/xtask layers`
+layers: ok
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/xtask assets`
+assets: ok
+EXIT: 0

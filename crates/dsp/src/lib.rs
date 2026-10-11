@@ -15,6 +15,7 @@
 
 pub mod biquad;
 pub mod meter;
+pub mod mixmath;
 pub mod offline;
 mod osc;
 pub mod pan;
@@ -241,6 +242,21 @@ pub trait PluginEditor: Send {
 }
 
 /// The plugin registry.
+/// The selectable insert/instrument catalogue of SML Recording: empty. The upstream bundled
+/// effects and instruments were removed from every product route (insert menus, CLI, MCP,
+/// demo, offline processing); use installed VST3/CLAP plugins instead. The implementations in
+/// [`plugins`] remain only as internal services/fixtures and are never instantiated for a session.
+pub fn catalogue() -> &'static [&'static PluginInfo] {
+    &[]
+}
+
+/// True for an id of a removed upstream built-in processor (kept in old sessions as an inactive
+/// missing placeholder).
+pub fn is_removed_builtin(id: &str) -> bool {
+    plugins::REGISTRY.iter().any(|p| p.id == id)
+}
+
+/// Internal registry of the retained (non-selectable) upstream implementations.
 pub fn plugins() -> &'static [&'static PluginInfo] {
     plugins::REGISTRY
 }

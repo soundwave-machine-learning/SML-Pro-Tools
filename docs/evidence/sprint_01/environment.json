@@ -1,0 +1,14 @@
+{
+  "recorded_utc": "2026-10-11T15:32:11Z",
+  "execution_host": {"os": "Linux 6.18.44-fc-v114", "arch": "x86_64", "cpus": 4, "memory_gb": 15, "container": "Claude Code remote cloud container (ephemeral)"},
+  "toolchain": {"rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)", "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)", "workspace_rust_version": "1.90", "edition": "2024", "targets_installed": ["x86_64-unknown-linux-gnu", "wasm32-unknown-unknown (added for cargo xtask wasm)"]},
+  "system_packages_added": ["libasound2-dev", "pkg-config", "libudev-dev"],
+  "source": {"repo": "soundwave-machine-learning/SML-Pro-Tools", "base_sha": "7414719f3760de1c9359ec9723351a7232442e61", "branch": "fable/recording-core", "planning_sha": "7414719f3760de1c9359ec9723351a7232442e61", "base_equals_planning_sha": true},
+  "audio_backend": {"cpal": "0.16.0", "cpal_asio_feature": false, "linux_hosts_compiled": ["ALSA"], "audio_devices_in_container": "none observed (headless container)"},
+  "native_target": {"planned": "Windows x64 (assumption)", "available": false, "reason": "Linux container; no Windows host, interface, driver, ASIO SDK or owner plugins"},
+  "owner_plugins": "none supplied",
+  "network": "agent proxy; crates.io/git dependencies reachable",
+  "budget": {"cap": "6 h wall-time proxy (no usage counter available)", "start_utc": "2026-10-11T15:16:41Z", "final_reserve_from_utc": "2026-10-11T20:56:41Z"},
+  "craftrules": "referenced by AGENTS.md (../../craftrules, storytold/craftrules); not present in container and not fetched; contents not inferred",
+  "plan_dir": "plan/ (gitignored) absent in this checkout"
+}

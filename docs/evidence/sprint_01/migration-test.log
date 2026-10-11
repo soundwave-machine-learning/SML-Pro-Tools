@@ -1,0 +1,55 @@
+# command: cargo test -p soundcraft-engine -- missing no_bundled unknown_clap demo::tests
+# utc: 2026-10-11T15:49:47Z  source: 7414719+worktree
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Finished `test` profile [optimized + debuginfo] target(s) in 26.04s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-22217bdb9abc8cae)
+
+running 7 tests
+test cmd::clap::tests::unknown_clap_insert_is_an_error ... ok
+test cmd::instrument::tests::no_bundled_default_and_removed_instruments_rejected ... ok
+test cmd::video::tests::online_toggles_and_list_reports_missing_files ... ok
+test cmd::bus::missing_tests::missing_processors_survive_reload_and_block_silent_export ... ok
+test cmd::health::tests::reports_missing_media_in_inactive_takes ... ok
+test demo::tests::demo_builds_and_renders_sound ... ok
+test cmd::file::tests::session_open_reports_missing_media ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 119 filtered out; finished in 1.21s
+
+     Running tests/clap_e2e.rs (target/debug/deps/clap_e2e-d1877038c4430d41)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/hostile_params.rs (target/debug/deps/hostile_params-afc04b006f10dec5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/hostile_sessions.rs (target/debug/deps/hostile_sessions-1420eae5c0574130)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/random_edits.rs (target/debug/deps/random_edits-fc66cc29df65ce39)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/session_transport.rs (target/debug/deps/session_transport-38dc8987cf0f5ef7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+   Doc-tests soundcraft_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT: 0

@@ -7,6 +7,10 @@ license.workspace = true
 rust-version.workspace = true
 repository.workspace = true
 
+[features]
+# Deterministic test-only providers (`test:` ids) for slot/graph fixtures. Never shipping.
+test-providers = []
+
 [dependencies]
 soundcraft-time.workspace = true
 soundcraft-audio-io.workspace = true

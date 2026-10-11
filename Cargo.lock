@@ -3558,6 +3558,8 @@ version = "0.5.0"
 dependencies = [
  "cpal",
  "log",
+ "serde",
+ "serde_json",
  "soundcraft-audio-io",
  "soundcraft-dsp",
  "soundcraft-mix",

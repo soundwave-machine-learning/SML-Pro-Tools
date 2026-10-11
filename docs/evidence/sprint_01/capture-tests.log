@@ -1,0 +1,18 @@
+# command: cargo test -p soundcraft-playback capture:: -- --test-threads=1
+# utc: 2026-10-11T15:49:44Z  source: 7414719+worktree
+   Compiling soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.65s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_playback-f11b7eb5f3bb6f53)
+
+running 7 tests
+test capture::tests::capture_is_bit_exact_for_irregular_callbacks ... ok
+test capture::tests::crash_recovery_keeps_exactly_the_durable_frames ... ok
+test capture::tests::disarmed_ring_records_nothing ... ok
+test capture::tests::overflow_stops_capture_explicitly_without_gaps ... ok
+test capture::tests::ring_memory_is_bounded ... ok
+test capture::tests::takes_never_overwrite_existing_files ... ok
+test capture::tests::writer_error_is_explicit_and_keeps_committed_frames ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.25s
+
+EXIT: 0

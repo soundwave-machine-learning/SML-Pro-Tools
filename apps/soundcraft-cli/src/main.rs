@@ -74,7 +74,7 @@ fn main() -> ExitCode {
         "mcp" => mcp(&rest),
         "parity" => parity(&rest),
         "plugins" => {
-            for p in soundcraft_dsp::plugins() {
+            for p in soundcraft_dsp::catalogue() {
                 outln!("{:<20} {:<22} {:?}{}", p.id, p.name, p.category, if p.is_instrument { " (instrument)" } else { "" });
             }
             ExitCode::SUCCESS

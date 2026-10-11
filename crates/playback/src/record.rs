@@ -1,77 +1,108 @@
 //! Audio input capture for recording.
 //!
-//! A [`Recorder`] opens the default input device and appends interleaved samples to a shared
-//! buffer while armed. The callback only `try_lock`s; if the UI thread holds the lock the block is
-//! kept in a small local backlog and appended next time, so nothing blocks the audio thread.
+//! A [`Recorder`] opens an input device (the negotiated one from a [`DeviceRequest`], or the
+//! host default) and, in its callback, only (1) stamps the block on the stream clock, (2) feeds
+//! the monitoring ring and (3) offers the block to a preallocated lock-free [`CaptureRing`]. A
+//! take is written to disk by a writer thread ([`crate::capture`]); no take is held in RAM by the
+//! callback and nothing in the callback allocates, locks or touches files.
 
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use crate::capture::{ActiveCapture, CaptureReport, CaptureRing, WriterConfig};
+use crate::clock::StreamClock;
+use crate::device::{DeviceRequest, NegotiatedConfig};
+use std::path::{Path, PathBuf};
+use std::sync::Arc;
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
-/// Captured audio: planar f32 at `sample_rate`.
+/// Captured audio: planar f32 at `sample_rate`, plus the durable media file it came from.
 #[derive(Debug, Clone, Default)]
 pub struct Take {
     pub sample_rate: u32,
     pub channels: Vec<Vec<f32>>,
+    /// The finalized dry capture file (never overwritten).
+    pub media: Option<PathBuf>,
+    /// Capture outcome (frames, partial/failed state, stream provenance).
+    pub report: Option<CaptureReport>,
 }
 
-struct Shared {
-    armed: AtomicBool,
-    data: Mutex<Vec<f32>>,
+/// Stream statistics shared with the UI (written by the callback with atomics only).
+#[derive(Debug, Default)]
+pub struct StreamStats {
+    pub generation: AtomicU64,
+    pub frames: AtomicU64,
+    pub min_block: AtomicU32,
+    pub max_block: AtomicU32,
 }
 
 pub struct Recorder {
-    shared: Arc<Shared>,
     /// Live input for monitoring (always fed while the input stream runs).
     pub monitor: Arc<InputRing>,
+    /// Capture ring reused for every take of this stream.
+    pub ring: Arc<CaptureRing>,
+    pub stats: Arc<StreamStats>,
+    active: Mutex<Option<ActiveCapture>>,
     #[cfg(not(target_os = "freebsd"))]
     _stream: Option<cpal::Stream>,
     pub device_name: String,
     pub sample_rate: u32,
     pub channels: usize,
+    /// The negotiated configuration when one was requested (None = host default device).
+    pub config: Option<NegotiatedConfig>,
 }
 
-/// Cap: one hour of 8-channel 192 kHz audio; 64 Mi samples (256 MB of f32) on 32-bit targets
-/// (wasm32, i686), where the 64-bit product doesn't fit in `usize`.
-const MAX_SAMPLES: usize = if usize::BITS >= 64 { (3600u64 * 192_000 * 8) as usize } else { 64 << 20 };
+/// Seconds of capture ring headroom (the writer must stay within this of the callback).
+pub const RING_SECONDS: f64 = 4.0;
 
 impl Recorder {
     /// Open the default input device. Errors when there is none (the caller shows a message).
-    #[cfg(not(target_os = "freebsd"))]
     pub fn open() -> Result<Recorder, String> {
+        Recorder::open_with(None)
+    }
+
+    /// Open the requested input device/rate/buffer exactly (or the default device with `None`).
+    /// A request the device cannot honour is an error, never a silent substitution.
+    #[cfg(not(target_os = "freebsd"))]
+    pub fn open_with(req: Option<&DeviceRequest>) -> Result<Recorder, String> {
         use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-        let host = cpal::default_host();
-        let device = host.default_input_device().ok_or("no audio input device")?;
+        let (device, config, negotiated) = match req {
+            Some(r) => {
+                let caps = crate::device::enumerate(crate::device::Direction::Input);
+                let n = crate::device::negotiate(r, &caps).map_err(|e| e.to_string())?;
+                let d = crate::device::find_device(&n, crate::device::Direction::Input)?;
+                (d, crate::device::stream_config(&n), Some(n))
+            }
+            None => {
+                let host = cpal::default_host();
+                let device = host.default_input_device().ok_or("no audio input device")?;
+                let cfg = device.default_input_config().map_err(|e| e.to_string())?;
+                if cfg.sample_format() != cpal::SampleFormat::F32 {
+                    return Err(format!("unsupported input sample format {:?}", cfg.sample_format()));
+                }
+                (device, cfg.config(), None)
+            }
+        };
         #[allow(deprecated)]
         let name = device.name().unwrap_or_else(|_| "Input".into());
-        let cfg = device.default_input_config().map_err(|e| e.to_string())?;
-        if cfg.sample_format() != cpal::SampleFormat::F32 {
-            return Err(format!("unsupported input sample format {:?}", cfg.sample_format()));
-        }
-        let config = cfg.config();
-        let shared = Arc::new(Shared { armed: AtomicBool::new(false), data: Mutex::new(Vec::new()) });
-        let sh = Arc::clone(&shared);
-        let monitor = InputRing::new(usize::from(config.channels), config.sample_rate.0);
-        let mon = Arc::clone(&monitor);
-        let mut backlog: Vec<f32> = Vec::new();
+        let channels = usize::from(config.channels).max(1);
+        let rate = config.sample_rate.0;
+        let monitor = InputRing::new(channels, rate);
+        let ring = CaptureRing::new(channels, (f64::from(rate) * RING_SECONDS) as usize);
+        let stats = Arc::new(StreamStats::default());
+        let (mon, rg, st) = (Arc::clone(&monitor), Arc::clone(&ring), Arc::clone(&stats));
+        let mut clock = StreamClock::new(rate);
+        st.generation.store(clock.generation(), Ordering::Release);
+        st.min_block.store(u32::MAX, Ordering::Release);
         let stream = device
             .build_input_stream(
                 &config,
                 move |data: &[f32], _: &cpal::InputCallbackInfo| {
                     crate::mark_audio_thread();
+                    let stamp = clock.advance(data.len() / channels);
                     mon.push(data);
-                    if !sh.armed.load(Ordering::Relaxed) {
-                        backlog.clear();
-                        return;
-                    }
-                    if let Ok(mut d) = sh.data.try_lock() {
-                        if d.len() < MAX_SAMPLES {
-                            d.extend_from_slice(&backlog);
-                            d.extend_from_slice(data);
-                        }
-                        backlog.clear();
-                    } else if backlog.len() < 1 << 20 {
-                        backlog.extend_from_slice(data);
-                    }
+                    rg.push(data, stamp.generation, stamp.stream_frame);
+                    st.frames.store(clock.frames(), Ordering::Release);
+                    st.min_block.fetch_min(stamp.frames, Ordering::AcqRel);
+                    st.max_block.fetch_max(stamp.frames, Ordering::AcqRel);
                 },
                 |e| {
                     // Possibly the audio thread (see `crate::mark_audio_thread`).
@@ -84,39 +115,73 @@ impl Recorder {
         stream.play().map_err(|e| e.to_string())?;
         Ok(Recorder {
             monitor,
-            shared,
+            ring,
+            stats,
+            active: Mutex::new(None),
             _stream: Some(stream),
             device_name: name,
-            sample_rate: config.sample_rate.0,
-            channels: usize::from(config.channels).max(1),
+            sample_rate: rate,
+            channels,
+            config: negotiated,
         })
     }
 
     #[cfg(target_os = "freebsd")]
-    pub fn open() -> Result<Recorder, String> {
+    pub fn open_with(_req: Option<&DeviceRequest>) -> Result<Recorder, String> {
         Err("recording is not supported on this platform yet".into())
     }
 
-    /// Start capturing (clears any previous take).
+    fn active(&self) -> std::sync::MutexGuard<'_, Option<ActiveCapture>> {
+        self.active.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Start a new take written to a fresh file under `dir` (never overwriting).
+    pub fn start_take(&self, dir: &Path, base: &str) -> Result<PathBuf, String> {
+        let mut a = self.active();
+        if a.is_some() {
+            return Err("a take is already being recorded".into());
+        }
+        let cap =
+            ActiveCapture::start_on_ring(Arc::clone(&self.ring), dir, base, self.sample_rate, WriterConfig::default()).map_err(|e| e.to_string())?;
+        let path = cap.media().to_path_buf();
+        *a = Some(cap);
+        Ok(path)
+    }
+
+    /// Compatibility: start a take in the system temp folder.
     pub fn arm(&self) {
-        self.shared.data.lock().unwrap_or_else(PoisonError::into_inner).clear();
-        self.shared.armed.store(true, Ordering::Relaxed);
+        let dir = std::env::temp_dir().join("sml-recording");
+        if let Err(e) = self.start_take(&dir, "Take") {
+            log::warn!("cannot start capture: {e}");
+        }
     }
 
     pub fn is_armed(&self) -> bool {
-        self.shared.armed.load(Ordering::Relaxed)
+        self.ring.is_armed()
     }
 
-    /// Stop capturing and return the take.
+    /// Stop capturing, finalize the file and return the take (read back from disk).
     pub fn take(&self) -> Take {
-        self.shared.armed.store(false, Ordering::Relaxed);
-        let data = std::mem::take(&mut *self.shared.data.lock().unwrap_or_else(PoisonError::into_inner));
-        deinterleave(&data, self.channels, self.sample_rate)
+        let Some(cap) = self.active().take() else {
+            return Take { sample_rate: self.sample_rate, channels: vec![Vec::new(); self.channels], media: None, report: None };
+        };
+        let report = cap.finish();
+        let channels = crate::capture::read_capture(&report.media).map(|(_, c)| c).unwrap_or_else(|e| {
+            log::warn!("reading back {}: {e}", report.media.display());
+            vec![Vec::new(); self.channels]
+        });
+        Take { sample_rate: self.sample_rate, channels, media: Some(report.media.clone()), report: Some(report) }
     }
 
-    /// Samples captured so far (per channel).
+    /// Frames captured so far in the current take.
     pub fn captured_frames(&self) -> usize {
-        self.shared.data.try_lock().map_or(0, |d| d.len() / self.channels.max(1))
+        if self.ring.is_armed() { usize::try_from(self.ring.accepted_frames()).unwrap_or(usize::MAX) } else { 0 }
+    }
+
+    /// Observed callback sizes (effective buffer), if any callback ran.
+    pub fn observed_block_range(&self) -> Option<(u32, u32)> {
+        let (a, b) = (self.stats.min_block.load(Ordering::Acquire), self.stats.max_block.load(Ordering::Acquire));
+        (a != u32::MAX && b > 0).then_some((a, b))
     }
 }
 
@@ -131,7 +196,7 @@ pub fn deinterleave(data: &[f32], channels: usize, sample_rate: u32) -> Take {
             }
         }
     }
-    Take { sample_rate, channels: out }
+    Take { sample_rate, channels: out, media: None, report: None }
 }
 
 #[cfg(test)]

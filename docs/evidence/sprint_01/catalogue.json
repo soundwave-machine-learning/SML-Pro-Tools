@@ -1,0 +1,41 @@
+{
+  "product": "SML Recording",
+  "selectable_catalogue": [],
+  "catalogue_source": "soundcraft_dsp::catalogue() (empty); CLI `soundcraft-cli plugins` prints nothing; engine.plugins query returns []",
+  "removed_upstream_builtins": [
+    "eq_1band",
+    "eq_7band",
+    "compressor",
+    "expander_gate",
+    "de_esser",
+    "maximizer",
+    "channel_strip",
+    "room_reverb",
+    "plate_reverb",
+    "mod_delay",
+    "chorus",
+    "flanger",
+    "phaser",
+    "saturator",
+    "lofi",
+    "rectifier",
+    "pitch_shifter",
+    "time_shift",
+    "gain",
+    "trim",
+    "invert",
+    "dc_offset_removal",
+    "signal_generator",
+    "dither",
+    "subtractive_synth",
+    "drum_synth"
+  ],
+  "removed_count": 26,
+  "status_of_removed_ids_in_old_sessions": "inactive missing placeholder: id/params/state/slot retained, audio passes through, listed by session.missing_plugins, exports require acknowledge_missing",
+  "external_hosts_retained": [
+    "clap: (crates/clap-host)",
+    "vst3: (crates/vst3-host)",
+    "au: (crates/au-host, macOS only)"
+  ],
+  "test_only_providers": "test:identity|gain|delay|affine \u2014 compiled only for tests / `test-providers` feature, never listed"
+}

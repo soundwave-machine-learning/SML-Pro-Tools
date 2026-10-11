@@ -511,6 +511,16 @@ pub struct Mixer {
     /// Surround panner, used when the output is multichannel (None = the stereo pan to L/R).
     #[serde(default)]
     pub surround: Option<SurroundPan>,
+    /// Native Stereo Width (VM03): 0..2, 1 = 100 % exact identity. Legacy sessions load as 1.
+    #[serde(default = "unity")]
+    pub width: f32,
+    /// Dedicated Summing / Tape / Master Tape slots (SL01).
+    #[serde(default)]
+    pub slots: crate::ChannelSlots,
+}
+
+fn unity() -> f32 {
+    1.0
 }
 
 impl Mixer {
@@ -537,6 +547,8 @@ impl Mixer {
             trim_db: 0.0,
             vca: None,
             surround: None,
+            width: 1.0,
+            slots: crate::ChannelSlots::default(),
         }
     }
 

@@ -287,6 +287,12 @@ fn track_slot(e: &Engine, p: &Value, cmd: &str, max: usize) -> Result<(TrackId, 
 
 fn insert(e: &mut Engine, p: &Value) -> Result<Value> {
     let plugin = str_param(p, "plugin").ok_or_else(|| bad("mix.insert", "`plugin` required"))?.to_string();
+    if soundcraft_dsp::is_removed_builtin(&plugin) {
+        return Err(bad(
+            "mix.insert",
+            format!("`{plugin}` was an upstream bundled processor and is not part of SML Recording; insert an installed VST3/CLAP plugin"),
+        ));
+    }
     let info = super::clap::plugin_info(&plugin).ok_or_else(|| bad("mix.insert", format!("unknown plugin `{plugin}`")))?;
     let t = tracks_required(e, "mix.insert", p)?.first().copied().ok_or_else(|| bad("mix.insert", "no track"))?;
     let explicit = slot_of(p, "slot", INSERT_SLOTS);

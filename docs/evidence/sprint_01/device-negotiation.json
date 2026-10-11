@@ -1,0 +1,9 @@
+{
+  "asio_feature_compiled": false,
+  "hosts_compiled": [
+    "ALSA"
+  ],
+  "inputs": [],
+  "note": "cpal reports no clock-lock state; ClockLock is Unknown for every device",
+  "outputs": []
+}

@@ -420,7 +420,19 @@ impl SoundApp {
         }
         let already_playing = self.is_playing();
         if let Some(r) = &self.recorder {
-            r.arm();
+            // Dry capture straight to a new, never-overwritten file beside the session (or in the
+            // temp folder for an unsaved session); the callback never holds the take in RAM.
+            let dir = self
+                .engine
+                .path
+                .as_ref()
+                .and_then(|p| std::path::Path::new(p).parent().map(|d| d.join("Audio Files")))
+                .unwrap_or_else(|| std::env::temp_dir().join("sml-recording"));
+            let base = self.engine.session().tracks.iter().find(|t| t.mixer.record_arm).map_or_else(|| "Take".to_string(), |t| t.name.clone());
+            if let Err(e) = r.start_take(&dir, &base) {
+                self.ui.status = format!("Cannot record: {e}");
+                return;
+            }
         }
         self.engine.transport.recording = true;
         if already_playing {
@@ -538,6 +550,18 @@ impl SoundApp {
         }
         let Some(r) = &self.recorder else { return };
         let take = r.take();
+        if let Some(rep) = &take.report
+            && rep.state.is_partial()
+        {
+            // Explicit, visible partial capture: every committed frame is kept.
+            self.ui.status = format!(
+                "Recording stopped early ({:?}): {} frames kept in {}{}",
+                rep.state,
+                rep.frames,
+                rep.media.display(),
+                rep.error.as_deref().map(|e| format!(" — {e}")).unwrap_or_default()
+            );
+        }
         let rate = take.sample_rate;
         let sel = self.engine.session().edit.selection;
         if self.engine.session().edit.loop_record && !sel.is_empty() {

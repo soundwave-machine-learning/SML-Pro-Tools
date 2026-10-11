@@ -28,10 +28,8 @@ pub fn specs() -> Vec<CommandSpec> {
 /// A built-in plugin's description, else a hosted CLAP (`clap:<id>`), VST3 (`vst3:<class id>`) or
 /// Audio Units (`au:<type>:<subtype>:<manufacturer>`) plugin's.
 pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {
-    soundcraft_dsp::plugin_info(id)
-        .or_else(|| soundcraft_clap_host::plugin_info(id))
-        .or_else(|| soundcraft_vst3_host::plugin_info(id))
-        .or_else(|| soundcraft_au_host::plugin_info(id))
+    // Removed upstream built-ins are not insertable (SML Recording ships no bundled effects).
+    soundcraft_clap_host::plugin_info(id).or_else(|| soundcraft_vst3_host::plugin_info(id)).or_else(|| soundcraft_au_host::plugin_info(id))
 }
 
 #[cfg(test)]
@@ -53,7 +51,9 @@ mod tests {
         let t = e.session().tracks[0].id.0;
         let r = e.execute("mix.insert", &json!({"track": t, "plugin": "clap:no.such.plugin"}));
         assert!(r.is_err());
-        assert!(super::plugin_info("eq_7band").is_some());
+        assert!(super::plugin_info("eq_7band").is_none(), "removed bundled processors are not insertable");
+        let r = e.execute("mix.insert", &json!({"track": t, "plugin": "eq_7band"}));
+        assert!(r.unwrap_err().to_string().contains("not part of SML Recording"));
         assert!(super::plugin_info("clap:no.such.plugin").is_none());
     }
 

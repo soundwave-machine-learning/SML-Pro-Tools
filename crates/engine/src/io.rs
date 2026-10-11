@@ -167,10 +167,7 @@ pub fn import_midi_bytes(e: &mut Engine, bytes: &[u8], at: Samples, tempo_map: b
         }
         let name = if tr.name.trim().is_empty() { format!("MIDI {}", i + 1) } else { tr.name.clone() };
         let id = s.add_track(TrackKind::Instrument, ChannelFormat::Stereo, Some(&name));
-        let drums = tr.sequence.notes.iter().all(|n| n.channel == 9);
-        if let Some(t) = s.track_mut(id) {
-            t.instrument = Some(soundcraft_model::Insert::new(if drums { "drum_synth" } else { "subtractive_synth" }));
-        }
+        // No bundled instrument is assigned (SML Recording ships none); the user picks one.
         let end_tick = base_tick + tr.sequence.end_tick().max(1);
         let len = s.tempo.tick_to_samples(end_tick, s.sample_rate) - at;
         let cid = s.new_clip_id();

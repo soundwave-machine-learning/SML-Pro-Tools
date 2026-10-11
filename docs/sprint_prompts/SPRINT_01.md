@@ -1,0 +1,30 @@
+# Sprint 01 — Recording, clock and clean baseline
+Revision 1.6 • PLANNED / NOT EXECUTED • gate A1.
+
+## Objective and prerequisites
+Establish correct dry disk recording and a coherent audio clock while removing the upstream plugin catalogue safely. No earlier sprint is assumed complete. Reconcile actual repository against historical source 7414719f3760de1c9359ec9723351a7232442e61 without resetting user work. Establish OS/toolchain/dependency/runtime access; Windows is assumed, not claimed tested. Missing native hardware does not block deterministic foundation work.
+
+## Read set and allowed scope
+Read the whole DOCUMENT_INDEX.md package before source work; particularly PROJECT_BRIEF, CLOCK_LATENCY_SPEC, VALIDATION_PLAN, SOURCE_AUDIT and all later feature contracts for schema dependencies. Source readset: root/nested AGENTS, README/ROADMAP/gaps/Cargo; crates/playback/src/{lib,record}.rs and Cargo.toml; crates/engine/src/cmd/{transport,setup_more,track,file,mix,instrument,audiosuite}.rs; engine io/demo; model session/track/source; audio-io WAV; dsp lib/plugins; UI startup/mixer/dialog/toolbar/menu callsites. Resolve moved paths with search, not assumptions.
+
+Allowed: baseline fixes, selected-device/backend plumbing, bounded capture/recovery, stream/sample clock, scheduler/offset primitives, catalogue removal/compatibility and simple recording UI. Audit future edit/mixer/host/schema needs; no native summing/tape model or wholesale framework replacement.
+
+## Concrete work
+1. Run actual baseline build/CI, inspect pinned toolchain and README/core version differences, inventory preexisting failures. Record exact command/environment/source. Fix ordinary blockers; after 20 minutes of unsuccessful diagnosis record a blocker instead of silently consuming the run.
+2. Inventory and remove every upstream selectable bundled effect/instrument factory/UI/CLI/MCP/demo/offline insertion route. Extract required clip-gain/fade/stretch/click/meter/pan/dither/resampling services before removing implementation modules. Preserve external hosts/traits and unrelated mature features. Synthetic dry demo audio replaces dependencies on deleted processors. Product display identity is SML Recording; retain licenses/notices.
+3. Old sessions keep missing processor ID/parameters/state/slot and original media; explicit warning and save/reopen. Export requires acknowledgment/explicit headless bypass option for missing plugins; never silently claim original sound. New graph/legacy version strategy per M02 is audited now.
+4. Wire requested device/channel/rate/buffer to real streams; display effective callback and reported hardware buffer separately. Use existing supported backends; no default-only substitution, no bespoke ASIO driver. Stopped reconfiguration/disconnect/error state per CL02. A single interface is the supported synchronized baseline; no new aggregate clock implementation.
+5. Replace growing callback RAM recordings with preallocated bounded transfer queues and worker disk writer. Unique paths, exact frame counts/map, safe finalization and session refs, no overwrite. Overflow/disk failure marks stopped partial capture visibly. Durable journal checkpoints follow flushed media writes; crash recovery cannot claim more durable frames than actually retained. Quantify uncommitted loss; no whole take held in RAM.
+6. Implement CL01/02/05: stream generations, integer sample ownership, timestamps/uncertainty and render/presentation distinction, variable callbacks and bounded commands. Audit fixed BLOCK=512 and pending buffers before changing them. All host allocations/deallocation/state capture/graph swaps leave audio threads safe. Scheduler/offset primitives support future punch/loop UI but A1 does not require that UI yet.
+7. Default recording view exposes actual input, meter, arm/monitor, play/record/stop and mixer entry; monitor initially off. Dry capture tap stays independent from playback clip processing/mixer effects. Multiple takes preserve previous media; stopped take has a correct timeline placement. Save/reopen and existing trim/fade smoke remain valid.
+8. Audit V/N/B/M/SL/VM/CL rows as working/partial/missing; establish reusable synthetic media/host fixtures and actual command index for later sprints. Unknown command paths are resolved from source, not made-up PASS scripts.
+
+## Validation and observable completion
+Run every A1 software row in VALIDATION_PLAN: catalogue/migration, capture/recovery/workflow, CL-T1/2/5 and scheduler/ledger part of CL-T3. Host-common fixtures still compile/run. Applicable full CI passes. Document native H1 pending if unavailable; an input mock does not prove physical recording.
+
+Artifacts: docs/evidence/sprint_01/environment.json, baseline.log, plugin-removal-inventory.md, catalogue.json, migration-test.log, capture-tests.log, failure-recovery.log, clock-tests.log, realtime-audit.md, validation-command-index.md and available startup UI captures. Write docs/sprint_reports/SPRINT_01_REPORT.md with R01–05/08/24–26 and later-feature audit. A1 portable PASS permits Sprint 2; failed capture/clock/source integrity blocks it.
+
+## Execution, report and continuation rules
+Follow docs/AUTONOMOUS_BUILD_PROMPT.md for authorization, worktree, six-hour cap and stop/checkpoint policy. Applicable repository instructions remain mandatory. Local ordinary edits/test fixes are authorized by launching the master; no push/merge/install/signing/purchase or delegated agents. No test weakening or fabricated results. Obsolete catalogue-only tests may be retired with explicit rationale and preserved shared coverage.
+
+Run the full inspected `cargo xtask ci` and relevant real feature commands before an accepted milestone commit. Record unavailable native checks as H pending and portable failures as blocking. Write the sprint report only after actual work, update living handoff/command index, inspect diff and print commit SHA after commit. A partial/WIP checkpoint never claims acceptance. At any stop write the final report/next action even if no later sprint ran.

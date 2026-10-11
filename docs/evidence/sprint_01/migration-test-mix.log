@@ -1,0 +1,19 @@
+# command: cargo test -p soundcraft-mix -- inserts_process delay_compensation
+# utc: 2026-10-11T15:50:15Z  source: 7414719+worktree
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2.78s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_mix-522f69446632f4c9)
+
+running 2 tests
+test tests::inserts_process_and_survive_unknown_plugins ... ok
+test tests::delay_compensation_aligns_latent_tracks ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; finished in 0.01s
+
+   Doc-tests soundcraft_mix
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT: 0

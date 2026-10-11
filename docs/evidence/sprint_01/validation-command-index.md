@@ -1,0 +1,27 @@
+# Validation command index (established Sprint 1, extended in later sprints)
+
+All commands run from the repository root on the execution host recorded in `environment.json`.
+"A" = portable software gate; "H" = native/owner gate (cannot run in this container).
+
+| Gate / check IDs | Real command | What it runs |
+|---|---|---|
+| Full CI (every milestone) | `cargo xtask ci` | fmt check, `clippy --workspace --all-targets -D warnings`, `cargo test --workspace`, assets, layers, `cargo check --target wasm32-unknown-unknown` |
+| A1 capture (identity, frame order, irregular callbacks, unique files) | `cargo test -p soundcraft-playback capture::` | `capture::tests::*` |
+| A1 recovery (overflow, disk full, crash, bounded ring) | `cargo test -p soundcraft-playback -- overflow writer_error crash_recovery ring_memory disarmed` | |
+| CL-T1 / CL-T3 primitives / CL-T5 load metric | `cargo test -p soundcraft-playback clock::` | 30-min simulated variable callbacks, generations, offsets, punch, ledger signs, load denominator |
+| CL-T2 negotiation | `cargo test -p soundcraft-playback device::` | fixture negotiation + real enumeration smoke |
+| CL-T2 real capability audit | `cargo run -p soundcraft-playback --example device_audit` | JSON of hosts/devices this build sees |
+| CL02 live path (no queued audio, variable callbacks) | `cargo test -p soundcraft-playback live_path` | |
+| A1 catalogue / migration (R04/R05) | `cargo test -p soundcraft-engine -- missing no_bundled unknown_clap demo::tests` and `cargo test -p soundcraft-mix -- inserts_process delay_compensation` | |
+| N01–N06, N08 (A2) | `cargo test -p soundcraft-engine cmd::nudge` | |
+| N07 dispatch/focus (A2, unit level) | `cargo test -p soundcraft-ui-egui nudge_keys` | key-map unit tests (physical keypad = H) |
+| B-T1–B-T6 (A3) | `cargo test -p soundcraft-engine cmd::bus` | |
+| VM-T5 snapshots, width command (A3) | `cargo test -p soundcraft-engine cmd::snapshot` | |
+| M-T2 pan law, VM-T3 width math, VM02 span rule (A3) | `cargo test -p soundcraft-dsp mixmath` | |
+| SL-T / CL-T4 / VM-T2 engine graph fixtures (A3) | `cargo test -p soundcraft-mix sml_graph` | slots, width, profile, PDC through slots |
+| Visual mixer mappings (A3, UI unit) | `cargo test -p soundcraft-ui-egui visual_mixer` | |
+| Vocal coverage (A2) | `cargo test -p soundcraft-engine vocal_` | V-row fixtures added in Sprint 2 |
+| H1–H4, CL-T6/7, N07 physical, N09, VM-T7/8, SL-T8, M-T7 | not runnable here | need Windows x64 target, interface/driver, owner plugins, owner review — see `docs/TARGET_MACHINE_GAUNTLET.md` |
+
+Rows added after Sprint 1 are marked by their gate; each was executed when its sprint ran
+(see the sprint reports for actual results). A row is never PASS by being listed here.

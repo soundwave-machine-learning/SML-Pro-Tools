@@ -1,0 +1,21 @@
+# command: cargo test -p soundcraft-playback -- overflow writer_error crash_recovery ring_memory disarmed
+# utc: 2026-10-11T15:49:47Z  source: 7414719+worktree
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_playback-f11b7eb5f3bb6f53)
+
+running 5 tests
+test capture::tests::disarmed_ring_records_nothing ... ok
+test capture::tests::overflow_stops_capture_explicitly_without_gaps ... ok
+test capture::tests::ring_memory_is_bounded ... ok
+test capture::tests::crash_recovery_keeps_exactly_the_durable_frames ... ok
+test capture::tests::writer_error_is_explicit_and_keeps_committed_frames ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.04s
+
+   Doc-tests soundcraft_playback
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT: 0

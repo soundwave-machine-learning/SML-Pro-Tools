@@ -72,7 +72,8 @@ mod tests {
         let mut e = Engine::default();
         e.execute("track.new", &json!({})).unwrap();
         let t = e.session().tracks[0].id.0;
-        e.execute("mix.insert", &json!({"track": t, "plugin": "gain", "slot": 2})).unwrap();
+        // Any insert (here a hosted-plugin placeholder) carries its own state blob.
+        e.session_mut().tracks[0].mixer.inserts[2] = Some(soundcraft_model::Insert::new("vst3:0123456789abcdef0123456789abcdef"));
         let undo_before = e.can_undo();
         let blob = b64::encode(b"\x00\x01plugin state\xff");
         let r = e.execute("mix.insert_state", &json!({"track": t, "slot": "c", "state": blob})).unwrap();
@@ -100,7 +101,7 @@ mod tests {
         let mut e = Engine::default();
         e.execute("track.new", &json!({})).unwrap();
         let t = e.session().tracks[0].id.0;
-        e.execute("mix.insert", &json!({"track": t, "plugin": "gain", "slot": 0})).unwrap();
+        e.session_mut().tracks[0].mixer.inserts[0] = Some(soundcraft_model::Insert::new("vst3:0123456789abcdef0123456789abcdef"));
         for p in [
             json!({"track": t, "slot": 0, "state": "!!!"}),
             json!({"track": t, "slot": 0, "state": 5}),

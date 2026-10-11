@@ -26,7 +26,11 @@ pub fn specs() -> Vec<CommandSpec> {
         }),
         cmd!(query "engine.history", "Undo History", ["Window"], None, "{}", always, |e, _| Ok(json!({"undo": e.undo_history(), "can_redo": e.can_redo()}))),
         cmd!(query "engine.plugins", "List Plugins", [], None, "{}", always, |_, _| {
-            let v: Vec<_> = soundcraft_dsp::plugins().iter().map(|p| json!({"id": p.id, "name": p.name, "category": p.category, "instrument": p.is_instrument, "params": p.params})).collect();
+            let v: Vec<_> = soundcraft_dsp::catalogue().iter().map(|p| json!({"id": p.id, "name": p.name, "category": p.category, "instrument": p.is_instrument, "params": p.params})).collect();
+            Ok(json!(v))
+        }),
+        cmd!(query "session.missing_plugins", "Missing Plugins", [], None, "{}", always, |e, _| {
+            let v: Vec<Value> = missing_plugins(e.session()).into_iter().map(|(t, at, id)| json!({"track": t, "at": at, "plugin": id})).collect();
             Ok(json!(v))
         }),
         cmd!(query "engine.parity", "Parity Report", [], None, "{}", always, |_, _| Ok(crate::catalog::parity_json())),

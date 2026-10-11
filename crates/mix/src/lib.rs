@@ -52,6 +52,25 @@ use soundcraft_model::{AutoParam, BusId, ChannelFormat, Clip, ClipContent, Route
 use soundcraft_time::{Range, Samples};
 use std::collections::HashMap;
 
+#[cfg(any(test, feature = "test-providers"))]
+pub mod test_providers;
+
+/// True when a session insert/slot id cannot be instantiated in this build: a removed upstream
+/// built-in, or an external plugin that is not installed. Such entries keep their id, parameters
+/// and state and pass audio through (an inactive missing placeholder).
+pub fn is_missing_plugin(id: &str) -> bool {
+    #[cfg(any(test, feature = "test-providers"))]
+    if id.starts_with(test_providers::PREFIX) {
+        return false;
+    }
+    if soundcraft_dsp::is_removed_builtin(id) || !is_third_party(id) {
+        return true;
+    }
+    soundcraft_clap_host::plugin_info(id).is_none()
+        && soundcraft_vst3_host::plugin_info(id).is_none()
+        && soundcraft_au_host::plugin_info(id).is_none()
+}
+
 /// Default (stereo) main mix width. The actual width is [`main_channels`].
 pub const MAIN_CHANNELS: usize = 2;
 
@@ -928,11 +947,12 @@ impl ClipFx {
     fn new(sr: f32, ch: usize) -> ClipFx {
         ClipFx { eq: None, comp: None, gain_db: 0.0, sr, ch }
     }
-    fn make(&self, id: &str) -> Option<Box<dyn Plugin>> {
-        soundcraft_dsp::create(id).map(|mut p| {
-            p.prepare(self.sr, 16_384, self.ch.max(1));
-            p
-        })
+    /// Clip Effects EQ/compressor were upstream bundled processors and are removed in SML
+    /// Recording: their parameters stay in the session (inactive) and are not processed; the
+    /// clip-effects gain stage remains.
+    fn make(&self, _id: &str) -> Option<Box<dyn Plugin>> {
+        let _ = (self.sr, self.ch);
+        None
     }
     /// Modules exist only when one of their parameters is set.
     fn configure(&mut self, params: &[(String, f32)]) {
@@ -1741,12 +1761,17 @@ pub fn render_track_pre_fader(s: &Session, track: TrackId, range: Range) -> Vec<
     out
 }
 
-/// A built-in plugin, else a hosted CLAP plugin (`clap:<id>`).
+/// A hosted external plugin (CLAP / VST3 / AU). Removed upstream built-ins are never created:
+/// their inserts stay in the session as inactive missing placeholders that pass audio through.
 fn create_plugin(id: &str) -> Option<Box<dyn Plugin>> {
-    soundcraft_dsp::create(id)
-        .or_else(|| soundcraft_clap_host::create(id))
-        .or_else(|| soundcraft_vst3_host::create(id))
-        .or_else(|| soundcraft_au_host::create(id))
+    #[cfg(any(test, feature = "test-providers"))]
+    if id.starts_with(test_providers::PREFIX) {
+        return test_providers::create(id);
+    }
+    if soundcraft_dsp::is_removed_builtin(id) {
+        return None;
+    }
+    soundcraft_clap_host::create(id).or_else(|| soundcraft_vst3_host::create(id)).or_else(|| soundcraft_au_host::create(id))
 }
 
 #[cfg(test)]
@@ -1899,11 +1924,20 @@ mod tests {
         s.track_mut(t).unwrap().mixer.inserts[0] = Some(Insert::new("does-not-exist"));
         let out = render_range(&s, Range::new(0, 4800), 512);
         assert!(out[0][100] > 0.3);
-        let id = soundcraft_dsp::plugins().iter().find(|p| p.id.contains("gain")).map(|p| p.id).unwrap_or("gain");
-        let mut ins = Insert::new(id);
+        let clean = render_range(&s, Range::new(0, 4800), 512);
+        // A removed upstream built-in in an old session: kept as an inactive missing placeholder
+        // (id/params retained, audio passes through unchanged, never silently replaced).
+        let mut ins = Insert::new("gain");
         ins.params.insert("gain".into(), -6.0);
         s.track_mut(t).unwrap().mixer.inserts[0] = Some(ins);
-        let _ = render_range(&s, Range::new(0, 4800), 512);
+        assert!(is_missing_plugin("gain") && is_missing_plugin("eq_7band") && is_missing_plugin("subtractive_synth"));
+        let out = render_range(&s, Range::new(0, 4800), 512);
+        assert_eq!(out, clean, "placeholder passes audio through");
+        assert_eq!(s.track(t).unwrap().mixer.inserts[0].as_ref().unwrap().params.get("gain"), Some(&-6.0), "state retained");
+        // A test fixture with a real effect proves inserts still process.
+        s.track_mut(t).unwrap().mixer.inserts[0] = Some(Insert::new("test:gain:-6"));
+        let out = render_range(&s, Range::new(0, 4800), 512);
+        assert!((out[0][100] / clean[0][100] - 10f32.powf(-6.0 / 20.0)).abs() < 1e-5);
     }
 
     /// A built-in gain behind a third-party id, with a state blob and a log of parameter sets.
@@ -2043,13 +2077,14 @@ mod tests {
             tr.playlist_mut().unwrap().clips.push(Clip::audio(cid, "i", SourceId(900), 0, 0, 48_000));
             tr.mixer.pan = vec![pan];
             if fx {
-                tr.mixer.inserts[0] = Some(Insert::new("maximizer"));
+                // Known-delay test provider (was the removed bundled maximizer's lookahead).
+                tr.mixer.inserts[0] = Some(Insert::new("test:delay:64"));
             }
             ids.push(t);
         }
         let argmax = |c: &[f32]| c.iter().enumerate().max_by(|a, b| a.1.abs().total_cmp(&b.1.abs())).map(|(i, _)| i).unwrap();
-        let lat = soundcraft_dsp::create("maximizer").unwrap().latency();
-        assert!(lat > 0, "test needs a latent plugin");
+        let lat = create_plugin("test:delay:64").unwrap().latency();
+        assert_eq!(lat, 64, "test needs a latent plugin");
         let out = render_range(&s, Range::new(0, 8000), 512);
         assert_eq!(argmax(&out[0]), argmax(&out[1]), "PDC should align L and R");
         s.edit.delay_compensation = false;

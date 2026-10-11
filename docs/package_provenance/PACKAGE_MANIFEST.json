@@ -1,0 +1,115 @@
+{
+  "revision": "1.6",
+  "source_commit": "7414719f3760de1c9359ec9723351a7232442e61",
+  "source_status": "historical planning baseline; execution must reconcile actual source",
+  "files": {
+    "CHANGELOG.md": {
+      "sha256": "f9c60858f53caab1e3f8f3ce971ce0cb5605bde629834cff500106f54f2da299",
+      "bytes": 1314
+    },
+    "START_HERE.md": {
+      "sha256": "3b5c32944fde0f49d5e68684ddb20d6e5e40601ff6d861f4a5d18284b43ad85f",
+      "bytes": 1944
+    },
+    "docs/AUTONOMOUS_BUILD_PROMPT.md": {
+      "sha256": "cf069cd876005d4912c725771fb42f45b3e921283a64587d3a05e1f62939ebab",
+      "bytes": 6239
+    },
+    "docs/BUS_WORKFLOW_SPEC.md": {
+      "sha256": "387e52edb2ac610bb337414a38e84ea8fa5cd912a29e9300ed4fac6b975f8b6a",
+      "bytes": 7355
+    },
+    "docs/CLOCK_LATENCY_RESEARCH.md": {
+      "sha256": "6dfc1a406d3105157885389d963abbd86251d6749d9eb39c0db30af376a9c328",
+      "bytes": 4297
+    },
+    "docs/CLOCK_LATENCY_SPEC.md": {
+      "sha256": "d85623b472aafbb2ff0dd8e0f09f71ba3c4e371d5d8a0b0cb054f1610ad14eb2",
+      "bytes": 16486
+    },
+    "docs/DOCUMENT_INDEX.md": {
+      "sha256": "a57f38710189bd618c6906533d1f4bc6b96b219ba0892b2dd9679cca6bf43a78",
+      "bytes": 2531
+    },
+    "docs/LUNA_HARRISON_WORKFLOW_RESEARCH.md": {
+      "sha256": "254328e65441368ce594ad54a765523a48212bb595caaacaa9352ddee4dea552",
+      "bytes": 4471
+    },
+    "docs/MIXER_MODES_SPEC.md": {
+      "sha256": "445072b79ad786ced02ce5a47a4313ff083b0506310e3f3e6ec6b6354010f761",
+      "bytes": 6258
+    },
+    "docs/MIXER_SLOT_SPEC.md": {
+      "sha256": "a5dcbd1ee891b771d5f8dbf9bde37227edf65572dfc81844cbc9da60e6fba0f4",
+      "bytes": 13189
+    },
+    "docs/MIXER_SOUND_RESEARCH.md": {
+      "sha256": "5fb0100ca7c18f758f0f9c239250bfd0eaef904bf7cb1b4c274fd088d5ae5dcf",
+      "bytes": 4059
+    },
+    "docs/NUDGE_SPEC.md": {
+      "sha256": "172181b0ab6c1d272b672ede51b2081527e4b4ecef542c7d6890ec97d3cdf9a3",
+      "bytes": 10312
+    },
+    "docs/PROJECT_BRIEF.md": {
+      "sha256": "3a4de58448f2ea4fb01966419cb0e19eda2ab4ea0e3beb276f1b83cb7727ca03",
+      "bytes": 4386
+    },
+    "docs/PROJECT_HANDOFF.md": {
+      "sha256": "3b362599ec3908c4ec953feb89e36258e84d3c654eb69b03b862a5732a77e852",
+      "bytes": 2242
+    },
+    "docs/PROMPT_AUDIT.md": {
+      "sha256": "05236414e4b8309e5a34264d5d88ce0c38ea7c1a39860d89a0964d0b7d6045fe",
+      "bytes": 7501
+    },
+    "docs/REFERENCE_BEHAVIOR.md": {
+      "sha256": "3cb3a49479884f4ce7dfbd0c37d9b699468d920a3b54d31a9d310b3f5eb93d5e",
+      "bytes": 5543
+    },
+    "docs/REQUIREMENTS_MATRIX.md": {
+      "sha256": "e4d888ecbe1b8b8944548e88683c3a78d110f1aa7cfc5bef1490b41d4d4ffd54",
+      "bytes": 3292
+    },
+    "docs/SOURCE_AUDIT.md": {
+      "sha256": "455953f01b1b2f9f8817660193e18f3f34ac0135f182387d9e460e2b34748ef8",
+      "bytes": 3394
+    },
+    "docs/SPRINT_PLAN.md": {
+      "sha256": "ce849b32f7e7c2a409e16eba93c4252abf4c4199857945ef98b6b11ae70a9729",
+      "bytes": 2915
+    },
+    "docs/VALIDATION_PLAN.md": {
+      "sha256": "e0c6ebe2ea4fbeb78618a16d4dfb40621dc370467f0f2db51b989d81c9a63514",
+      "bytes": 9712
+    },
+    "docs/VISUAL_MIXER_SPEC.md": {
+      "sha256": "7b13e80994035ccc438c52ea6408cecc4d0c9a0490e2b7e8673734f14c88a764",
+      "bytes": 13667
+    },
+    "docs/VOCAL_EDITING_SPEC.md": {
+      "sha256": "f3e10bc3bb9b2f1a14a4e1904920a488b65f948df7813990ddbd1a131d11306d",
+      "bytes": 8194
+    },
+    "docs/sprint_prompts/SPRINT_01.md": {
+      "sha256": "1516d57b0fa9fa11ee065192c80d392a092c8bf7a6a67942f8f80a96117ca1bb",
+      "bytes": 6059
+    },
+    "docs/sprint_prompts/SPRINT_02.md": {
+      "sha256": "ba140112dc30b2bb62f59585e2815394630ae87cbb83abdd92764094e442d649",
+      "bytes": 4266
+    },
+    "docs/sprint_prompts/SPRINT_03.md": {
+      "sha256": "7ac3c3b5dbeb28d9d32dd49ea12104209f646f68d921aae023681ecd382188ff",
+      "bytes": 5398
+    },
+    "docs/sprint_prompts/SPRINT_04.md": {
+      "sha256": "4106e8a6d2f7c8dd7a15adfb626aee146f7c7a4a31d2eabf83238f6070f47c19",
+      "bytes": 4547
+    },
+    "tools/verify_prompt_package.py": {
+      "sha256": "5f6de80d57d50cd62bb08f6b811dc86324aa6a0d5e0fff7d1f726f449cb0beb8",
+      "bytes": 2504
+    }
+  }
+}

@@ -533,6 +533,10 @@ mod tests {
     fn bypass_by_category_and_range() {
         let mut e = crate::demo::demo_engine();
         let kick = e.session().track_by_name("Kick").unwrap().id;
+        // An old session's (now missing-placeholder) inserts keep their category for bypass.
+        let tr = e.session_mut().track_mut(kick).unwrap();
+        tr.mixer.inserts[0] = Some(soundcraft_model::Insert::new("eq_7band"));
+        tr.mixer.inserts[1] = Some(soundcraft_model::Insert::new("compressor"));
         e.execute("edit.select", &json!({"tracks": [kick.0]})).unwrap();
         e.execute("track.bypass_dynamics", &json!({})).unwrap();
         let tr = e.session().track(kick).unwrap();
@@ -590,6 +594,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("bass.json").to_string_lossy().into_owned();
         let mut e = crate::demo::demo_engine();
+        let bass = e.session().track_by_name("Bass").unwrap().id;
+        e.session_mut().track_mut(bass).unwrap().mixer.inserts[0] = Some(soundcraft_model::Insert::new("compressor"));
         e.execute("edit.select", &json!({"tracks": ["Bass"]})).unwrap();
         e.execute("track.save_preset", &json!({"path": path})).unwrap();
         e.execute("edit.select", &json!({"tracks": ["Hats"]})).unwrap();

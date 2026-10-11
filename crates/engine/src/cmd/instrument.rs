@@ -21,6 +21,12 @@ pub fn specs() -> Vec<CommandSpec> {
 
 fn set_instrument(e: &mut Engine, p: &Value) -> Result<Value> {
     let plugin = str_param(p, "plugin").ok_or_else(|| bad("mix.instrument", "`plugin` required"))?;
+    if soundcraft_dsp::is_removed_builtin(plugin) {
+        return Err(bad(
+            "mix.instrument",
+            format!("`{plugin}` was an upstream bundled instrument and is not part of SML Recording; use an installed VST3/CLAP instrument"),
+        ));
+    }
     let info = super::clap::plugin_info(plugin).ok_or_else(|| bad("mix.instrument", format!("unknown plugin `{plugin}`")))?;
     if !info.is_instrument {
         return Err(bad("mix.instrument", format!("`{plugin}` is not an instrument")));
@@ -54,18 +60,18 @@ mod tests {
         e.session().track(t).and_then(|tr| tr.instrument.as_ref()).map(|i| i.plugin.clone())
     }
 
+    /// Retired upstream test `sets_an_instrument_tracks_instrument_with_defaults_and_undoes`: it
+    /// exercised the removed bundled synths. Shared coverage kept: new instrument tracks get no
+    /// bundled default, removed instruments are rejected, and assignment of hosted instruments
+    /// still goes through the same command (covered by the refusal test below and host tests).
     #[test]
-    fn sets_an_instrument_tracks_instrument_with_defaults_and_undoes() {
+    fn no_bundled_default_and_removed_instruments_rejected() {
         let mut e = Engine::default();
         let t = track(&mut e, "instrument");
-        assert_eq!(instrument_of(&e, t).as_deref(), Some("subtractive_synth"));
-        let r = e.execute("mix.instrument", &json!({"track": t.0, "plugin": "drum_synth"})).unwrap();
-        assert_eq!(r["plugin"], "drum_synth");
-        assert_eq!(instrument_of(&e, t).as_deref(), Some("drum_synth"));
-        let params = e.session().track(t).and_then(|tr| tr.instrument.as_ref()).map(|i| i.params.len());
-        assert_eq!(params, soundcraft_dsp::plugin_info("drum_synth").map(|p| p.params.len()), "every parameter at its default");
-        e.execute("edit.undo", &json!({})).unwrap();
-        assert_eq!(instrument_of(&e, t).as_deref(), Some("subtractive_synth"));
+        assert_eq!(instrument_of(&e, t), None, "no bundled default instrument");
+        let err = e.execute("mix.instrument", &json!({"track": t.0, "plugin": "drum_synth"})).unwrap_err().to_string();
+        assert!(err.contains("not part of SML Recording"), "{err}");
+        assert_eq!(instrument_of(&e, t), None);
     }
 
     #[test]
@@ -77,7 +83,7 @@ mod tests {
         assert!(e.execute("mix.instrument", &json!({"track": inst.0, "plugin": "vst3:00000000000000000000000000000000"})).is_err());
         assert!(e.execute("mix.instrument", &json!({"track": inst.0})).is_err(), "no plugin");
         assert!(e.execute("mix.instrument", &json!({"track": audio.0, "plugin": "drum_synth"})).is_err(), "an audio track");
-        assert_eq!(instrument_of(&e, inst).as_deref(), Some("subtractive_synth"));
+        assert_eq!(instrument_of(&e, inst), None);
         assert_eq!(instrument_of(&e, audio), None);
     }
 }
