@@ -2,6 +2,7 @@
 wrote /home/user/SML-Pro-Tools/dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz
 SoundCraft CLI 0.5.0
 ==> done
-total 15M
--rw-r--r-- 1 root root 15M Oct 11 17:18 soundcraft-0.5.0-linux-x86_64.tar.gz
-EXIT: 0
+total 31M
+-rw-r--r-- 1 root root 16M Oct 11 17:23 sml-recording-0.5.0-windows-x64-gnu-unsigned.zip
+-rw-r--r-- 1 root root 15M Oct 11 18:42 soundcraft-0.5.0-linux-x86_64.tar.gz
+EXIT: 0 (2s)

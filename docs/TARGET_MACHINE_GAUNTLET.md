@@ -17,11 +17,15 @@ results under `docs/evidence/sprint_04/` (or a new dated folder) — never fill 
 1. Extract to a fresh folder (no installer). Launch `soundcraft.exe`.
 2. Setup › Playback Engine: *Scan output devices*, choose the interface, 48 kHz, 128 frames,
    *Apply*. Record: requested/reported/effective buffer, device name, any error text.
-3. Window › Recording: select an audio track, *Arm*, speak; check the input meter and that a WAV
+3. Same window: *Scan input devices*, pick the interface (opens at the session rate and the
+   chosen buffer with all its inputs; on failure the message names why and the old input stays).
+   Record the input line it then shows (device, channels, rate, requested buffer).
+4. Window › Recording: select an audio track, *Arm*, speak; check the input meter and that a WAV
    appears in `<session>/Audio Files/` after stopping. Save, quit, reopen, play the take.
-4. Load one owner VST3 on an insert and in a Tape slot; open/close its editor; save/reopen.
-5. Export: Full Mix and `file.export_path` Edited Dry/Processed for the vocal.
-6. Screens: 1366×768 and 1920×1080 at 100/125/150 % scaling — Mix (Console/Visual/Split),
+5. Load one owner VST3 on an insert and in a Tape slot; open/close its editor; save/reopen.
+   During playback check the Tape slot's in/out meters move and differ by the slot trim.
+6. Export: Full Mix and `file.export_path` Edited Dry/Processed for the vocal.
+7. Screens: 1366×768 and 1920×1080 at 100/125/150 % scaling — Mix (Console/Visual/Split),
    Edit (NUDGE group), Recording window: controls readable, reachable, no overlap. Save images
    with resolution/scale in the filename; record hashes.
 Evidence: `package-smoke-windows.md`, images.

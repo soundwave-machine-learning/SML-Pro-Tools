@@ -1,35 +1,35 @@
 {
-  "source_commit": "b1181dcfb88cc52c037c5ae7e6ad702e9ede2380",
-  "note": "artifacts built from this commit plus uncommitted Sprint 4 docs; binaries not committed (dist/ is gitignored)",
+  "source_commit": "3eaef101e6b91d4e0f097a7a2e051e6432b5c621",
+  "note": "executables rebuilt from this commit (clean tree) after the Sprint 4 follow-up batches; the zip's USER_GUIDE.md / TARGET_MACHINE_GAUNTLET.md come from the final docs commit (re-zipped, executables unchanged). Binaries not committed (dist/ is gitignored). Supersedes the earlier b1181dc build.",
   "artifacts": [
     {
       "path": "dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz",
-      "bytes": 15692322,
-      "sha256": "7d95b1f7b248440c1c18c0cff13c939638539b4f63421fb3f7e267011f38db0d",
+      "bytes": 15700687,
+      "sha256": "99299e177275f58dead865c8beb6e8091263657f7944d27bacfadaa5a4304c0d",
       "description": "Linux x86_64 tarball via packaging/linux/package.sh --skip-build --formats tar"
     },
     {
       "path": "dist/release/sml-recording-0.5.0-windows-x64-gnu-unsigned.zip",
-      "bytes": 16277642,
-      "sha256": "cebcb166cd519b8b45eeef6ed1ae55912972c8b749eac942be47addaa6844b81",
+      "bytes": 16314925,
+      "sha256": "1a08dc2c3239edb07b026a013ccc2954a7c8022689474ea246de7ddac83002fa",
       "description": "Windows x64 portable zip, cross-built (x86_64-pc-windows-gnu, mingw-w64), unsigned"
     },
     {
       "path": "target/x86_64-pc-windows-gnu/release/soundcraft.exe",
-      "bytes": 37277946,
-      "sha256": "38c44c1d1ec1db955acaac8324e6e3ef6625c7b3f15329f4a0136fcbe61abea3",
+      "bytes": 37355259,
+      "sha256": "f93bc8239cc8048489e2ce994e652d6d9a3941e34ee0dde1b751762946d83e4d",
       "description": "Windows GUI exe inside the zip"
     },
     {
       "path": "target/x86_64-pc-windows-gnu/release/soundcraft-cli.exe",
-      "bytes": 11165817,
-      "sha256": "61f1154a88abcd495a273920be2fd60ac6974d2e6037aa07a8421d7a99a9d75f",
+      "bytes": 11161967,
+      "sha256": "4bd825b120e7bda2b88463fdf9f675c659cc9c39d362398e6b2bccd7dfae16e4",
       "description": "Windows CLI exe inside the zip"
     }
   ],
   "runtime_validation": {
-    "linux": "headless CLI smoke PASS in container (package-smoke.log); GUI not launched (no display)",
-    "windows": "NOT RUN (no Windows host). Cross-compiling is not a Windows runtime pass. Native MSVC packaging (package.ps1) not run."
+    "linux": "headless CLI smoke PASS from clean extraction (package-smoke.log); GUI not launched (no display)",
+    "windows": "NOT RUN (no Windows host). Cross-compiling is not a Windows runtime pass. Native MSVC packaging (package.ps1) not run. DLL imports: Windows system DLLs only."
   },
   "signing": "none (out of authorization)"
 }
