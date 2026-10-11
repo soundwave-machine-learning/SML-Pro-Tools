@@ -911,6 +911,23 @@ impl SoundApp {
             self.engine.transport.playing = false;
             self.ui.status = "Recording stopped: plugin latency changed during the take (alignment would be wrong). The take so far was kept; press Record to continue.".into();
         }
+        // CL-T2: the input stream failed (interface unplugged / driver error). A running take is
+        // finalized as an explicit partial (frames before the failure kept) and the transport
+        // stops; the dead stream is dropped so the next Record reopens the input.
+        if let Some(why) = self.recorder.as_ref().and_then(|r| r.input_lost()) {
+            if self.engine.transport.recording {
+                self.finish_recording();
+                if let Some(p) = &self.player {
+                    p.stop();
+                }
+                self.engine.transport.playing = false;
+                self.ui.status = format!("Recording stopped: {why}. {}", self.ui.status);
+            } else {
+                self.ui.status = format!("Audio input stopped: {why}.");
+            }
+            self.recorder = None;
+            self.recorder_failed = false;
+        }
         // Stop the old playback before sending a replacement session to the audio thread.
         self.handle_transport(dt);
         if self.engine.revision != self.last_rev {

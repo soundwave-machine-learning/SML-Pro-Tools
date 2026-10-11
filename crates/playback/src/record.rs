@@ -6,7 +6,7 @@
 //! take is written to disk by a writer thread ([`crate::capture`]); no take is held in RAM by the
 //! callback and nothing in the callback allocates, locks or touches files.
 
-use crate::capture::{ActiveCapture, CaptureReport, CaptureRing, WriterConfig};
+use crate::capture::{ActiveCapture, CaptureReport, CaptureRing, CaptureState, WriterConfig};
 use crate::clock::StreamClock;
 use crate::device::{DeviceRequest, NegotiatedConfig};
 use std::path::{Path, PathBuf};
@@ -32,6 +32,25 @@ pub struct StreamStats {
     pub frames: AtomicU64,
     pub min_block: AtomicU32,
     pub max_block: AtomicU32,
+    /// Input stream failure (CL-T2 disconnect): 0 none, 1 device not available, 2 other backend
+    /// error. Set from the stream's error callback (one atomic store, realtime-safe).
+    pub lost: std::sync::atomic::AtomicU8,
+}
+
+impl StreamStats {
+    /// Records an input stream failure (first one wins).
+    pub fn mark_lost(&self, device_gone: bool) {
+        let _ = self.lost.compare_exchange(0, if device_gone { 1 } else { 2 }, Ordering::AcqRel, Ordering::Acquire);
+    }
+
+    /// Why the input stream stopped, if it did.
+    pub fn lost_reason(&self) -> Option<&'static str> {
+        match self.lost.load(Ordering::Acquire) {
+            0 => None,
+            1 => Some("the input device is no longer available"),
+            _ => Some("the input driver reported an error"),
+        }
+    }
 }
 
 pub struct Recorder {
@@ -91,6 +110,7 @@ impl Recorder {
         let ring = CaptureRing::new(channels, (f64::from(rate) * RING_SECONDS) as usize);
         let stats = Arc::new(StreamStats::default());
         let (mon, rg, st) = (Arc::clone(&monitor), Arc::clone(&ring), Arc::clone(&stats));
+        let st_err = Arc::clone(&stats);
         let first_capture: Arc<Mutex<Option<cpal::StreamInstant>>> = Arc::new(Mutex::new(None));
         let fc = Arc::clone(&first_capture);
         let mut clock = StreamClock::new(rate);
@@ -114,9 +134,10 @@ impl Recorder {
                     st.min_block.fetch_min(stamp.frames, Ordering::AcqRel);
                     st.max_block.fetch_max(stamp.frames, Ordering::AcqRel);
                 },
-                |e| {
+                move |e| {
                     // Possibly the audio thread (see `crate::mark_audio_thread`).
                     crate::mark_audio_thread();
+                    st_err.mark_lost(matches!(e, cpal::StreamError::DeviceNotAvailable));
                     log::warn!("input stream error: {e}");
                 },
                 None,
@@ -185,7 +206,14 @@ impl Recorder {
         let Some(cap) = self.active().take() else {
             return Take { sample_rate: self.sample_rate, channels: vec![Vec::new(); self.channels], media: None, report: None };
         };
-        let report = cap.finish();
+        let mut report = cap.finish();
+        // CL-T2 disconnect: the take ended because the input stream failed — explicit partial.
+        if let Some(why) = self.stats.lost_reason()
+            && report.state == CaptureState::Finalized
+        {
+            report.state = CaptureState::DeviceLost;
+            report.error = Some(why.to_string());
+        }
         let channels = crate::capture::read_capture_selected(&report.media, keep).map(|(_, c)| c).unwrap_or_else(|e| {
             log::warn!("reading back {}: {e}", report.media.display());
             vec![Vec::new(); self.channels]
@@ -196,6 +224,12 @@ impl Recorder {
     /// Frames captured so far in the current take.
     pub fn captured_frames(&self) -> usize {
         if self.ring.is_armed() { usize::try_from(self.ring.accepted_frames()).unwrap_or(usize::MAX) } else { 0 }
+    }
+
+    /// Why the input stream stopped (device unplugged / driver error), if it did. Recording
+    /// cannot continue on this stream; the UI finalizes the take and reopens the input later.
+    pub fn input_lost(&self) -> Option<&'static str> {
+        self.stats.lost_reason()
     }
 
     /// Observed callback sizes (effective buffer), if any callback ran.
@@ -221,6 +255,50 @@ pub fn deinterleave(data: &[f32], channels: usize, sample_rate: u32) -> Take {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
+    /// CL-T2 / A1 recovery, simulated disconnect: the stream error marks the recorder; the take
+    /// that was running ends as an explicit DeviceLost partial with every frame captured before
+    /// the failure intact (no silent truncation, no substitute device).
+    #[test]
+    fn disconnect_mid_take_is_an_explicit_partial_with_frames_kept() {
+        let ring = CaptureRing::new(2, 48_000);
+        let rec = Recorder {
+            monitor: InputRing::new(2, 48_000),
+            ring: Arc::clone(&ring),
+            stats: Arc::new(StreamStats::default()),
+            active: Mutex::new(None),
+            #[cfg(not(target_os = "freebsd"))]
+            _stream: None,
+            device_name: "fixture".into(),
+            sample_rate: 48_000,
+            channels: 2,
+            config: None,
+            first_capture: Arc::new(Mutex::new(None)),
+        };
+        let dir = std::env::temp_dir().join(format!("sml-disconnect-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        rec.start_take(&dir, "Vox").unwrap();
+        let block: Vec<f32> = (0..256).map(|i| i as f32 / 256.0).collect();
+        let mut pushed = 0u64;
+        for k in 0..20u64 {
+            assert!(ring.push(&block, 0, k * 128));
+            pushed += 128;
+        }
+        assert!(rec.input_lost().is_none());
+        rec.stats.mark_lost(true); // the backend's error callback
+        rec.stats.mark_lost(false); // later errors do not overwrite the first reason
+        assert_eq!(rec.input_lost(), Some("the input device is no longer available"));
+        let take = rec.take();
+        let report = take.report.unwrap();
+        assert_eq!(report.state, CaptureState::DeviceLost);
+        assert!(report.state.is_partial());
+        assert_eq!(report.frames, pushed, "every frame before the failure is on disk");
+        assert_eq!(take.channels[0].len() as u64, pushed);
+        assert_eq!(take.channels[1][1], 3.0 / 256.0, "interleaving intact");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn deinterleaves() {
         let t = super::deinterleave(&[1.0, 2.0, 3.0, 4.0, 5.0], 2, 48_000);

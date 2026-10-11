@@ -36,7 +36,9 @@ Evidence: `package-smoke-windows.md`, images.
   confirm Record refuses with a named message when the input does not exist on the device), levels, dry file (insert a plugin on the
   track; the file must not contain it), no dropped/duplicated frames over a 10-minute take using
   an encoded test signal (e.g. a counting ramp or MLS from a second device), stop/finalize,
-  crash test (kill the process mid-take; reopen; the take recovers up to the last checkpoint).
+  crash test (kill the process mid-take; reopen; the take recovers up to the last checkpoint),
+  unplug test (pull the interface's USB mid-take: recording must stop with a named message and
+  keep the frames before the unplug; replug and press Record).
 - Evidence: `hardware-recording.md`, `recording-alignment.csv`.
 
 ## 3. CL-T6 latency and calibration (≈60 min)

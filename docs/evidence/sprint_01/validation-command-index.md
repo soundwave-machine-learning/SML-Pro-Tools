@@ -7,7 +7,7 @@ All commands run from the repository root on the execution host recorded in `env
 |---|---|---|
 | Full CI (every milestone) | `cargo xtask ci` | fmt check, `clippy --workspace --all-targets -D warnings`, `cargo test --workspace`, assets, layers, `cargo check --target wasm32-unknown-unknown` |
 | A1 capture (identity, frame order, irregular callbacks, unique files) | `cargo test -p soundcraft-playback capture::` | `capture::tests::*` |
-| A1 recovery (overflow, disk full, crash, bounded ring) | `cargo test -p soundcraft-playback -- overflow writer_error crash_recovery ring_memory disarmed` | |
+| A1 recovery (overflow, disk full, crash, bounded ring; disconnect added in Sprint 4) | `cargo test -p soundcraft-playback -- overflow writer_error crash_recovery ring_memory disarmed disconnect` | |
 | CL-T1 / CL-T3 primitives / CL-T5 load metric | `cargo test -p soundcraft-playback clock::` | 30-min simulated variable callbacks, generations, offsets, punch, ledger signs, load denominator |
 | CL-T2 negotiation | `cargo test -p soundcraft-playback device::` | fixture negotiation + real enumeration smoke |
 | CL-T2 real capability audit | `cargo run -p soundcraft-playback --example device_audit` | JSON of hosts/devices this build sees |

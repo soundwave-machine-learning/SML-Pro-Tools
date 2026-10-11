@@ -33,6 +33,9 @@ pub enum CaptureState {
     WriteFailed,
     /// Rebuilt from a journal after an interrupted session.
     Recovered,
+    /// The input stream failed (device unplugged / driver error) during the take. Frames
+    /// captured before the failure are kept.
+    DeviceLost,
 }
 
 impl CaptureState {
@@ -43,6 +46,7 @@ impl CaptureState {
             CaptureState::Overflow => 2,
             CaptureState::WriteFailed => 3,
             CaptureState::Recovered => 4,
+            CaptureState::DeviceLost => 5,
         }
     }
     fn from_code(c: u8) -> CaptureState {
@@ -51,12 +55,13 @@ impl CaptureState {
             2 => CaptureState::Overflow,
             3 => CaptureState::WriteFailed,
             4 => CaptureState::Recovered,
+            5 => CaptureState::DeviceLost,
             _ => CaptureState::Recording,
         }
     }
     /// True for the stopped-with-loss states the UI must show as a partial capture.
     pub fn is_partial(self) -> bool {
-        matches!(self, CaptureState::Overflow | CaptureState::WriteFailed)
+        matches!(self, CaptureState::Overflow | CaptureState::WriteFailed | CaptureState::DeviceLost)
     }
 }
 
