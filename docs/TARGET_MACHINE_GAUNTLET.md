@@ -32,7 +32,8 @@ Evidence: `package-smoke-windows.md`, images.
 
 ## 2. H1 recording / clock (≈60 min)
 - Same physical interface for input and output. 44.1 and 48 kHz, 64/128/256 frames where
-  offered. Verify correct physical input channel, levels, dry file (insert a plugin on the
+  offered. Verify correct physical input channel (set the track Input to e.g. "In 3"; also
+  confirm Record refuses with a named message when the input does not exist on the device), levels, dry file (insert a plugin on the
   track; the file must not contain it), no dropped/duplicated frames over a 10-minute take using
   an encoded test signal (e.g. a counting ramp or MLS from a second device), stop/finalize,
   crash test (kill the process mid-take; reopen; the take recovers up to the last checkpoint).

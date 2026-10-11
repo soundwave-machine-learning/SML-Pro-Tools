@@ -448,8 +448,14 @@ impl SoundApp {
             return;
         }
         self.ensure_input();
-        if self.recorder.is_none() {
+        let Some(device_channels) = self.recorder.as_ref().map(|r| r.channels) else {
             self.ui.status = "Cannot record: no audio input device".into();
+            return;
+        };
+        // R01/H1: refuse to start rather than record another physical input.
+        let problems = soundcraft_engine::io::input_channel_problems(self.engine.session(), device_channels);
+        if !problems.is_empty() {
+            self.ui.status = format!("Cannot record: {}. Change the track input or the input device.", problems.join("; "));
             return;
         }
         if let Some(p) = &self.player {
@@ -467,6 +473,9 @@ impl SoundApp {
                 .unwrap_or_else(|| std::env::temp_dir().join("sml-recording"));
             let base = self.engine.session().tracks.iter().find(|t| t.mixer.record_arm).map_or_else(|| "Take".to_string(), |t| t.name.clone());
             if let Err(e) = r.start_take(&dir, &base) {
+                if let Some(p) = &self.player {
+                    p.set_recording(false);
+                }
                 self.ui.status = format!("Cannot record: {e}");
                 return;
             }

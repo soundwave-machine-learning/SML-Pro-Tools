@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (607 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (608 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -116,6 +116,12 @@ commit; result in `regression.log`):
 - **V01/V03/V13 coverage** — V01 selection/zoom audio-neutral test and Tab clip-edge walk;
   V03 Smart-tool zone functions extracted unchanged and tested; V13 row updated to the Sprint 3
   `v13_named_export_paths` test.
+- **R01/H1 input-channel integrity** (bug found in review): a take mapped track inputs modulo
+  the capture width, so "In 5" on a 2-input device silently recorded input 1. Recording now
+  refuses to start (and `add_recording` refuses atomically) when an armed track's input
+  channels are missing; a one-input device feeding a stereo track stays dual mono. A failed
+  take start also clears the player's recording flag
+  (`recording_never_substitutes_another_input_channel`).
 - **CL05 session swap** — replaced `Arc<Session>` returned to the UI thread for dropping
   (`replaced_sessions_are_dropped_off_the_audio_thread`).
 

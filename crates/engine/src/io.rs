@@ -557,6 +557,35 @@ pub fn open_session(e: &mut Engine, path: &str) -> Result<Vec<String>> {
 /// Turn a recorded take into clips on the record-armed tracks (one undo step: "Record").
 /// `channels` is the planar input capture at `rate`; each track takes the input channels its
 /// input route names ("In 3" → channel 2), defaulting to the first channels.
+/// Zero-based first capture channel of an armed track ("In 3" → 2, "In 1-2" → 0; other
+/// inputs → 0).
+fn first_input_channel(t: &soundcraft_model::Track) -> usize {
+    match &t.mixer.input {
+        soundcraft_model::Route::Hardware(h) => {
+            h.trim_start_matches("In ").split(['-', ' ']).next().and_then(|n| n.parse::<usize>().ok()).map_or(0, |n| n.saturating_sub(1))
+        }
+        _ => 0,
+    }
+}
+
+/// R01/H1 preflight: armed audio tracks whose input channels the capture device does not have
+/// (`device_channels` inputs). A one-input device may feed a stereo track (dual mono, stated in
+/// the manual); any other shortfall would record a different physical input, so recording must
+/// not start. Returns one message per affected track.
+pub fn input_channel_problems(s: &Session, device_channels: usize) -> Vec<String> {
+    s.tracks
+        .iter()
+        .filter(|t| t.mixer.record_arm && t.kind == TrackKind::Audio && !t.inactive)
+        .filter_map(|t| {
+            let first = first_input_channel(t);
+            let need = first + t.channels();
+            let dual_mono = device_channels == 1 && first == 0;
+            (need > device_channels && !dual_mono)
+                .then(|| format!("`{}` records input {}–{} but the input device has {device_channels} channel(s)", t.name, first + 1, need))
+        })
+        .collect()
+}
+
 pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, rate: u32) -> Result<Vec<soundcraft_model::ClipId>> {
     let frames = channels.first().map_or(0, Vec::len);
     if frames == 0 {
@@ -567,24 +596,22 @@ pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, ra
         .tracks
         .iter()
         .filter(|t| t.mixer.record_arm && t.kind == TrackKind::Audio && !t.inactive)
-        .map(|t| {
-            let first = match &t.mixer.input {
-                soundcraft_model::Route::Hardware(h) => {
-                    h.trim_start_matches("In ").split(['-', ' ']).next().and_then(|n| n.parse::<usize>().ok()).map_or(0, |n| n.saturating_sub(1))
-                }
-                _ => 0,
-            };
-            (t.id, first, t.channels(), t.name.clone())
-        })
+        .map(|t| (t.id, first_input_channel(t), t.channels(), t.name.clone()))
         .collect();
     if armed.is_empty() {
         return Err(EngineError::BadParams("record".into(), "no tracks are record-enabled".into()));
+    }
+    // Never substitute another physical input (checked before recording starts, again here).
+    let problems = input_channel_problems(e.session(), channels.len());
+    if !problems.is_empty() {
+        return Err(EngineError::BadParams("record".into(), problems.join("; ")));
     }
     let before = e.session_arc();
     let mut out = Vec::new();
     let take_no = e.session().sources.len() + 1;
     for (tid, first, n, name) in armed {
-        let chans: Vec<Vec<f32>> = (0..n).map(|k| channels.get((first + k) % channels.len().max(1)).cloned().unwrap_or_default()).collect();
+        // A one-input capture feeding a stereo track is dual mono (the only allowed fill).
+        let chans: Vec<Vec<f32>> = (0..n).map(|k| channels.get((first + k).min(channels.len() - 1)).cloned().unwrap_or_default()).collect();
         let buf = AudioBuffer { sample_rate: rate, channels: chans };
         let clip_name = format!("{name}_{take_no:02}");
         let s = e.session_mut();
@@ -638,6 +665,40 @@ pub fn add_loop_recording_at(e: &mut Engine, sel: soundcraft_time::Range, captur
         }
     }
     made
+}
+
+#[cfg(test)]
+mod input_channel_tests {
+    use super::*;
+    use soundcraft_model::{ChannelFormat, Route};
+
+    /// R01/H1: a track never records a different physical input than its own; a one-input
+    /// device may feed a stereo track (dual mono); the take maps "In 3" to capture channel 3.
+    #[test]
+    fn recording_never_substitutes_another_input_channel() {
+        let mut e = Engine::default();
+        let v = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Vox"));
+        let tr = e.session_mut().track_mut(v).unwrap();
+        tr.mixer.record_arm = true;
+        tr.mixer.input = Route::Hardware("In 3".into());
+        let cap = |n: usize| (0..n).map(|c| vec![c as f32 + 1.0; 100]).collect::<Vec<_>>();
+        assert_eq!(input_channel_problems(e.session(), 2).len(), 1, "In 3 on a 2-input device");
+        let err = add_recording(&mut e, 0, cap(2), 48_000).unwrap_err().to_string();
+        assert!(err.contains("Vox") && err.contains("2 channel"), "{err}");
+        assert!(e.session().track(v).unwrap().clips().is_empty(), "nothing placed");
+        assert!(input_channel_problems(e.session(), 8).is_empty());
+        let ids = add_recording(&mut e, 0, cap(8), 48_000).unwrap();
+        let c = e.session().track(v).unwrap().clips().iter().find(|c| c.id == ids[0]).cloned().unwrap();
+        let ClipContent::Audio { source, .. } = c.content else { panic!() };
+        assert_eq!(e.session().pool.get(source).unwrap().channel(0).unwrap()[0], 3.0, "capture channel 3");
+        // Stereo track on a one-input device: dual mono, allowed.
+        let st = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Stereo, Some("Gtr"));
+        e.session_mut().track_mut(v).unwrap().mixer.record_arm = false;
+        e.session_mut().track_mut(st).unwrap().mixer.record_arm = true;
+        assert!(input_channel_problems(e.session(), 1).is_empty());
+        e.session_mut().track_mut(st).unwrap().mixer.input = Route::Hardware("In 2-3".into());
+        assert_eq!(input_channel_problems(e.session(), 2).len(), 1, "In 2-3 needs 3 inputs");
+    }
 }
 
 #[cfg(test)]

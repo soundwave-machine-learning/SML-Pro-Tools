@@ -11,9 +11,13 @@ today; anything not yet validated on the target machine is marked.
 - If the disk cannot keep up or fails, recording stops and the status bar says so; every frame
   written before the problem is kept. After a crash, the take file can be recovered to the last
   durable checkpoint (at most about one second is lost).
-- Device/rate/buffer: the engine can open an exact device/rate/buffer and reports an error
-  instead of silently using another device. The device picker in the UI does not yet use this
-  path (it opens the system default input). ASIO is not compiled in this build.
+- Device/rate/buffer: choose the input interface in **Setup › Playback Engine** (*Scan input
+  devices*, §9). The exact device/rate/buffer is opened, or you get an error — another device is
+  never used silently. ASIO is not compiled in this build.
+- Input channels: a track records the input its *Input* selector names ("In 3", "In 1-2"). If
+  the input device lacks that channel, Record refuses to start and says which track and channel;
+  it never records a different input instead. A one-input device can feed a stereo track (the
+  same signal on both sides).
 - *Not yet validated on a real Windows interface (H1).*
 
 ## 2. Nudge
