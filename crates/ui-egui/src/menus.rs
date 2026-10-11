@@ -209,7 +209,7 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
         ui,
         |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("SoundCraft", |ui| {
+                ui.menu_button("SML Recording", |ui| {
                     if ui.button("About SoundCraft").clicked() {
                         app.ui.show_about = true;
                     }

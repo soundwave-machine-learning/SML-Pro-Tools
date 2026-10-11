@@ -115,7 +115,7 @@ pub fn specs() -> Vec<CommandSpec> {
             }
             Ok(json!({}))
         }),
-        cmd!("mix.send_level", "Send Level", [], None, "{track?, slot, db?, pan?, mute?, pre_fader?}", has_selection, send_level),
+        cmd!("mix.send_level", "Send Level", [], None, "{track?, slot, db?, pan?, follow_pan?: bool, mute?, pre_fader?}", has_selection, send_level),
         cmd!("mix.new_bus", "New Bus", [], None, "{name, format?: stereo}", always, |e, p| {
             let name = str_param(p, "name").filter(|n| !n.trim().is_empty()).ok_or_else(|| bad("mix.new_bus", "`name` required"))?.to_string();
             let fmt = str_param(p, "format").and_then(soundcraft_model::ChannelFormat::from_id).unwrap_or(soundcraft_model::ChannelFormat::Stereo);
@@ -427,6 +427,10 @@ fn send_level(e: &mut Engine, p: &Value) -> Result<Value> {
     }
     if let Some(m) = p.get("mute").and_then(Value::as_bool) {
         sl.mute = m;
+    }
+    if let Some(f) = p.get("follow_pan").and_then(Value::as_bool) {
+        // SL06: Follow Channel (copy the channel's panner) or Independent (the send's own pan).
+        sl.follow_main_pan = f;
     }
     if let Some(m) = p.get("pre_fader").and_then(Value::as_bool) {
         sl.pre_fader = m;

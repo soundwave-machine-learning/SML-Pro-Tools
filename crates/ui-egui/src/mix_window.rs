@@ -27,14 +27,39 @@ pub(crate) fn content(app: &mut SoundApp, ui: &mut Ui) {
         .as_ref()
         .filter(|_| app.engine.transport.playing || app.engine.session().tracks.iter().any(|t| t.mixer.input_monitor))
         .map(|p| p.meters());
-    egui::ScrollArea::horizontal().auto_shrink([false, false]).show(ui, |ui| {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = 1.0;
-            for id in ids {
-                strip(app, ui, id, snap.as_ref());
-            }
+    // One mixer state, two synchronized surfaces (VM01): Console strips, Visual canvas, or both.
+    crate::visual_mixer::header(app, ui);
+    let view = crate::visual_mixer::MixView::of(app);
+    let console = |app: &mut SoundApp, ui: &mut Ui| {
+        egui::ScrollArea::horizontal().id_salt("console").auto_shrink([false, false]).show(ui, |ui| {
+            ui.horizontal_top(|ui| {
+                ui.spacing_mut().item_spacing.x = 1.0;
+                for id in &ids {
+                    strip(app, ui, *id, snap.as_ref());
+                }
+            });
         });
-    });
+    };
+    let visual = |app: &mut SoundApp, ui: &mut Ui| {
+        ui.horizontal_top(|ui| {
+            let list_w = 230.0;
+            let canvas_w = (ui.available_width() - list_w - 8.0).max(200.0);
+            let h = ui.available_height();
+            let down = egui::Layout::top_down(egui::Align::Min);
+            ui.allocate_ui_with_layout(egui::vec2(canvas_w, h), down, |ui| crate::visual_mixer::canvas(app, ui));
+            ui.allocate_ui_with_layout(egui::vec2(list_w, h), down, |ui| crate::visual_mixer::channel_list(app, ui));
+        });
+    };
+    match view {
+        crate::visual_mixer::MixView::Console => console(app, ui),
+        crate::visual_mixer::MixView::Visual => visual(app, ui),
+        crate::visual_mixer::MixView::Split => {
+            let h = ui.available_height();
+            ui.allocate_ui(egui::vec2(ui.available_width(), (h * 0.45).max(220.0)), |ui| visual(app, ui));
+            ui.separator();
+            console(app, ui);
+        }
+    }
 }
 
 /// Format of the destination a track's output feeds (the main mix, a bus, or stereo).
@@ -178,6 +203,42 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
             }
         }
         y = sec.max.y + 4.0;
+    }
+    if all || has("inserts_ae") {
+        // Dedicated slots (SL01) and native Stereo Width (VM03), shared with the Visual view.
+        let rows: Vec<soundcraft_model::SlotKind> = match track.kind {
+            TrackKind::Aux | TrackKind::Folder | TrackKind::Master => {
+                vec![soundcraft_model::SlotKind::Summing, soundcraft_model::SlotKind::MasterTape]
+            }
+            TrackKind::Audio | TrackKind::Instrument | TrackKind::Midi => vec![soundcraft_model::SlotKind::Tape],
+            _ => Vec::new(),
+        };
+        let width_row = track.channels() == 2 && track.kind != TrackKind::Master;
+        let n = rows.len() + usize::from(width_row);
+        if n > 0 {
+            let sec = Rect::from_min_size(pos2(x0, y), vec2(inner_w, 16.0 + n as f32 * 17.0));
+            ui.painter().rect_filled(sec, 2.0, t.strip_section);
+            section_label(ui, sec, "SLOTS");
+            for (k, kind) in rows.iter().enumerate() {
+                let sr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + k as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
+                dedicated_slot(app, ui, &track, *kind, sr);
+            }
+            if width_row {
+                let wr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + rows.len() as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
+                let mut c = ui.new_child(egui::UiBuilder::new().max_rect(wr));
+                let mut w = track.mixer.width * 100.0;
+                let resp = c
+                    .add_sized(wr.size(), egui::DragValue::new(&mut w).range(0.0..=200.0).speed(1.0).prefix("W ").suffix("%").max_decimals(0))
+                    .on_hover_text("Stereo Width (100% = exact pass-through). Same control as the Visual view's node handles.");
+                if resp.changed() {
+                    let _ = app.engine.execute_merged("mix.width", &json!({"tracks": [id.0], "width": w / 100.0}), &format!("width:{}", id.0));
+                }
+                if resp.drag_stopped() || resp.lost_focus() {
+                    app.engine.end_merge();
+                }
+            }
+            y = sec.max.y + 4.0;
+        }
     }
     if all || has("eq_curve") {
         let sec = Rect::from_min_size(pos2(x0, y), vec2(inner_w, 40.0));
@@ -408,6 +469,84 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
 
 /// An instrument track's INSTRUMENT row: click opens a hosted instrument's plugin window,
 /// right-click (or click, when none is set) picks another instrument.
+/// One dedicated slot row: provider name (Clean/None when empty), click for the slot menu
+/// (installed plugins, Clean/None, bypass, trim, Master Tape Pre/Post). No model knobs exist.
+fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcraft_model::SlotKind, r: Rect) {
+    use soundcraft_model::{SlotKind, TapePosition};
+    let t = Tokens::current();
+    let slot = track.mixer.slots.get(kind);
+    let empty_name = if kind == SlotKind::Summing { "Clean" } else { "None" };
+    let name = slot
+        .and_then(|s| s.provider.as_ref())
+        .map_or(empty_name.to_string(), |p| p.plugin.rsplit(['.', ':']).next().unwrap_or(&p.plugin).to_string());
+    let prefix = match kind {
+        SlotKind::Tape => "Tape",
+        SlotKind::Summing => "Sum",
+        SlotKind::MasterTape => {
+            if track.mixer.slots.master_tape_position == TapePosition::Pre {
+                "MTape▲"
+            } else {
+                "MTape▼"
+            }
+        }
+    };
+    let bypass = slot.is_some_and(|s| s.bypass);
+    let missing = slot.and_then(|s| s.provider.as_ref()).is_some_and(|p| soundcraft_mix::is_missing_plugin(&p.plugin));
+    let col = if missing {
+        Color32::from_rgb(200, 80, 80)
+    } else if bypass {
+        t.text_dim
+    } else {
+        t.counter_text
+    };
+    ui.painter().rect_filled(r, 1.0, t.counter_bg);
+    let label = format!("{prefix} {name}{}", if bypass { " (byp)" } else { "" });
+    ui.painter().text(pos2(r.min.x + 3.0, r.center().y), Align2::LEFT_CENTER, label, regular(10.0), col);
+    let resp = ui.interact(r, ui.id().with(("dslot", track.id.0, kind.id())), Sense::click()).on_hover_text(format!(
+        "{} slot: {}{}\nTrim {:.1} dB. Click for options.",
+        kind.id(),
+        name,
+        if missing { " (MISSING — passes audio through)" } else { "" },
+        slot.map_or(0.0, |s| s.trim_db)
+    ));
+    let id = track.id;
+    egui::Popup::menu(&resp).show(|ui| {
+        if ui.button(format!("{empty_name} (identity)")).clicked() {
+            run_report(app, "mix.slot", json!({"track": id.0, "slot": kind.id(), "plugin": ""}));
+        }
+        if let Some(p) = hosted_menus(ui, false) {
+            run_report(app, "mix.slot", json!({"track": id.0, "slot": kind.id(), "plugin": p}));
+        }
+        ui.separator();
+        if ui.selectable_label(bypass, "Bypass (keeps latency compensation)").clicked() {
+            run_report(app, "mix.slot", json!({"track": id.0, "slot": kind.id(), "bypass": !bypass}));
+        }
+        let mut trim = slot.map_or(0.0, |s| s.trim_db);
+        if ui.add(egui::DragValue::new(&mut trim).range(-24.0..=24.0).speed(0.1).prefix("Trim ").suffix(" dB")).changed() {
+            let _ = app.engine.execute_merged("mix.slot", &json!({"track": id.0, "slot": kind.id(), "trim_db": trim}), &format!("slottrim:{}", id.0));
+        }
+        if kind == SlotKind::MasterTape {
+            ui.separator();
+            for (pos, label) in [(TapePosition::Pre, "Pre (before inserts)"), (TapePosition::Post, "Post (after fader)")] {
+                if ui.selectable_label(track.mixer.slots.master_tape_position == pos, label).clicked() {
+                    run_report(
+                        app,
+                        "mix.slot",
+                        json!({"track": id.0, "slot": kind.id(), "position": if pos == TapePosition::Pre { "pre" } else { "post" }}),
+                    );
+                }
+            }
+        }
+        ui.label(egui::RichText::new("Native summing/tape models: not yet available").small());
+    });
+}
+
+fn run_report(app: &mut SoundApp, id: &str, p: serde_json::Value) {
+    if let Err(e) = app.run(id, p) {
+        app.ui.status = e;
+    }
+}
+
 fn instrument_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, r: Rect) {
     let t = Tokens::current();
     let (id, slot) = (track.id, soundcraft_mix::INSTRUMENT_SLOT);

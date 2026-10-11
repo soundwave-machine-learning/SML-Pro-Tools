@@ -1,0 +1,56 @@
+# command: cargo test -p soundcraft-engine -- visual_tests cmd::snapshot
+# utc: 2026-10-11T16:31:21Z  source: c11b84f+worktree
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-f76b7e9532565dbf)
+
+running 4 tests
+test cmd::snapshot::tests::width_is_unavailable_on_mono ... ok
+test cmd::snapshot::visual_tests::vmt6_deleted_channel_mid_gesture_is_isolated ... ok
+test cmd::snapshot::tests::vmt5_snapshots_round_trip_and_scope ... ok
+test cmd::snapshot::visual_tests::vmt1_vmt4_one_model_one_undo_per_gesture ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 128 filtered out; finished in 0.00s
+
+     Running tests/clap_e2e.rs (target/debug/deps/clap_e2e-b703f63c28d04381)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 3 filtered out; finished in 0.00s
+
+     Running tests/hostile_params.rs (target/debug/deps/hostile_params-7afbce35eaf588d9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/hostile_sessions.rs (target/debug/deps/hostile_sessions-6b027445306fbb6a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/random_edits.rs (target/debug/deps/random_edits-a8243ab79ae0bf74)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/session_transport.rs (target/debug/deps/session_transport-fe5d52b5c7eac6f7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/vocal_workflow.rs (target/debug/deps/vocal_workflow-b9ee2488a9965fb7)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 8 filtered out; finished in 0.00s
+
+   Doc-tests soundcraft_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+EXIT: 0

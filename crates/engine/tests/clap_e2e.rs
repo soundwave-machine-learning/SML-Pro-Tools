@@ -118,3 +118,54 @@ fn clap_state_is_captured_stored_and_restored_before_the_first_block() {
     let half = gain_of(e.session());
     assert!((half - reference / 3.0).abs() < 1e-5, "{half} vs {}", reference / 3.0);
 }
+
+/// SL-T6: the real CLAP fixture hosted in a dedicated Tape slot loads, processes, has its live
+/// state captured (realtime path, slot instance index), stored on the slot, survives
+/// save/reopen and is restored before the first offline block. Plumbing only — not a claim
+/// that arbitrary plugins are compatible (owner plugins = H2).
+#[test]
+fn clap_provider_in_tape_slot_round_trips_state_and_renders() {
+    install_fixture();
+    let gain = "clap:org.soundcraft.test.gain";
+    let mut e = Engine::default();
+    let s = e.session_mut();
+    let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Vox"));
+    let src = soundcraft_engine::io::add_source(
+        s,
+        "dc",
+        AudioBuffer { sample_rate: 48_000, channels: vec![vec![0.25; 4800]] },
+        None,
+        soundcraft_audio_io::FileFormat::Wav,
+    );
+    let id = s.new_clip_id();
+    s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "dc", src, 0, 0, 4800));
+    let dry = soundcraft_mix::render_range(e.session(), Range::new(0, 4800), 512)[0][2000];
+    e.execute("mix.slot", &json!({"track": t.0, "slot": "tape", "plugin": gain})).unwrap();
+    let specs = soundcraft_mix::instance_specs(e.session());
+    let spec = specs.iter().find(|x| x.slot == soundcraft_model::SlotKind::Tape.instance_index()).expect("slot instance spec");
+    let mut eng = soundcraft_mix::MixEngine::new(48_000.0, 512);
+    eng.set_external_instances(true);
+    let mut p = soundcraft_mix::create_instance(&spec.id, None, 48_000.0, 512, spec.ch).unwrap();
+    p.set_param("7", 1.5);
+    let mut io = vec![vec![0.0f32; 64]];
+    p.process(&mut io, 64);
+    eng.adopt(vec![soundcraft_mix::PreparedInstance { track: t, slot: spec.slot, id: gain.into(), ch: spec.ch, plugin: p }]);
+    eng.ensure_synced(e.session());
+    let states = eng.capture_states();
+    let (_, _, blob) = states.iter().find(|(tt, sl, _)| *tt == t && *sl == spec.slot).expect("slot state captured");
+    e.execute("mix.slot_state", &json!({"track": t.0, "slot": "tape", "state": soundcraft_model::b64::encode(blob)})).unwrap();
+    let dir = std::env::temp_dir().join(format!("sml-slot-clap-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("s.scraft");
+    e.execute("session.save", &json!({"path": path.to_string_lossy()})).unwrap();
+    let mut f = Engine::default();
+    f.execute("session.open", &json!({"path": path.to_string_lossy()})).unwrap();
+    let wet = soundcraft_mix::render_range(f.session(), Range::new(0, 4800), 512)[0][2000];
+    assert!((wet - 1.5 * dry).abs() < 1e-4, "restored slot state plays: dry {dry} wet {wet}");
+    // Teardown: removing the provider retires the instance and the render returns to dry.
+    f.execute("mix.slot", &json!({"track": f.session().track_by_name("Vox").unwrap().id.0, "slot": "tape", "plugin": ""})).unwrap();
+    let back = soundcraft_mix::render_range(f.session(), Range::new(0, 4800), 512)[0][2000];
+    assert!((back - dry).abs() < 1e-6);
+    let _ = std::fs::remove_dir_all(&dir);
+}

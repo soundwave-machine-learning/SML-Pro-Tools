@@ -290,3 +290,65 @@ fn vocal_v11_time_stretch_service_duration_and_pitch() {
     }
     assert_eq!(src, copy, "source untouched");
 }
+
+/// V-E2E final software stage (Sprint 3): comp → Vocal Bus (one step) → FX return → Tape slot
+/// fixture provider → width/snapshot → save/reopen → named exports. Edited Dry equals the comp
+/// reference; Processed/Full Mix include the declared processing; sources unchanged.
+#[test]
+fn vocal_e2e_final_bus_slot_export() {
+    let (mut e, t, srcs) = three_takes();
+    let hashes: Vec<u64> = srcs.iter().map(|s| hash_source(&e, *s)).collect();
+    exec(&mut e, "track.playlist_promote", json!({"track": t.0, "playlist": 2, "start": 12_000, "end": 36_000}));
+    let dbl = {
+        let s = e.session_mut();
+        let d = s.add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Double"));
+        let src = soundcraft_engine::io::add_source(s, "dbl", AudioBuffer { sample_rate: SR, channels: vec![take(1)] }, None, FileFormat::Wav);
+        let id = s.new_clip_id();
+        s.track_mut(d).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "dbl", src, 0, 0, LEN as i64));
+        d
+    };
+    let r = exec(&mut e, "bus.create_from_selection", json!({"tracks": [t.0, dbl.0], "name": "Vocal Bus"}));
+    let vbus = r["bus_track"].as_u64().unwrap();
+    exec(&mut e, "bus.create_fx_return", json!({"tracks": [t.0], "name": "Vocal Reverb", "destination": "Vocal Bus"}));
+    exec(&mut e, "mix.slot", json!({"track": t.0, "slot": "tape", "plugin": "test:gain:-6"}));
+    exec(&mut e, "mix.width", json!({"tracks": [vbus], "width": 0.8}));
+    exec(&mut e, "snapshot.save", json!({"slot": "A"}));
+    let dir = std::env::temp_dir().join(format!("sml-e2e-final-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("vocal.scraft");
+    exec(&mut e, "session.save", json!({"path": path.to_string_lossy()}));
+    let mut f = Engine::default();
+    exec(&mut f, "session.open", json!({"path": path.to_string_lossy()}));
+    let tf = f.session().track_by_name("Lead Vox").unwrap().id;
+    let read = |p: &std::path::Path| soundcraft_audio_io::decode(&std::fs::read(p).unwrap(), Some("wav")).unwrap().1.channels;
+    let mut out = serde_json::Map::new();
+    for kind in ["edited_dry", "processed", "full_mix"] {
+        let p = dir.join(format!("{kind}.wav"));
+        exec(&mut f, "file.export_path", json!({"path": p.to_string_lossy(), "kind": kind, "track": tf.0, "start": 0, "end": LEN as i64}));
+        out.insert(kind.into(), json!(read(&p)[0][20_000]));
+    }
+    let dry = read(&dir.join("edited_dry.wav"));
+    let t3 = take(2);
+    let t1 = take(0);
+    let max_err = (0..LEN).map(|i| (dry[0][i] - if (12_000..36_000).contains(&i) { t3[i] } else { t1[i] }).abs()).fold(0.0f32, f32::max);
+    let processed = out["processed"].as_f64().unwrap() as f32;
+    let g = 10f32.powf(-6.0 / 20.0);
+    let expect_processed = t3[20_000] * g * centre();
+    let reopened: Vec<u64> = srcs
+        .iter()
+        .filter_map(|s| f.session().sources.iter().find(|x| x.name == e.session().source(*s).unwrap().name).map(|x| hash_source(&f, x.id)))
+        .collect();
+    println!(
+        "VOCAL_E2E_FINAL {}",
+        json!({"stage": "sprint3 (bus/fx return/slot/width/snapshot/save-reopen/exports)", "edited_dry_max_abs_error": max_err,
+               "processed_sample": processed, "processed_expected": expect_processed, "samples_at_20000": out,
+               "tracks": f.session().tracks.iter().map(|t| t.name.clone()).collect::<Vec<_>>(), "snapshots": f.session().mix_snapshots.keys().collect::<Vec<_>>(),
+               "source_hashes_unchanged": reopened == hashes})
+    );
+    assert!(max_err <= 1e-5, "edited dry = comp reference: {max_err}");
+    assert!((processed - expect_processed).abs() < 1e-5, "processed includes tape fixture + pan: {processed} vs {expect_processed}");
+    assert_eq!(reopened, hashes);
+    assert!(f.session().mix_snapshots.contains_key("A"));
+    let _ = std::fs::remove_dir_all(&dir);
+}

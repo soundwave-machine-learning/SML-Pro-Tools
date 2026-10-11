@@ -153,3 +153,60 @@ mod tests {
         assert_eq!(e.session().track(m).unwrap().mixer.width, 1.0);
     }
 }
+
+/// VM-T1/T4/T6 at the engine boundary both mixer views use: the Console fader/knobs and the
+/// Visual node gestures dispatch the same commands to the same ids; a gesture of many updates is
+/// one undo step; view changes never touch audio state; a deleted channel mid-gesture is a clean
+/// error that changes nothing else.
+#[cfg(test)]
+mod visual_tests {
+    use crate::Engine;
+    use serde_json::json;
+    use soundcraft_model::{ChannelFormat, TrackKind};
+
+    #[test]
+    fn vmt1_vmt4_one_model_one_undo_per_gesture() {
+        let mut e = Engine::default();
+        let a = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Stereo, Some("Lead"));
+        let b = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Dbl"));
+        // Console edit.
+        e.execute("mix.volume", &json!({"track": a.0, "db": -3.0})).unwrap();
+        let undo_before = e.undo_history().len();
+        let rev_before = e.revision;
+        // Visual drag: 100 intermediate updates of gain + stereo centre (span kept), one gesture.
+        for k in 0..100 {
+            let db = -3.0 - k as f64 * 0.05;
+            e.execute_merged("mix.volume", &json!({"track": a.0, "db": db}), "visual:a").unwrap();
+            let c = k as f64 / 200.0;
+            e.execute_merged("mix.pan", &json!({"track": a.0, "pan": (c - 1.0).max(-1.0), "index": 0}), "visual:a").unwrap();
+            e.execute_merged("mix.pan", &json!({"track": a.0, "pan": (c + 1.0).min(1.0), "index": 1}), "visual:a").unwrap();
+        }
+        e.end_merge();
+        assert_eq!(e.undo_history().len(), undo_before + 1, "one undo entry per gesture");
+        assert!(e.revision > rev_before);
+        let t = e.session().track(a).unwrap();
+        assert!((t.mixer.volume_db - (-3.0 - 99.0 * 0.05) as f32).abs() < 1e-4, "latest final value kept");
+        // The view switch is not an audio/undo edit.
+        e.execute("mix.view", &json!({"view": 2})).unwrap();
+        assert_eq!(e.undo_history().len(), undo_before + 1);
+        e.execute("edit.undo", &json!({})).unwrap();
+        let t = e.session().track(a).unwrap();
+        assert_eq!((t.mixer.volume_db, t.mixer.pan.clone()), (-3.0, vec![-1.0, 1.0]), "undo restores gain and both pan endpoints");
+        // Hidden channel = view only.
+        e.session_mut().track_mut(b).unwrap().hidden = true;
+        assert!(!e.session().track(b).unwrap().mixer.mute);
+    }
+
+    #[test]
+    fn vmt6_deleted_channel_mid_gesture_is_isolated() {
+        let mut e = Engine::default();
+        let a = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, Some("A"));
+        let b = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, Some("B"));
+        e.execute_merged("mix.volume", &json!({"track": a.0, "db": -6.0}), "visual:a").unwrap();
+        e.session_mut().tracks.retain(|t| t.id != a);
+        let before = e.session().track(b).unwrap().clone();
+        assert!(e.execute_merged("mix.volume", &json!({"track": a.0, "db": -7.0}), "visual:a").is_err());
+        e.end_merge();
+        assert_eq!(e.session().track(b).unwrap(), &before, "no other id mutated");
+    }
+}

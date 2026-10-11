@@ -48,7 +48,10 @@
 
 use soundcraft_dsp::pan::{PanLaw, SpeakerPos, SurroundParams, gains};
 use soundcraft_dsp::{Plugin, db_to_gain};
-use soundcraft_model::{AutoParam, BusId, ChannelFormat, Clip, ClipContent, Route, Session, Speaker, SurroundPan, Track, TrackId, TrackKind};
+use soundcraft_model::{
+    AuditionBypass, AutoParam, BusId, ChannelFormat, Clip, ClipContent, DedicatedSlot, ProfileKind, Route, Session, SlotKind, Speaker, StereoPanMode,
+    SurroundPan, TapePosition, Track, TrackId, TrackKind,
+};
 use soundcraft_time::{Range, Samples};
 use std::collections::HashMap;
 
@@ -135,6 +138,13 @@ pub fn instance_specs(s: &Session) -> Vec<InstanceSpec> {
         {
             out.push(InstanceSpec { track: t.id, slot: INSTRUMENT_SLOT, id: ins.plugin.clone(), ch: ch.max(2), state: ins.state_bytes() });
         }
+        for k in SlotKind::ALL {
+            if let Some(ins) = t.mixer.slots.get(k).and_then(|x| x.provider.as_ref())
+                && is_third_party(&ins.plugin)
+            {
+                out.push(InstanceSpec { track: t.id, slot: k.instance_index(), id: ins.plugin.clone(), ch, state: ins.state_bytes() });
+            }
+        }
     }
     out
 }
@@ -188,6 +198,18 @@ impl StripMeter {
 struct BusBuf {
     fmt: ChannelFormat,
     buf: Vec<Vec<f32>>,
+    /// f64 accumulator for graph-version-2 sums (M02); flushed into `buf` before it is read.
+    acc: Vec<Vec<f64>>,
+}
+
+impl BusBuf {
+    fn flush(&mut self, frames: usize) {
+        for (b, a) in self.buf.iter_mut().zip(self.acc.iter()) {
+            for (x, y) in b.iter_mut().zip(a.iter()).take(frames) {
+                *x = *y as f32;
+            }
+        }
+    }
 }
 
 struct PluginSlot {
@@ -221,6 +243,18 @@ struct Strip {
     align_pre: DelayLine,
     out_extra: DelayLine,
     outbuf: Vec<Vec<f32>>,
+    /// Dedicated slot instances (Tape, Summing, Master Tape) and the delay each keeps while
+    /// bypassed so compensation stays valid (SL05).
+    dedicated: [Option<PluginSlot>; 3],
+    slot_delay: [DelayLine; 3],
+    /// Last applied native Stereo Width (for the per-block ramp).
+    width_prev: f32,
+    /// Excluded by solo (gates every contribution, pre-fader sends included).
+    soloed_out: bool,
+    /// Muted by mute/automation/VCA (gates the final output and post-fader sends).
+    mute_only: bool,
+    /// Keeps insert latency while inserts are audition-bypassed.
+    audition_delay: DelayLine,
 }
 
 /// A multichannel delay line (samples), resized only when the delay changes.
@@ -290,6 +324,12 @@ impl Strip {
             align_pre: DelayLine::default(),
             out_extra: DelayLine::default(),
             outbuf: Vec::new(),
+            dedicated: [None, None, None],
+            slot_delay: [DelayLine::default(), DelayLine::default(), DelayLine::default()],
+            width_prev: 1.0,
+            soloed_out: false,
+            mute_only: false,
+            audition_delay: DelayLine::default(),
         }
     }
 }
@@ -327,6 +367,85 @@ pub struct MixEngine {
     adopt: HashMap<(TrackId, usize), PreparedInstance>,
     /// Instances `sync` took out of service, for the host to drop (see [`MixEngine::take_retired`]).
     retired: Vec<Box<dyn Plugin>>,
+    /// Temporary audition bypass (SL05). Set by the realtime host only; offline renders and
+    /// exports always use the saved normal state.
+    pub audition: AuditionBypass,
+    /// Mix profile and graph version of the session last rendered (set in `render`).
+    profile: MixProfileView,
+    graph_version: u32,
+    /// f64 main-mix accumulator (graph version 2).
+    main_acc: Vec<Vec<f64>>,
+}
+
+/// The parts of the session mix profile the router needs (Copy, no allocation per block).
+#[derive(Debug, Clone, Copy, Default)]
+struct MixProfileView {
+    logic: bool,
+    law: soundcraft_dsp::mixmath::ProfileLaw,
+    stereo_pan: bool,
+    compensated: bool,
+    /// Building an Independent send matrix (mono pan / balance from the send position).
+    independent: bool,
+}
+
+impl MixProfileView {
+    fn of(s: &Session) -> MixProfileView {
+        let p = &s.mix_profile;
+        MixProfileView {
+            logic: p.kind == ProfileKind::LogicStyle,
+            law: soundcraft_dsp::mixmath::ProfileLaw::parse(&p.law).unwrap_or_default(),
+            stereo_pan: p.stereo_mode == StereoPanMode::StereoPan,
+            compensated: p.balance_compensated,
+            independent: false,
+        }
+    }
+}
+
+fn s_graph_v2(_t: &Track, version: u32) -> bool {
+    version >= 2
+}
+
+/// Mono/stereo → stereo routing matrix for the SML profile (M02): mono Pan, stereo Balance or
+/// dual stereo Pan with the profile law. Standard-profile sends (v2) use the same functions with
+/// the legacy-equivalent -3 law. A neutral bus (Aux at full-width default positions) is an
+/// exact identity (B01). Matrix is `m[src][dst]`.
+fn profile_matrix(t: &Track, ns: usize, pans: [f32; 2], p: &MixProfileView, legacy: PanLaw) -> Matrix {
+    use soundcraft_dsp::mixmath::{ProfileLaw, balance, mono_pan, stereo_pan};
+    let law = if p.logic {
+        p.law
+    } else {
+        match legacy {
+            PanLaw::Zero => ProfileLaw::Zero,
+            _ => ProfileLaw::Minus3,
+        }
+    };
+    let mut m = [[0.0f32; MAX_CHANNELS]; MAX_CHANNELS];
+    if ns == 1 {
+        let (l, r) = mono_pan(f64::from(pans[0]), law);
+        m[0][0] = l as f32;
+        m[0][1] = r as f32;
+        return m;
+    }
+    let neutral = !p.independent && matches!(t.kind, TrackKind::Aux | TrackKind::Folder | TrackKind::Master) && pans == [-1.0, 1.0];
+    if neutral {
+        m[0][0] = 1.0;
+        m[1][1] = 1.0;
+        return m;
+    }
+    if p.stereo_pan && !p.independent {
+        let sp = stereo_pan(f64::from(pans[0]), f64::from(pans[1]), law);
+        m[0][0] = sp[0][0] as f32;
+        m[0][1] = sp[0][1] as f32;
+        m[1][0] = sp[1][0] as f32;
+        m[1][1] = sp[1][1] as f32;
+    } else {
+        // Balance position: the send's own value, or the centre of the channel's pan pair.
+        let pos = if p.independent { pans[0] } else { (pans[0] + pans[1]) / 2.0 };
+        let (gl, gr) = balance(f64::from(pos), law, p.compensated);
+        m[0][0] = gl as f32;
+        m[1][1] = gr as f32;
+    }
+    m
 }
 
 /// What `sync` needs to fill a slot.
@@ -389,6 +508,10 @@ impl MixEngine {
             external: false,
             adopt: HashMap::new(),
             retired: Vec::new(),
+            audition: AuditionBypass::default(),
+            profile: MixProfileView::default(),
+            graph_version: 1,
+            main_acc: Vec::new(),
         }
     }
 
@@ -424,6 +547,7 @@ impl MixEngine {
         for st in self.strips.values_mut() {
             out.extend(st.plugins.iter_mut().filter_map(Option::take).map(|s| s.plugin));
             out.extend(st.instrument.take().map(|s| s.plugin));
+            out.extend(st.dedicated.iter_mut().filter_map(Option::take).map(|s| s.plugin));
         }
         out.extend(self.adopt.drain().map(|(_, p)| p.plugin));
         self.synced = (usize::MAX, usize::MAX, usize::MAX);
@@ -442,6 +566,11 @@ impl MixEngine {
             }
             if let Some(data) = st.instrument.as_mut().and_then(|s| s.plugin.save_state()) {
                 out.push((*tid, INSTRUMENT_SLOT, data));
+            }
+            for (k, slot) in SlotKind::ALL.iter().zip(st.dedicated.iter_mut()) {
+                if let Some(data) = slot.as_mut().and_then(|s| s.plugin.save_state()) {
+                    out.push((*tid, k.instance_index(), data));
+                }
             }
         }
         out.sort_by_key(|(t, s, _)| (*t, *s));
@@ -487,6 +616,9 @@ impl MixEngine {
         if self.main.len() != main_ch {
             self.main = vec![vec![0.0; mb]; main_ch];
         }
+        if self.main_acc.len() != main_ch {
+            self.main_acc = vec![vec![0.0; mb]; main_ch];
+        }
         let mut cx = SlotCtx { sr: self.sample_rate, mb, external: self.external, adopt: &mut self.adopt, retired: &mut self.retired };
         let gone: Vec<TrackId> = self.strips.keys().filter(|id| s.track(**id).is_none()).copied().collect();
         for id in gone {
@@ -495,6 +627,9 @@ impl MixEngine {
                     cx.retire(p);
                 }
                 cx.retire(st.instrument.take());
+                for d in st.dedicated.iter_mut() {
+                    cx.retire(d.take());
+                }
             }
         }
         for t in &s.tracks {
@@ -529,6 +664,14 @@ impl MixEngine {
                 cx.retire(old);
                 strip.instrument = want.and_then(|i| cx.make(t.id, INSTRUMENT_SLOT, i, ich));
             }
+            for (k, inst) in SlotKind::ALL.iter().zip(strip.dedicated.iter_mut()) {
+                let want = t.mixer.slots.get(*k).and_then(|x| x.provider.as_ref());
+                if inst.as_ref().map(|p| (p.id.as_str(), p.ch)) != want.map(|i| (i.plugin.as_str(), ch)) {
+                    let old = inst.take();
+                    cx.retire(old);
+                    *inst = want.and_then(|i| cx.make(t.id, k.instance_index(), i, ch));
+                }
+            }
         }
         // Instances nobody claimed (the session changed again before they arrived).
         let leftovers: Vec<(TrackId, usize)> = cx.adopt.keys().copied().collect();
@@ -542,10 +685,13 @@ impl MixEngine {
         }
         for b in &s.busses {
             let n = b.format.channels().clamp(1, MAX_CHANNELS);
-            let bus = self.busses.entry(b.id).or_insert_with(|| BusBuf { fmt: b.format, buf: Vec::new() });
+            let bus = self.busses.entry(b.id).or_insert_with(|| BusBuf { fmt: b.format, buf: Vec::new(), acc: Vec::new() });
             bus.fmt = b.format;
             if bus.buf.len() != n {
                 bus.buf = vec![vec![0.0; mb]; n];
+            }
+            if bus.acc.len() != n {
+                bus.acc = vec![vec![0.0; mb]; n];
             }
         }
         self.busses.retain(|id, _| s.bus(*id).is_some());
@@ -577,12 +723,17 @@ impl MixEngine {
         }
         self.last_end = pos.saturating_add(frames as i64);
         self.ensure_synced(s);
+        self.profile = MixProfileView::of(s);
+        self.graph_version = s.mix_profile.graph_version;
         for b in self.busses.values_mut() {
             for c in b.buf.iter_mut() {
                 c.iter_mut().take(frames).for_each(|x| *x = 0.0);
             }
         }
         for c in &mut self.main {
+            c.iter_mut().take(frames).for_each(|x| *x = 0.0);
+        }
+        for c in self.main_acc.iter_mut().chain(self.busses.values_mut().flat_map(|b| b.acc.iter_mut())) {
             c.iter_mut().take(frames).for_each(|x| *x = 0.0);
         }
         let any_solo = s.tracks.iter().any(|t| t.mixer.solo && !t.inactive);
@@ -603,7 +754,7 @@ impl MixEngine {
             }
         }
         let busses = std::mem::take(&mut self.busses);
-        let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording };
+        let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording, audition: self.audition };
         run_strips(&mut work, |(t, st)| process_strip(s, t, st, &busses, &live_in, pos, frames, any_solo));
         self.busses = busses;
         // Delay compensation: align every strip to the slowest; direct-to-main outputs also wait
@@ -631,12 +782,19 @@ impl MixEngine {
         }
         let is_aux = |t: &Track| matches!(t.kind, TrackKind::Aux | TrackKind::Folder);
         // Phase 2: auxes in dependency order (they read busses).
+        let v2 = self.graph_version >= 2;
         for t in order.iter().filter_map(|&i| s.tracks.get(i)).filter(live).filter(|t| is_aux(t)) {
+            if v2
+                && let Route::Bus(b) = &t.mixer.input
+                && let Some(bus) = self.busses.get_mut(b)
+            {
+                bus.flush(frames);
+            }
             let Some(mut st) = self.strips.remove(&t.id) else { continue };
             if st.scratch.len() < self.max_block {
                 st.scratch.resize(self.max_block, 0.0);
             }
-            let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording };
+            let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording, audition: self.audition };
             process_strip(s, t, &mut st, &self.busses, &live_in, pos, frames, any_solo);
             let ch = st.buf.len();
             st.align.set(if pdc { lmax_a.saturating_sub(st.latency) } else { 0 }, ch);
@@ -646,6 +804,13 @@ impl MixEngine {
             self.strips.insert(t.id, st);
         }
         self.order = order;
+        if v2 {
+            for (m, a) in self.main.iter_mut().zip(self.main_acc.iter()) {
+                for (x, y) in m.iter_mut().zip(a.iter()).take(frames) {
+                    *x = *y as f32;
+                }
+            }
+        }
         // Master faders process the main mix.
         for t in s.tracks.iter().filter(|t| t.kind == TrackKind::Master && !t.inactive) {
             if let Some(strip) = self.strips.get_mut(&t.id) {
@@ -654,10 +819,22 @@ impl MixEngine {
                         d.copy_from_slice(sr);
                     }
                 }
+                let audition = self.audition;
+                // SL02 Main: summed mix -> Summing slot -> Master Tape (Pre) -> inserts -> fader
+                // -> Master Tape (Post). Main is a stereo identity (no extra pan stage).
+                {
+                    let [_, sum_i, mt_i] = &mut strip.dedicated;
+                    let [_, sum_d, mt_d] = &mut strip.slot_delay;
+                    run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, audition.summing);
+                    if t.mixer.slots.master_tape_position == TapePosition::Pre {
+                        run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape);
+                    }
+                }
                 for (i, ins) in t.mixer.inserts.iter().enumerate() {
                     if let (Some(ins), Some(Some(slot))) = (ins, strip.plugins.get_mut(i))
                         && ins.active
                         && !ins.bypass
+                        && !audition.inserts
                     {
                         apply_params(slot, ins, t, i, pos);
                         slot.plugin.process(&mut strip.buf, frames);
@@ -665,12 +842,23 @@ impl MixEngine {
                 }
                 let v0 = volume_db_at(t, pos);
                 let v1 = volume_db_at(t, pos + frames as i64);
+                for c in strip.buf.iter_mut() {
+                    for i in 0..frames {
+                        if let Some(x) = c.get_mut(i) {
+                            *x *= lerp_gain(v0, v1, i, frames);
+                        }
+                    }
+                }
+                if t.mixer.slots.master_tape_position == TapePosition::Post {
+                    let [_, _, mt_i] = &mut strip.dedicated;
+                    let [_, _, mt_d] = &mut strip.slot_delay;
+                    run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape);
+                }
                 for (ch, src) in strip.buf.iter().enumerate().take(self.main.len()) {
                     if let Some(m) = self.main.get_mut(ch) {
                         for i in 0..frames {
-                            let g = lerp_gain(v0, v1, i, frames);
                             if let (Some(d), Some(x)) = (m.get_mut(i), src.get(i)) {
-                                *d = x * g;
+                                *d = *x;
                             }
                         }
                     }
@@ -703,9 +891,14 @@ impl MixEngine {
         self.meters.entry(t.id).or_default().measure(&strip.buf, frames, strip.gr);
         let src_fmt = strip_format(t, strip.buf.len());
         let law = self.pan_law;
+        let v2 = s_graph_v2(t, self.graph_version);
+        let pans = [pan_at(t, 0, pos), pan_at(t, 1, pos)];
         for (i, snd) in t.mixer.sends.iter().enumerate() {
             let Some(snd) = snd else { continue };
-            if snd.mute || strip.muted {
+            // v2 policy: solo exclusion gates every send; channel mute gates post-fader sends
+            // only (pre-fader sends follow their own send mute). Legacy: mute gates all.
+            let gated = if v2 { strip.soloed_out || (!snd.pre_fader && strip.muted) } else { strip.muted };
+            if snd.mute || gated {
                 continue;
             }
             let lvl = send_level(t, i, snd.level_db, pos);
@@ -716,13 +909,40 @@ impl MixEngine {
             if gain <= 0.0 {
                 continue;
             }
-            // Mono sends use the send's own pan; stereo sends go straight to L/R.
-            let stereo = if src.len() == 1 { [snd.pan, 0.0] } else { [-1.0, 1.0] };
-            let surround = snd.surround.as_ref().or(if snd.follow_main_pan { t.mixer.surround.as_ref() } else { None });
-            let m = build_matrix(src_fmt, src.len(), dst.fmt, dst.buf.len(), &PanSpec { stereo, surround }, law);
-            apply_matrix(src, frames, &mut dst.buf, &m, gain);
+            let m = if v2 && src.len() <= 2 && dst.buf.len() == 2 && snd.surround.is_none() {
+                // SL06: exactly one panner per route. Follow = the channel's own panner
+                // coefficients; Independent = the send's saved position (mono pan / balance).
+                if snd.follow_main_pan {
+                    // Same coefficients as the channel's main-output route.
+                    if self.profile.logic {
+                        profile_matrix(t, src.len(), pans, &self.profile, law)
+                    } else {
+                        build_matrix(src_fmt, src.len(), dst.fmt, dst.buf.len(), &PanSpec { stereo: pans, surround: t.mixer.surround.as_ref() }, law)
+                    }
+                } else {
+                    profile_matrix(t, src.len(), [snd.pan, snd.pan], &MixProfileView { independent: true, ..self.profile }, law)
+                }
+            } else {
+                // Mono sends use the send's own pan; stereo sends go straight to L/R.
+                let stereo = if src.len() == 1 { [snd.pan, 0.0] } else { [-1.0, 1.0] };
+                let surround = snd.surround.as_ref().or(if snd.follow_main_pan { t.mixer.surround.as_ref() } else { None });
+                build_matrix(src_fmt, src.len(), dst.fmt, dst.buf.len(), &PanSpec { stereo, surround }, law)
+            };
+            if v2 {
+                apply_matrix_acc(src, frames, &mut dst.acc, &m, gain);
+            } else {
+                apply_matrix(src, frames, &mut dst.buf, &m, gain);
+            }
         }
         let spec = PanSpec { stereo: [pan_at(t, 0, pos), pan_at(t, 1, pos)], surround: t.mixer.surround.as_ref() };
+        let profile = self.profile;
+        let route_matrix = |src_n: usize, dst_fmt: ChannelFormat, dst_n: usize| -> Matrix {
+            if profile.logic && src_n <= 2 && dst_n == 2 && t.mixer.surround.is_none() {
+                profile_matrix(t, src_n, pans, &profile, law)
+            } else {
+                build_matrix(src_fmt, src_n, dst_fmt, dst_n, &spec, law)
+            }
+        };
         match &t.mixer.output {
             Route::Main if strip.out_extra.len > 0 => {
                 if strip.outbuf.len() != strip.buf.len() {
@@ -733,17 +953,29 @@ impl MixEngine {
                     d.extend_from_slice(src.get(..frames).unwrap_or(&[]));
                 }
                 strip.out_extra.process(&mut strip.outbuf, frames);
-                let m = build_matrix(src_fmt, strip.outbuf.len(), self.main_fmt, self.main.len(), &spec, law);
-                apply_matrix(&strip.outbuf, frames, &mut self.main, &m, 1.0);
+                let m = route_matrix(strip.outbuf.len(), self.main_fmt, self.main.len());
+                if v2 {
+                    apply_matrix_acc(&strip.outbuf, frames, &mut self.main_acc, &m, 1.0);
+                } else {
+                    apply_matrix(&strip.outbuf, frames, &mut self.main, &m, 1.0);
+                }
             }
             Route::Main => {
-                let m = build_matrix(src_fmt, strip.buf.len(), self.main_fmt, self.main.len(), &spec, law);
-                apply_matrix(&strip.buf, frames, &mut self.main, &m, 1.0);
+                let m = route_matrix(strip.buf.len(), self.main_fmt, self.main.len());
+                if v2 {
+                    apply_matrix_acc(&strip.buf, frames, &mut self.main_acc, &m, 1.0);
+                } else {
+                    apply_matrix(&strip.buf, frames, &mut self.main, &m, 1.0);
+                }
             }
             Route::Bus(b) => {
                 if let Some(dst) = self.busses.get_mut(b) {
-                    let m = build_matrix(src_fmt, strip.buf.len(), dst.fmt, dst.buf.len(), &spec, law);
-                    apply_matrix(&strip.buf, frames, &mut dst.buf, &m, 1.0);
+                    let m = route_matrix(strip.buf.len(), dst.fmt, dst.buf.len());
+                    if v2 {
+                        apply_matrix_acc(&strip.buf, frames, &mut dst.acc, &m, 1.0);
+                    } else {
+                        apply_matrix(&strip.buf, frames, &mut dst.buf, &m, 1.0);
+                    }
                 }
             }
             _ => {}
@@ -758,6 +990,8 @@ struct LiveInput<'a> {
     input: &'a [Vec<f32>],
     monitor_only: bool,
     recording: bool,
+    /// Temporary audition bypass (realtime only; offline renders/exports pass the default).
+    audition: AuditionBypass,
 }
 
 fn process_strip(
@@ -774,7 +1008,11 @@ fn process_strip(
         c.iter_mut().take(frames).for_each(|x| *x = 0.0);
     }
     match t.kind {
-        TrackKind::Audio if !live.input.is_empty() && (t.mixer.input_monitor || (t.mixer.record_arm && (live.monitor_only || live.recording))) => {
+        TrackKind::Audio
+            if !live.input.is_empty()
+                && !hardware_monitoring(s)
+                && (t.mixer.input_monitor || (t.mixer.record_arm && (live.monitor_only || live.recording))) =>
+        {
             // Input monitoring: the track hears its hardware input instead of its clips.
             let first = match &t.mixer.input {
                 Route::Hardware(h) => {
@@ -863,17 +1101,39 @@ fn process_strip(
         }
         _ => {}
     }
-    let trim = db_to_gain(t.mixer.trim_db) * if t.mixer.phase_invert { -1.0 } else { 1.0 };
-    if (trim - 1.0).abs() > f32::EPSILON {
-        for c in strip.buf.iter_mut() {
-            c.iter_mut().take(frames).for_each(|x| *x *= trim);
+    // SL02 bus/Main: incoming sum -> Summing provider (+ slot trim) -> utility trim/polarity.
+    let is_bus = matches!(t.kind, TrackKind::Aux | TrackKind::Folder);
+    let mut latency = 0usize;
+    {
+        let [tape_i, sum_i, mt_i] = &mut strip.dedicated;
+        let [tape_d, sum_d, mt_d] = &mut strip.slot_delay;
+        if is_bus {
+            latency += run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, live.audition.summing);
+        }
+        let trim = db_to_gain(t.mixer.trim_db) * if t.mixer.phase_invert { -1.0 } else { 1.0 };
+        if (trim - 1.0).abs() > f32::EPSILON {
+            for c in strip.buf.iter_mut() {
+                c.iter_mut().take(frames).for_each(|x| *x *= trim);
+            }
+        }
+        // Track Tape (before user inserts) / bus Master Tape when Pre.
+        if is_bus {
+            if t.mixer.slots.master_tape_position == TapePosition::Pre {
+                latency += run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, live.audition.tape);
+            }
+        } else {
+            latency += run_dedicated(t.mixer.slots.tape.as_ref(), tape_i, tape_d, &mut strip.buf, frames, live.audition.tape);
         }
     }
     let mut gr = 0.0f32;
-    let mut latency = 0usize;
     for (i, ins) in t.mixer.inserts.iter().enumerate() {
         let (Some(ins), Some(Some(slot))) = (ins, strip.plugins.get_mut(i)) else { continue };
         if !ins.active || ins.bypass {
+            continue;
+        }
+        if live.audition.inserts {
+            // Audition bypass keeps compensation: the insert's latency stays as a plain delay.
+            latency = latency.saturating_add(slot.plugin.latency());
             continue;
         }
         apply_params(slot, ins, t, i, pos);
@@ -883,10 +1143,38 @@ fn process_strip(
             gr = slot.plugin.gain_reduction_db();
         }
     }
+    if live.audition.inserts {
+        let ins_lat: usize = t
+            .mixer
+            .inserts
+            .iter()
+            .zip(strip.plugins.iter())
+            .filter_map(|(i, p)| i.as_ref().filter(|i| i.active && !i.bypass).and(p.as_ref()))
+            .map(|p| p.plugin.latency())
+            .sum();
+        strip.audition_delay.set(ins_lat, strip.buf.len());
+        strip.audition_delay.process(&mut strip.buf, frames);
+    }
+    // Native Stereo Width (VM03): after user Pre inserts, before the pre-fader tap; exact
+    // pass-through at a settled 100 %; ramps over the block when it changes.
+    if strip.buf.len() == 2 {
+        let w = if t.mixer.width.is_finite() { t.mixer.width.clamp(0.0, 2.0) } else { 1.0 };
+        if let [l, r] = strip.buf.as_mut_slice()
+            && let (Some(l), Some(r)) = (l.get_mut(..frames), r.get_mut(..frames))
+        {
+            soundcraft_dsp::mixmath::apply_width_ramp(l, r, strip.width_prev, w);
+        }
+        strip.width_prev = w;
+    }
     strip.gr = gr;
-    strip.latency = latency;
     let auto_mute = t.mixer.automation_mode.reads() && t.lane(&AutoParam::Mute).is_some_and(|l| l.value_at(pos, 0.0) >= 0.5);
-    let soloed_out = any_solo && !t.mixer.solo && !t.mixer.solo_safe && !receives_solo(s, t);
+    let soloed_out = if s.mix_profile.graph_version >= 2 {
+        any_solo && !solo_admits(s, t)
+    } else {
+        any_solo && !t.mixer.solo && !t.mixer.solo_safe && !receives_solo(s, t)
+    };
+    strip.soloed_out = soloed_out;
+    strip.mute_only = t.mixer.mute || auto_mute;
     strip.muted = t.mixer.mute || auto_mute || soloed_out;
     if t.mixer.sends.iter().flatten().any(|x| x.pre_fader) {
         strip.pre.resize_with(strip.buf.len(), Vec::new);
@@ -917,6 +1205,9 @@ fn process_strip(
             strip.muted = true;
         }
     }
+    if strip.muted {
+        strip.mute_only = strip.mute_only || !strip.soloed_out;
+    }
     let (g0, g1) = if strip.muted { (-144.0, -144.0) } else { (v0.min(12.0), v1.min(12.0)) };
     for c in strip.buf.iter_mut() {
         for i in 0..frames {
@@ -925,6 +1216,83 @@ fn process_strip(
             }
         }
     }
+    // Bus Master Tape when Post: after the fader (and user Post inserts), before the post tap.
+    if is_bus && t.mixer.slots.master_tape_position == TapePosition::Post {
+        let [_, _, mt_i] = &mut strip.dedicated;
+        let [_, _, mt_d] = &mut strip.slot_delay;
+        latency += run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, live.audition.tape);
+    }
+    strip.latency = latency;
+}
+
+/// CL03 Hardware Monitor mode: the interface's direct monitoring is used, so software input
+/// monitoring is off for every track (playback continues; recording stays dry).
+fn hardware_monitoring(s: &Session) -> bool {
+    s.edit.value("monitor.mode", 1.0) == 2.0
+}
+
+/// Runs one dedicated slot in place: provider, then its post-provider trim. A bypassed (or
+/// audition-bypassed) slot skips provider *and* trim together but keeps the provider's latency
+/// as a plain delay so path compensation stays valid. An empty unity slot touches nothing.
+/// Returns the latency the slot contributes. Provider settings come from its own state/editor.
+fn run_dedicated(
+    cfg: Option<&DedicatedSlot>,
+    inst: &mut Option<PluginSlot>,
+    delay: &mut DelayLine,
+    buf: &mut [Vec<f32>],
+    frames: usize,
+    audition_off: bool,
+) -> usize {
+    let Some(cfg) = cfg else { return 0 };
+    let lat = inst.as_ref().map_or(0, |p| p.plugin.latency());
+    if cfg.bypass || audition_off {
+        delay.set(lat, buf.len());
+        delay.process(buf, frames);
+        return lat;
+    }
+    if let Some(p) = inst.as_mut() {
+        p.plugin.process(buf, frames);
+    }
+    if cfg.trim_db != 0.0 {
+        let g = db_to_gain(cfg.trim_db);
+        for c in buf.iter_mut() {
+            c.iter_mut().take(frames).for_each(|x| *x *= g);
+        }
+    }
+    lat
+}
+
+/// True when `from` feeds `to` through outputs/sends and bus inputs (bounded depth; no
+/// allocation, safe on the audio thread).
+fn feeds(s: &Session, from: &Track, to: &Track, depth: u8) -> bool {
+    if depth == 0 {
+        return false;
+    }
+    let reaches = |b: BusId| -> bool {
+        if to.mixer.input == Route::Bus(b) && matches!(to.kind, TrackKind::Aux | TrackKind::Folder) {
+            return true;
+        }
+        s.tracks
+            .iter()
+            .filter(|a| matches!(a.kind, TrackKind::Aux | TrackKind::Folder) && a.mixer.input == Route::Bus(b) && a.id != from.id)
+            .any(|a| feeds(s, a, to, depth - 1))
+    };
+    if let Route::Bus(b) = from.mixer.output
+        && reaches(b)
+    {
+        return true;
+    }
+    from.mixer.sends.iter().flatten().any(|x| matches!(x.target, Route::Bus(b) if reaches(b)))
+}
+
+/// Graph-version-2 solo policy (BUS_WORKFLOW_SPEC): a strip stays eligible when it is soloed,
+/// solo-safe, downstream of a soloed strip (its buses/returns, nested), or upstream of a soloed
+/// bus (that bus's contributors). Unrelated sources sharing a return are not admitted.
+fn solo_admits(s: &Session, t: &Track) -> bool {
+    if t.mixer.solo || t.mixer.solo_safe {
+        return true;
+    }
+    s.tracks.iter().filter(|o| o.mixer.solo && !o.inactive && o.id != t.id).any(|o| feeds(s, o, t, 8) || feeds(s, t, o, 8))
 }
 
 /// Clip-effect parameters of a clip, or None when it has none or they are bypassed.
@@ -1022,6 +1390,9 @@ fn structure_fingerprint(s: &Session) -> usize {
             snd.target.hash(&mut h);
         }
         t.instrument.as_ref().map(|x| x.plugin.as_str()).hash(&mut h);
+        for k in SlotKind::ALL {
+            t.mixer.slots.get(k).and_then(|x| x.provider.as_ref()).map(|x| x.plugin.as_str()).hash(&mut h);
+        }
     }
     for b in &s.busses {
         b.id.hash(&mut h);
@@ -1616,6 +1987,35 @@ fn apply_matrix(src: &[Vec<f32>], frames: usize, dst: &mut [Vec<f32>], m: &Matri
             *o += acc;
         }
     }
+}
+
+/// [`apply_matrix`] into f64 accumulators (graph version 2 bus/Main sums, M02): each
+/// contribution is computed in f64 and added without f32 rounding between contributors.
+fn apply_matrix_acc(src: &[Vec<f32>], frames: usize, dst: &mut [Vec<f64>], m: &Matrix, gain: f32) {
+    let ns = src.len().min(MAX_CHANNELS);
+    for (d, out) in dst.iter_mut().enumerate().take(MAX_CHANNELS) {
+        for (s, row) in m.iter().enumerate().take(ns) {
+            let g = f64::from(row.get(d).copied().unwrap_or(0.0)) * f64::from(gain);
+            if g == 0.0 {
+                continue;
+            }
+            let Some(c) = src.get(s) else { continue };
+            for (o, x) in out.iter_mut().zip(c.iter()).take(frames) {
+                *o += f64::from(*x) * g;
+            }
+        }
+    }
+}
+
+/// Per-strip processing latency (inserts + dedicated slots, plugin-reported) after one silent
+/// block of the session, for the CL03 latency ledger. Creates plugins: call off the audio thread.
+pub fn strip_latencies(s: &Session) -> Vec<(TrackId, usize)> {
+    let mut eng = MixEngine::new(s.sample_rate.as_f64() as f32, 256);
+    let mut out = vec![vec![0.0f32; 256]; main_channels(s)];
+    eng.render(s, 0, 256, &mut out);
+    let mut v: Vec<(TrackId, usize)> = eng.strips.iter().map(|(t, st)| (*t, st.latency)).collect();
+    v.sort_by_key(|(t, _)| *t);
+    v
 }
 
 /// Ceiling on one offline render (samples summed over channels): 2^29 f32 = 2 GiB, about 93
@@ -2294,5 +2694,381 @@ mod tests {
         }
         let e_ls = out[4][100].powi(2) + out[6][100].powi(2);
         assert!((e_ls - x(4).powi(2)).abs() < 1e-5, "Ls energy is preserved");
+    }
+}
+
+/// A3 graph fixtures (MIXER_SLOT_SPEC SL-T, MIXER_MODES_SPEC M-T, CLOCK_LATENCY_SPEC CL-T4,
+/// VISUAL_MIXER_SPEC VM-T2/T3) through the real render path. Test-only providers prove plumbing
+/// and order; they are not sound models.
+#[cfg(test)]
+mod sml_graph_tests {
+    use super::*;
+    use soundcraft_audio_io::AudioBuffer;
+    use soundcraft_model::{DedicatedSlot, Insert, MixProfile, ProfileKind, SendSlot, SourceAudio, SourceId, StereoPanMode};
+    use std::sync::Arc;
+
+    const N: usize = 4096;
+
+    fn src(s: &mut Session, id: u64, chans: Vec<Vec<f32>>) -> SourceId {
+        let sid = SourceId(id);
+        s.pool.insert(sid, Arc::new(SourceAudio::new(AudioBuffer { sample_rate: 48_000, channels: chans })));
+        sid
+    }
+
+    fn track(s: &mut Session, fmt: ChannelFormat, chans: Vec<Vec<f32>>, sid: u64) -> TrackId {
+        let t = s.add_track(TrackKind::Audio, fmt, None);
+        let id = src(s, sid, chans);
+        let cid = s.new_clip_id();
+        let len = N as i64;
+        s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(cid, "x", id, 0, 0, len));
+        t
+    }
+
+    fn ramp(k: f32) -> Vec<f32> {
+        (0..N).map(|i| ((i as f32 * 0.0123 * k).sin()) * 0.25).collect()
+    }
+
+    fn render(s: &Session) -> Vec<Vec<f32>> {
+        render_range(s, Range::new(0, N as i64), 256)
+    }
+
+    fn slot(id: u64, provider: Option<&str>, trim_db: f32) -> Option<DedicatedSlot> {
+        Some(DedicatedSlot { id, provider: provider.map(Insert::new), bypass: false, trim_db })
+    }
+
+    fn bus(s: &mut Session, name: &str) -> (TrackId, BusId) {
+        let b = s.add_bus(name, ChannelFormat::Stereo);
+        let a = s.add_track(TrackKind::Aux, ChannelFormat::Stereo, Some(name));
+        s.track_mut(a).unwrap().mixer.input = Route::Bus(b);
+        (a, b)
+    }
+
+    /// SL-T1 / VM-T2: empty/Clean slots at unity, 100 % width and mixer view state are
+    /// sample-identical to the same graph without them.
+    #[test]
+    fn sml_graph_slt1_empty_slots_and_views_are_identity() {
+        let mut s = Session::default();
+        let a = track(&mut s, ChannelFormat::Stereo, vec![ramp(1.0), ramp(1.7)], 1);
+        let m = track(&mut s, ChannelFormat::Mono, vec![ramp(0.6)], 2);
+        let (bt, b) = bus(&mut s, "Vox");
+        s.track_mut(m).unwrap().mixer.output = Route::Bus(b);
+        s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+        let base = render(&s);
+        let mut t = s.clone();
+        t.track_mut(a).unwrap().mixer.slots.tape = slot(1, None, 0.0);
+        t.track_mut(bt).unwrap().mixer.slots.summing = slot(2, None, 0.0);
+        t.track_mut(bt).unwrap().mixer.slots.master_tape = slot(3, None, 0.0);
+        t.track_mut(a).unwrap().mixer.width = 1.0;
+        t.edit.values.insert("mixer.view".into(), 2.0);
+        t.edit.values.insert("visual.zoom".into(), 3.0);
+        assert_eq!(render(&t), base, "bit-identical");
+        // A loaded identity provider is invoked and still exact.
+        t.track_mut(a).unwrap().mixer.slots.tape = slot(1, Some("test:identity"), 0.0);
+        assert_eq!(render(&t), base);
+    }
+
+    /// SL-T2: noncommuting affine/gain fixtures prove Tape-before-inserts and bus Pre/Post
+    /// Master Tape order; moving Pre/Post keeps the slot id/state.
+    #[test]
+    fn sml_graph_slt2_slot_order_is_sl02() {
+        let mut s = Session::default();
+        let dc: Vec<f32> = vec![0.25; N];
+        let t = track(&mut s, ChannelFormat::Mono, vec![dc.clone()], 1);
+        s.track_mut(t).unwrap().mixer.pan = vec![-1.0];
+        s.track_mut(t).unwrap().mixer.slots.tape = slot(9, Some("test:affine:2:0.1"), 0.0);
+        s.track_mut(t).unwrap().mixer.inserts[0] = Some(Insert::new("test:gain:-6"));
+        let g = 10f32.powf(-6.0 / 20.0);
+        let out = render(&s);
+        let want = (2.0 * 0.25 + 0.1) * g; // tape (affine) first, then insert gain
+        assert!((out[0][N / 2] - want).abs() < 1e-6, "{} vs {want} (reversed order would be {})", out[0][N / 2], 2.0 * 0.25 * g + 0.1);
+        // Bus Master Tape: Post (default) applies after the fader; Pre before the inserts.
+        let mut s = Session::default();
+        let t = track(&mut s, ChannelFormat::Mono, vec![dc], 2);
+        let (bt, b) = bus(&mut s, "Bus");
+        s.track_mut(t).unwrap().mixer.output = Route::Bus(b);
+        s.track_mut(t).unwrap().mixer.pan = vec![-1.0];
+        {
+            let tr = s.track_mut(bt).unwrap();
+            tr.mixer.slots.master_tape = slot(5, Some("test:affine:2:0.1"), 0.0);
+            tr.mixer.volume_db = -6.0;
+        }
+        let post = render(&s)[0][N / 2];
+        assert!((post - ((0.25 * g) * 2.0 + 0.1)).abs() < 1e-6, "post: fader then tape, got {post}");
+        s.track_mut(bt).unwrap().mixer.slots.master_tape_position = TapePosition::Pre;
+        let pre = render(&s)[0][N / 2];
+        assert!((pre - ((0.25 * 2.0 + 0.1) * g)).abs() < 1e-6, "pre: tape then fader, got {pre}");
+        assert_eq!(s.track(bt).unwrap().mixer.slots.master_tape.as_ref().unwrap().id, 5, "same slot id after move");
+    }
+
+    /// SL-T2/SL-T7: hard-left main pan with an Independent hard-right send and a one-sided stereo
+    /// source: the send applies exactly one pan; Follow copies the channel coefficients.
+    #[test]
+    fn sml_graph_slt7_independent_and_follow_send_pan() {
+        let mut s = Session::default();
+        let t = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        let (_, b) = bus(&mut s, "FX");
+        let dead = s.add_bus("dead", ChannelFormat::Stereo);
+        {
+            let tr = s.track_mut(t).unwrap();
+            tr.mixer.pan = vec![-1.0];
+            tr.mixer.output = Route::Bus(dead); // listen to the send only
+            let mut snd = SendSlot::new(Route::Bus(b));
+            snd.level_db = 0.0;
+            snd.follow_main_pan = false;
+            snd.pan = 1.0;
+            tr.mixer.sends[0] = Some(snd);
+        }
+        let out = render(&s);
+        assert_eq!(out[0][100], 0.0, "independent hard-right send: nothing on the left");
+        assert!((out[1][100] - 0.5).abs() < 1e-6, "exactly one pan stage (no double -3 dB): {}", out[1][100]);
+        // Follow: same coefficients as the channel (hard left).
+        s.track_mut(t).unwrap().mixer.sends[0].as_mut().unwrap().follow_main_pan = true;
+        let out = render(&s);
+        assert!((out[0][100] - 0.5).abs() < 1e-6 && out[1][100] == 0.0, "{:?}", (out[0][100], out[1][100]));
+        // Independent centre within 0.01 dB of the -3 coefficient.
+        let tr = s.track_mut(t).unwrap();
+        tr.mixer.sends[0].as_mut().unwrap().follow_main_pan = false;
+        tr.mixer.sends[0].as_mut().unwrap().pan = 0.0;
+        let out = render(&s);
+        let db = 20.0 * (out[0][100] / 0.5).log10();
+        assert!((db + 3.0103).abs() < 0.01, "{db}");
+        // One-sided stereo source keeps its side through a centred stereo send.
+        let mut s2 = Session::default();
+        let st = track(&mut s2, ChannelFormat::Stereo, vec![vec![0.5; N], vec![0.0; N]], 2);
+        let (_, b2) = bus(&mut s2, "FX");
+        let dead2 = s2.add_bus("dead", ChannelFormat::Stereo);
+        let tr = s2.track_mut(st).unwrap();
+        tr.mixer.output = Route::Bus(dead2);
+        let mut snd = SendSlot::new(Route::Bus(b2));
+        snd.level_db = 0.0;
+        tr.mixer.sends[0] = Some(snd);
+        let out = render(&s2);
+        assert!((out[0][100] - 0.5).abs() < 1e-6 && out[1][100] == 0.0, "no crossfeed: {:?}", (out[0][100], out[1][100]));
+    }
+
+    /// SL-T3 / CL-T4 / M-T5: known-delay providers on track Tape, bus Summing and inserts through
+    /// parallel/nested routes stay aligned within 1 sample; bypass keeps compensation; an empty
+    /// identity slot adds zero delay.
+    #[test]
+    fn sml_graph_clt4_compensation_through_slots() {
+        for d in [0usize, 1, 63, 128, 1024] {
+            let mut s = Session::default();
+            let mut imp = vec![0.0f32; N];
+            imp[500] = 1.0;
+            let a = track(&mut s, ChannelFormat::Mono, vec![imp.clone()], 1);
+            let bt_src = track(&mut s, ChannelFormat::Mono, vec![imp], 2);
+            s.track_mut(a).unwrap().mixer.pan = vec![-1.0];
+            s.track_mut(bt_src).unwrap().mixer.pan = vec![1.0];
+            if d > 0 {
+                s.track_mut(a).unwrap().mixer.slots.tape = slot(1, Some(&format!("test:delay:{d}")), 0.0);
+            }
+            let argmax = |c: &[f32]| c.iter().enumerate().max_by(|x, y| x.1.abs().total_cmp(&y.1.abs())).map(|(i, _)| i).unwrap();
+            let len = (N + 2048) as i64;
+            let out = render_range(&s, Range::new(0, len), 256);
+            assert!((argmax(&out[0]) as i64 - argmax(&out[1]) as i64).abs() <= 1, "delay {d}: L {} R {}", argmax(&out[0]), argmax(&out[1]));
+            if d > 0 {
+                // Bypass keeps the compensation delay.
+                s.track_mut(a).unwrap().mixer.slots.tape.as_mut().unwrap().bypass = true;
+                let out = render_range(&s, Range::new(0, len), 256);
+                assert_eq!(argmax(&out[0]), argmax(&out[1]), "bypassed delay {d}");
+            }
+        }
+        // Nested: delay on a bus Summing slot vs a direct track.
+        let mut s = Session::default();
+        let mut imp = vec![0.0f32; N];
+        imp[300] = 1.0;
+        let a = track(&mut s, ChannelFormat::Mono, vec![imp.clone()], 1);
+        let c = track(&mut s, ChannelFormat::Mono, vec![imp], 2);
+        let (bt, b) = bus(&mut s, "Vox");
+        s.track_mut(a).unwrap().mixer.output = Route::Bus(b);
+        s.track_mut(a).unwrap().mixer.pan = vec![-1.0];
+        s.track_mut(c).unwrap().mixer.pan = vec![1.0];
+        s.track_mut(bt).unwrap().mixer.slots.summing = slot(2, Some("test:delay:128"), 0.0);
+        let out = render_range(&s, Range::new(0, (N + 2048) as i64), 256);
+        let argmax = |c: &[f32]| c.iter().enumerate().max_by(|x, y| x.1.abs().total_cmp(&y.1.abs())).map(|(i, _)| i).unwrap();
+        // Aux latency comes from the previous block (documented); after the first block it is stable.
+        assert!(
+            (argmax(&out[0]) as i64 - argmax(&out[1]) as i64).abs() <= 1,
+            "bus summing delay compensated: {} vs {}",
+            argmax(&out[0]),
+            argmax(&out[1])
+        );
+    }
+
+    /// M-T1: 64 inputs summed on a bus (graph v2, f64 accumulation) vs an f64 reference: peak
+    /// error ≤ 1e-6 for normalised output ≤ 1, no intermediate clipping above 0 dBFS.
+    #[test]
+    fn sml_graph_mt1_f64_bus_sum() {
+        let mut s = Session::default();
+        assert_eq!(s.mix_profile.graph_version, 2);
+        let (_, b) = bus(&mut s, "Sum");
+        let mut reference = vec![0.0f64; N];
+        let mut seed = 7u32;
+        for k in 0..64u64 {
+            let data: Vec<f32> = (0..N)
+                .map(|_| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 17;
+                    seed ^= seed << 5;
+                    (seed as f32 / u32::MAX as f32 - 0.5) / 32.0
+                })
+                .collect();
+            for (r, x) in reference.iter_mut().zip(&data) {
+                *r += f64::from(*x);
+            }
+            let t = track(&mut s, ChannelFormat::Mono, vec![data], 10 + k);
+            s.track_mut(t).unwrap().mixer.pan = vec![-1.0];
+            s.track_mut(t).unwrap().mixer.output = Route::Bus(b);
+        }
+        let out = render(&s);
+        let err = out[0].iter().zip(&reference).map(|(a, r)| (f64::from(*a) - r).abs()).fold(0.0, f64::max);
+        assert!(err <= 1e-6, "peak error {err:e}");
+        // Above 0 dBFS internally: a +12 dB bus sum is not clipped before the fader.
+        let mut s = Session::default();
+        let (bt, b) = bus(&mut s, "Hot");
+        for k in 0..4 {
+            let t = track(&mut s, ChannelFormat::Mono, vec![vec![0.9; N]], 100 + k);
+            s.track_mut(t).unwrap().mixer.pan = vec![-1.0];
+            s.track_mut(t).unwrap().mixer.output = Route::Bus(b);
+        }
+        s.track_mut(bt).unwrap().mixer.volume_db = -12.0;
+        let out = render(&s);
+        let want = 3.6 * 10f32.powf(-12.0 / 20.0);
+        assert!((out[0][N / 2] - want).abs() < 1e-5, "{} vs {want}", out[0][N / 2]);
+    }
+
+    /// M-T2: Logic-style profile pans with the published SML coefficients (0.01 dB), stereo
+    /// Balance has no crossfeed, dual stereo Pan routes each side, neutral buses are identity.
+    #[test]
+    fn sml_graph_mt2_logic_profile_pan() {
+        let mut s = Session::default();
+        s.mix_profile = MixProfile { kind: ProfileKind::LogicStyle, ..s.mix_profile.clone() };
+        let t = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        for (p, law) in [(0.0f32, "-3db"), (0.5, "-3db"), (0.0, "0db"), (-0.5, "0db"), (0.0, "-3db_compensated"), (1.0, "-3db")] {
+            s.mix_profile.law = law.into();
+            s.track_mut(t).unwrap().mixer.pan = vec![p];
+            let out = render(&s);
+            let (l, r) = soundcraft_dsp::mixmath::mono_pan(f64::from(p), soundcraft_dsp::mixmath::ProfileLaw::parse(law).unwrap());
+            for (got, want) in [(out[0][100], l), (out[1][100], r)] {
+                if want == 0.0 {
+                    assert_eq!(got, 0.0, "exact zero at {p} {law}");
+                } else {
+                    let db = 20.0 * (f64::from(got) / (0.5 * want)).log10();
+                    assert!(db.abs() < 0.01, "{p} {law}: {db} dB");
+                }
+            }
+        }
+        // Stereo balance: one-sided input, no crossfeed.
+        let mut s2 = Session::default();
+        s2.mix_profile = MixProfile { kind: ProfileKind::LogicStyle, ..s2.mix_profile.clone() };
+        let st = track(&mut s2, ChannelFormat::Stereo, vec![vec![0.5; N], vec![0.0; N]], 2);
+        s2.track_mut(st).unwrap().mixer.pan = vec![-0.5, 0.5];
+        let out = render(&s2);
+        assert_eq!((out[0][100], out[1][100]), (0.5, 0.0), "centred balance passes L, no crossfeed");
+        s2.mix_profile.stereo_mode = StereoPanMode::StereoPan;
+        s2.track_mut(st).unwrap().mixer.pan = vec![1.0, 1.0];
+        let out = render(&s2);
+        assert_eq!(out[0][100], 0.0, "stereo pan routes the left input hard right");
+        assert!((out[1][100] - 0.5).abs() < 1e-6);
+        // Neutral nested bus (Aux at default full width) adds no gain under compensated laws.
+        let mut s3 = Session::default();
+        s3.mix_profile =
+            MixProfile { kind: ProfileKind::LogicStyle, law: "-3db_compensated".into(), balance_compensated: true, ..s3.mix_profile.clone() };
+        let m = track(&mut s3, ChannelFormat::Stereo, vec![vec![0.3; N], vec![0.2; N]], 3);
+        let direct = render(&s3);
+        let (_, b) = bus(&mut s3, "Vox");
+        let (bt2, b2) = bus(&mut s3, "Mix");
+        s3.track_mut(m).unwrap().mixer.output = Route::Bus(b);
+        let vox = s3.tracks.iter().find(|x| x.name == "Vox").unwrap().id;
+        s3.track_mut(vox).unwrap().mixer.output = Route::Bus(b2);
+        let _ = bt2;
+        let nested = render(&s3);
+        assert!((nested[0][N / 2] - direct[0][N / 2]).abs() < 1e-6 && (nested[1][N / 2] - direct[1][N / 2]).abs() < 1e-6, "no +3 dB per bus level");
+    }
+
+    /// VM-T3 at the engine: width processes once, before the pre-fader send tap; 100 % exact.
+    #[test]
+    fn sml_graph_vmt3_width_in_graph() {
+        let mut s = Session::default();
+        let t = track(&mut s, ChannelFormat::Stereo, vec![vec![0.5; N], vec![0.1; N]], 1);
+        let base = render(&s);
+        s.track_mut(t).unwrap().mixer.width = 0.0;
+        let out = render(&s);
+        // Settled after the first block's ramp: dual mono (0.3, 0.3).
+        assert!((out[0][N - 1] - 0.3).abs() < 1e-6 && (out[1][N - 1] - 0.3).abs() < 1e-6, "{:?}", (out[0][N - 1], out[1][N - 1]));
+        s.track_mut(t).unwrap().mixer.width = 1.0;
+        assert_eq!(render(&s), base, "fresh render at 100 % is identity");
+        // Pre-fader send sees the widened signal.
+        let (_, b) = bus(&mut s, "FX");
+        let dead = s.add_bus("dead", ChannelFormat::Stereo);
+        let tr = s.track_mut(t).unwrap();
+        tr.mixer.width = 2.0;
+        tr.mixer.volume_db = -144.0;
+        tr.mixer.output = Route::Bus(dead);
+        let mut snd = SendSlot::new(Route::Bus(b));
+        snd.level_db = 0.0;
+        snd.pre_fader = true;
+        tr.mixer.sends[0] = Some(snd);
+        let out = render(&s);
+        assert!((out[0][N - 1] - 0.7).abs() < 1e-6 && (out[1][N - 1] + 0.1).abs() < 1e-6, "{:?}", (out[0][N - 1], out[1][N - 1]));
+    }
+
+    /// B policy (v2): channel mute keeps pre-fader sends, gates post-fader sends; solo of one
+    /// source opens its return without admitting an unrelated source sharing it; solo-safe.
+    #[test]
+    fn sml_graph_mute_solo_policy() {
+        let mut s = Session::default();
+        let a = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        let u = track(&mut s, ChannelFormat::Mono, vec![vec![0.25; N]], 2);
+        let (ret, b) = bus(&mut s, "Verb");
+        let dead = s.add_bus("dead", ChannelFormat::Stereo);
+        for t in [a, u] {
+            let tr = s.track_mut(t).unwrap();
+            tr.mixer.pan = vec![-1.0];
+            tr.mixer.output = Route::Bus(dead);
+            let mut snd = SendSlot::new(Route::Bus(b));
+            snd.level_db = 0.0;
+            snd.pre_fader = true;
+            tr.mixer.sends[0] = Some(snd);
+        }
+        assert!((render(&s)[0][100] - 0.75).abs() < 1e-6);
+        s.track_mut(a).unwrap().mixer.mute = true;
+        assert!((render(&s)[0][100] - 0.75).abs() < 1e-6, "muted source keeps its pre-fader send");
+        s.track_mut(a).unwrap().mixer.sends[0].as_mut().unwrap().pre_fader = false;
+        assert!((render(&s)[0][100] - 0.25).abs() < 1e-6, "post-fader send follows mute");
+        s.track_mut(a).unwrap().mixer.mute = false;
+        s.track_mut(a).unwrap().mixer.solo = true;
+        let out = render(&s);
+        assert!((out[0][100] - 0.5).abs() < 1e-6, "solo A: return open, unrelated U not admitted ({})", out[0][100]);
+        s.track_mut(u).unwrap().mixer.solo_safe = true;
+        assert!((render(&s)[0][100] - 0.75).abs() < 1e-6, "solo-safe U stays eligible");
+        s.track_mut(u).unwrap().mixer.solo_safe = false;
+        s.track_mut(a).unwrap().mixer.solo = false;
+        s.track_mut(ret).unwrap().mixer.solo = true;
+        assert!((render(&s)[0][100] - 0.75).abs() < 1e-6, "soloing the bus admits its contributors");
+    }
+
+    /// SL-T4 (engine side) + SL05: unknown provider = named placeholder passing audio; audition
+    /// overrides are realtime-only and never reach offline renders/exports.
+    #[test]
+    fn sml_graph_slt4_missing_provider_and_audition_isolation() {
+        let mut s = Session::default();
+        let t = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        let base = render(&s);
+        s.track_mut(t).unwrap().mixer.slots.tape = slot(4, Some("vst3:00000000000000000000000000000000"), 0.0);
+        assert_eq!(render(&s), base, "missing provider passes audio (placeholder)");
+        assert!(is_missing_plugin("vst3:00000000000000000000000000000000"));
+        s.track_mut(t).unwrap().mixer.slots.tape = slot(4, Some("test:gain:-6"), 0.0);
+        let normal = render(&s);
+        s.audition = AuditionBypass { tape: true, summing: true, inserts: true };
+        assert_eq!(render(&s), normal, "offline render ignores the session's audition flags");
+        let mut eng = MixEngine::new(48_000.0, 256);
+        eng.audition = AuditionBypass { tape: true, ..AuditionBypass::default() };
+        let mut out = vec![vec![0.0; 256]; 2];
+        eng.render(&s, 0, 256, &mut out);
+        assert!((out[0][100] - base[0][100]).abs() < 1e-6, "realtime audition bypass removes the tape slot");
+        // Slot trim alone is visible processing.
+        s.track_mut(t).unwrap().mixer.slots.tape = slot(4, None, -6.0);
+        assert!((render(&s)[0][100] / base[0][100] - 10f32.powf(-6.0 / 20.0)).abs() < 1e-5);
     }
 }

@@ -1,0 +1,21 @@
+{
+    "edited_dry_max_abs_error": 0.0,
+    "processed_expected": 0.1474933624267578,
+    "processed_sample": 0.1474933624267578,
+    "samples_at_20000": {
+        "edited_dry": 0.4156928062438965,
+        "full_mix": 0.1474970281124115,
+        "processed": 0.1474933624267578
+    },
+    "snapshots": [
+        "A"
+    ],
+    "source_hashes_unchanged": true,
+    "stage": "sprint3 (bus/fx return/slot/width/snapshot/save-reopen/exports)",
+    "tracks": [
+        "Lead Vox",
+        "Vocal Reverb",
+        "Double",
+        "Vocal Bus"
+    ]
+}

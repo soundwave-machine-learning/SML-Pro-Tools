@@ -27,6 +27,7 @@ mod options;
 mod plugin_state;
 mod query;
 mod setup_more;
+mod slots;
 mod snapshot;
 mod surround;
 mod track;
@@ -130,6 +131,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(nudge::specs());
         v.extend(bus::specs());
         v.extend(snapshot::specs());
+        v.extend(slots::specs());
         v
     })
 }

@@ -1,0 +1,13 @@
+# command: cargo test -p soundcraft-engine --test clap_e2e
+# utc: 2026-10-11T16:31:21Z  source: c11b84f+worktree
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running tests/clap_e2e.rs (target/debug/deps/clap_e2e-b703f63c28d04381)
+
+running 3 tests
+test clap_insert_renders_through_the_mix ... ok
+test clap_state_is_captured_stored_and_restored_before_the_first_block ... ok
+test clap_provider_in_tape_slot_round_trips_state_and_renders ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+EXIT: 0

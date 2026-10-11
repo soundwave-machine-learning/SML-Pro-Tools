@@ -1,0 +1,38 @@
+# command: cargo test -p soundcraft-dsp mixmath
+# utc: 2026-10-11T16:32:20Z  source: c11b84f+worktree
+   Compiling proc-macro2 v1.0.107
+   Compiling quote v1.0.47
+   Compiling syn v3.0.6
+   Compiling serde_derive v1.0.229
+   Compiling serde v1.0.229
+   Compiling soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+    Finished `test` profile [optimized + debuginfo] target(s) in 39.73s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_dsp-db57d782d9129ffc)
+
+running 4 tests
+test mixmath::tests::balance_has_no_crossfeed_and_stereo_pan_routes_each_side ... ok
+test mixmath::tests::full_width_stereo_node_can_move ... ok
+test mixmath::tests::width_formula_and_exact_identity ... ok
+test mixmath::tests::pan_law_coefficients ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 13 filtered out; finished in 0.00s
+
+     Running tests/fuzz.rs (target/debug/deps/fuzz-0402e1d5dfef1bca)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 0.00s
+
+     Running tests/offline_meters.rs (target/debug/deps/offline_meters-b0b8ad4caaef26a5)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 17 filtered out; finished in 0.00s
+
+     Running tests/plugins.rs (target/debug/deps/plugins-d20ced062fd197f8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 25 filtered out; finished in 0.00s
+
+EXIT: 0

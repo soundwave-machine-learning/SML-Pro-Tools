@@ -1,0 +1,20 @@
+# command: cargo test -p soundcraft-mix sml_graph -- --test-threads=1
+# utc: 2026-10-11T16:31:17Z  source: c11b84f+worktree
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.68s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_mix-fa43080554be3863)
+
+running 9 tests
+test sml_graph_tests::sml_graph_clt4_compensation_through_slots ... ok
+test sml_graph_tests::sml_graph_mt1_f64_bus_sum ... ok
+test sml_graph_tests::sml_graph_mt2_logic_profile_pan ... ok
+test sml_graph_tests::sml_graph_mute_solo_policy ... ok
+test sml_graph_tests::sml_graph_slt1_empty_slots_and_views_are_identity ... ok
+test sml_graph_tests::sml_graph_slt2_slot_order_is_sl02 ... ok
+test sml_graph_tests::sml_graph_slt4_missing_provider_and_audition_isolation ... ok
+test sml_graph_tests::sml_graph_slt7_independent_and_follow_send_pan ... ok
+test sml_graph_tests::sml_graph_vmt3_width_in_graph ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 23 filtered out; finished in 0.03s
+
+EXIT: 0

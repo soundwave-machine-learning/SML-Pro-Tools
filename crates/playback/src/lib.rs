@@ -182,6 +182,8 @@ impl AudioState {
                         self.read = 0.0;
                     }
                     self.fold = fold_gains(&s);
+                    // Temporary audition overrides are realtime-only (offline exports ignore them).
+                    self.mix.audition = s.audition;
                     self.session = s;
                 }
                 Cmd::Play { from, end, looped } => {

@@ -1,0 +1,6 @@
+plugin,format,where,test,result,notes
+org.soundcraft.test.gain (repo fixture),CLAP,insert,cargo test -p soundcraft-engine --test clap_e2e clap_insert,PASS,existing upstream fixture
+org.soundcraft.test.gain (repo fixture),CLAP,insert state,cargo test -p soundcraft-engine --test clap_e2e clap_state,PASS,state captured/restored before first block
+org.soundcraft.test.gain (repo fixture),CLAP,Tape slot,cargo test -p soundcraft-engine --test clap_e2e clap_provider,PASS,load/state capture/save-reopen/render/teardown
+VST3 repo fixture,VST3,insert,cargo test -p soundcraft-vst3-host,PASS (workspace suite),host-level tests from upstream; not run in a slot
+owner EQ / dynamics / pitch plugins,VST3,any,H2 native,NOT RUN,no owner plugins or Windows host available; no compatibility claim

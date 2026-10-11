@@ -51,3 +51,67 @@ positions and the accumulation state.
    modified by editing.
 
 Pitch correction uses your own VST3 pitch plugin (not yet validated with a named plugin).
+
+## 4. Buses and FX returns
+- **Create Bus from Selection** (Mix toolbar, or command search): select Lead, Double L, Double R
+  → Create Bus from Selection → name it "Vocal Bus". One step creates the bus channel, routes the
+  selected tracks into it (their faders, pans, inserts and sends are kept) and selects it; one
+  Undo removes all of it. If the tracks fed different outputs you are asked for a destination.
+  Selecting a bus together with one of its own sources is refused (it would double the signal).
+- **Create FX Return**: adds a return channel plus a send on each selected track (post-fader,
+  starting at -∞; the dry outputs are unchanged). An empty return only duplicates the dry signal
+  once you raise the sends — load your own reverb on it.
+- A bus is a real summing channel (inserts, fader, mute/solo, sends). Organizational folders and
+  VCAs are not buses. Deleting a bus reroutes its sources to the bus's own output and removes or
+  reassigns sends that targeted it; nothing is deleted from your media.
+- **Spill** (`bus.spill`): shows the bus and every channel that feeds it (direct or by send),
+  hiding the rest of the mixer view; exiting restores your previous visibility. View only.
+- Mute/solo (new sessions): a muted channel still feeds its *pre-fader* sends (mute the send
+  itself to stop them); soloing a track keeps its buses/returns audible without letting other,
+  unrelated tracks into a shared reverb; soloing a bus keeps the tracks feeding it; solo-safe
+  channels stay audible.
+
+## 5. Dedicated slots (Summing / Tape)
+- Each audio track has a **Tape** slot (before your inserts); each bus and Main have a **Summing**
+  slot (on the summed signal) and a **Master Tape** slot (Post — after the fader — by default on
+  buses, Pre on Main so a limiter can follow).
+- Empty slots are exact pass-through ("Clean"/"None"). You can load your own installed VST3/CLAP
+  plugin into a slot; it processes the one bus/track signal it sits on — a plugin in a bus's
+  Summing slot does not see the individual tracks.
+- Slot bypass bypasses the plugin and its trim but keeps its delay, so timing stays aligned.
+  Change a slot's plugin or Pre/Post position while stopped.
+- Native analog summing and tape models are **not included yet** (deferred to a later pass); no
+  drive/noise/bias controls are shown because none exist.
+- Audition bypass (`mix.audition_bypass`) temporarily silences all Summing, Tape and/or insert
+  processing for comparison. It is never saved and never affects exports.
+
+## 6. Mix profile, pan and width
+- Standard profile keeps the existing pan law. **Logic-style** profile (`mix.profile`) uses SML's
+  published laws (0 dB, -3 dB [default], -3 dB compensated), mono Pan, stereo Balance (no
+  crossfeed) or dual stereo Pan. These are SML's own curves, not a copy of another product.
+- New buses are neutral (unity, centred, 100 % width) so nested buses never add pan-law gain.
+- **Stereo Width** (Console "W" row or the Visual node handles — the same control): 0 % = mono,
+  100 % = untouched, 200 % = double side. Width is placed after inserts and before the sends/fader.
+- New sessions sum buses and Main in 64-bit floating point; older sessions keep their original
+  arithmetic until you choose `mix.graph_migrate`.
+
+## 7. Console, Visual and Split
+The Mix window header switches **Console** (channel strips), **Visual** (soundstage: left/right =
+pan, up/down = fader, side handles = width) and **Split** (both). Both views edit the same mixer;
+opening or closing a view never changes the sound. Drag a node (Shift locks an axis, Alt is fine
+control, Esc cancels, double-click resets to 0 dB/centre). The channel list beside the canvas
+selects, hides (view only) and edits values numerically. Snapshots **A/B/C** store gain, pan,
+width, mute, solo and visibility (click to recall while stopped, Shift+click to save). Plugins,
+slots, routing, trims and automation are not part of snapshots.
+
+## 8. Monitoring and exports
+- Monitoring modes (`mix.monitor_mode`, change while stopped): **Tracking** (small buffer; see
+  `mix.latency_report` for latency contributors), **Mixing** (full processing and compensation),
+  **Hardware Monitor** (software input monitoring off; use your interface's direct monitoring —
+  plugins are not on that path). Recording is always dry.
+- Named exports (`file.export_path`): **Raw Source** (the original media), **Edited Dry** (comp,
+  clip edits, clip gain and fades only), **Processed Track** (the channel's own final output incl.
+  Tape, inserts, width, fader and pan, before any bus), **Full Mix** (Main after everything, normal
+  saved state). Summing processed stems is not guaranteed to recreate a mix with shared or
+  nonlinear processing.
+- Exports refuse to run while a missing plugin would be silently skipped, unless you acknowledge it.

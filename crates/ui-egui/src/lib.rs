@@ -25,6 +25,7 @@ pub mod theme;
 pub mod toolbar;
 pub mod video_track;
 pub mod video_window;
+pub mod visual_mixer;
 pub mod widgets;
 pub mod windows;
 
@@ -102,6 +103,12 @@ pub struct UiState {
     pub configurations: Vec<(String, Value)>,
     /// Appearance (`ui.theme`): dark by default, light or follow the system on request.
     pub theme: theme::ThemeMode,
+    /// Visual mixer channel filter (view only).
+    #[serde(skip)]
+    pub visual_filter: String,
+    /// Visual mixer node drag in progress (start values for Escape-cancel).
+    #[serde(skip)]
+    pub visual_gesture: Option<visual_mixer::VisualGesture>,
 }
 
 impl Default for UiState {
@@ -154,6 +161,8 @@ impl Default for UiState {
             workspace_dir: String::new(),
             configurations: Vec::new(),
             theme: theme::ThemeMode::Dark,
+            visual_filter: String::new(),
+            visual_gesture: None,
         }
     }
 }
@@ -465,8 +474,15 @@ impl SoundApp {
     pub fn capture_plugin_states(&mut self) {
         let Some(p) = &self.player else { return };
         for (t, slot, data) in p.capture_states() {
-            let slot = if slot == soundcraft_mix::INSTRUMENT_SLOT { json!("instrument") } else { json!(slot) };
             let state = soundcraft_model::b64::encode(&data);
+            // Dedicated Summing/Tape slot providers store their state on the slot.
+            if let Some(kind) = soundcraft_model::SlotKind::ALL.into_iter().find(|k| k.instance_index() == slot) {
+                if let Err(e) = self.engine.execute("mix.slot_state", &json!({"track": t.0, "slot": kind.id(), "state": state})) {
+                    log::warn!("storing slot plugin state: {e}");
+                }
+                continue;
+            }
+            let slot = if slot == soundcraft_mix::INSTRUMENT_SLOT { json!("instrument") } else { json!(slot) };
             if let Err(e) = self.engine.execute("mix.insert_state", &json!({"track": t.0, "slot": slot, "state": state})) {
                 log::warn!("storing plugin state: {e}");
             }
