@@ -372,6 +372,19 @@ fn width_handles(app: &mut SoundApp, ui: &Ui, tr: &Track, node: Rect) {
 }
 
 /// Channel list beside the canvas: select, hide/show (view only), numeric gain/pan/width.
+/// VM01 list badge: where the channel goes ("→ Main", "→ Vox", "→ none") plus active sends.
+pub fn route_badge(s: &soundcraft_model::Session, t: &Track) -> String {
+    use soundcraft_model::Route;
+    let out = match &t.mixer.output {
+        Route::None => "none".to_string(),
+        Route::Main => "Main".to_string(),
+        Route::Bus(b) => s.bus(*b).map_or_else(|| "missing bus".to_string(), |b| b.name.clone()),
+        Route::Hardware(h) => h.clone(),
+    };
+    let sends = t.mixer.sends.iter().flatten().filter(|x| !x.mute).count();
+    if sends > 0 { format!("→ {out} +{sends} send{}", if sends == 1 { "" } else { "s" }) } else { format!("→ {out}") }
+}
+
 pub fn channel_list(app: &mut SoundApp, ui: &mut Ui) {
     let tracks: Vec<Track> = app
         .engine
@@ -389,9 +402,36 @@ pub fn channel_list(app: &mut SoundApp, ui: &mut Ui) {
                     let _ = app.run("track.hide", json!({"tracks": [tr.id.0], "value": !vis}));
                 }
                 let sel = app.engine.session().edit.selected_tracks.contains(&tr.id);
-                if ui.selectable_label(sel, &tr.name).clicked() {
-                    let _ = app.run("edit.select", json!({"tracks": [tr.id.0]}));
+                // Double-click renames in place (same `track.rename` command as the Console).
+                let key = egui::Id::new(("vm-rename", tr.id.0));
+                let editing: Option<String> = ui.ctx().memory(|m| m.data.get_temp(key));
+                if let Some(mut text) = editing {
+                    let r = ui.add(egui::TextEdit::singleline(&mut text).desired_width(110.0));
+                    r.request_focus();
+                    if r.lost_focus() {
+                        ui.ctx().memory_mut(|m| m.data.remove::<String>(key));
+                        if !ui.input(|i| i.key_pressed(egui::Key::Escape)) && text.trim() != tr.name && !text.trim().is_empty() {
+                            let _ = app.run("track.rename", json!({"track": tr.id.0, "name": text}));
+                        }
+                    } else {
+                        ui.ctx().memory_mut(|m| m.data.insert_temp(key, text));
+                    }
+                } else {
+                    let r = ui.selectable_label(sel, &tr.name).on_hover_text("Click to select, double-click to rename");
+                    if r.double_clicked() {
+                        ui.ctx().memory_mut(|m| m.data.insert_temp(key, tr.name.clone()));
+                    } else if r.clicked() {
+                        let _ = app.run("edit.select", json!({"tracks": [tr.id.0]}));
+                    }
                 }
+                if app.meters.get(&tr.id).is_some_and(|m| m.clip) {
+                    ui.label(egui::RichText::new("CLIP").small().strong().color(Color32::from_rgb(220, 60, 60)))
+                        .on_hover_text("This channel's meter clipped (≥ 0 dBFS); clears with the meter hold");
+                }
+            });
+            // Second line: route badge, then numeric gain/width.
+            ui.horizontal(|ui| {
+                ui.add_space(24.0);
                 let mut db = tr.mixer.volume_db;
                 if ui.add(egui::DragValue::new(&mut db).range(-144.0..=12.0).speed(0.1).suffix(" dB").max_decimals(1)).changed() {
                     let _ = app.engine.execute_merged("mix.volume", &json!({"track": tr.id.0, "db": db}), &format!("vmlist:{}", tr.id.0));
@@ -406,6 +446,8 @@ pub fn channel_list(app: &mut SoundApp, ui: &mut Ui) {
                         );
                     }
                 }
+                let badge = route_badge(app.engine.session(), &tr);
+                ui.add(egui::Label::new(egui::RichText::new(badge).small().color(Tokens::current().text_dim)).truncate());
             });
         }
     });
@@ -430,6 +472,29 @@ mod tests {
 
     /// VM-T4 group rules: common delta keeps relative offsets, clamps at the engine limits,
     /// rejects a −∞ member for vertical moves; pan delta keeps mono members in range.
+    #[test]
+    fn route_badge_names_destination_and_active_sends() {
+        use soundcraft_model::{ChannelFormat, Route, SendSlot, Session};
+        let mut s = Session::default();
+        let b = s.add_bus("Vox", ChannelFormat::Stereo);
+        let fx = s.add_bus("Verb", ChannelFormat::Stereo);
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        let tr = s.track(t).unwrap().clone();
+        assert_eq!(route_badge(&s, &tr), "→ Main");
+        let tr = s.track_mut(t).unwrap();
+        tr.mixer.output = Route::Bus(b);
+        tr.mixer.sends[0] = Some(SendSlot::new(Route::Bus(fx)));
+        let mut muted = SendSlot::new(Route::Bus(fx));
+        muted.mute = true;
+        tr.mixer.sends[1] = Some(muted);
+        let tr = s.track(t).unwrap().clone();
+        assert_eq!(route_badge(&s, &tr), "→ Vox +1 send", "muted sends are not counted");
+        let mut tr = tr;
+        tr.mixer.output = Route::None;
+        tr.mixer.sends = Default::default();
+        assert_eq!(route_badge(&s, &tr), "→ none");
+    }
+
     #[test]
     fn group_drag_deltas() {
         assert_eq!(common_db_delta(&[-6.0, -12.0], 3.0), Ok(3.0));

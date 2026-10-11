@@ -140,6 +140,14 @@ pub fn negotiate(req: &DeviceRequest, devices: &[DeviceCaps]) -> Result<Negotiat
     })
 }
 
+/// The request for recording from `dev`: every physical input the device offers at `rate` (the
+/// widest float configuration), so any track input channel can be captured. `None` when the
+/// device has no float configuration at that rate.
+pub fn input_request(dev: &DeviceCaps, rate: u32, buffer_frames: Option<u32>) -> Option<DeviceRequest> {
+    let channels = dev.configs.iter().filter(|c| c.float && c.min_rate <= rate && c.max_rate >= rate).map(|c| c.channels).max()?;
+    Some(DeviceRequest { host: Some(dev.host.clone()), device: Some(dev.name.clone()), sample_rate: rate, buffer_frames, channels })
+}
+
 /// Input or output side.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Direction {
@@ -305,5 +313,20 @@ mod tests {
     fn enumerate_never_panics() {
         let _ = enumerate(Direction::Input);
         let _ = enumerate(Direction::Output);
+    }
+
+    #[test]
+    fn input_request_captures_every_input_and_negotiates_exactly() {
+        let devs = iface();
+        // Widest float config at the rate (8 inputs), never the int16-only device.
+        let r = input_request(&devs[1], 48_000, Some(128)).unwrap();
+        assert_eq!((r.host.as_deref(), r.device.as_deref(), r.channels, r.buffer_frames), (Some("WASAPI"), Some("Speakers"), 8, Some(128)));
+        let n = negotiate(&r, &devs).unwrap();
+        assert_eq!((n.device.as_str(), n.channels, n.sample_rate), ("Speakers", 8, 48_000));
+        assert!(input_request(&devs[1], 44_100, None).is_none(), "rate the device cannot run");
+        assert!(input_request(&devs[2], 48_000, None).is_none(), "no float configuration");
+        // A buffer outside the reported range is an error, not a substitution.
+        let r = input_request(&devs[0], 48_000, Some(4096)).unwrap();
+        assert!(matches!(negotiate(&r, &devs), Err(NegotiationError::UnsupportedBuffer { .. })));
     }
 }

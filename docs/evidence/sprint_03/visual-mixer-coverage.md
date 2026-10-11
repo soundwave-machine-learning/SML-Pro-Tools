@@ -3,7 +3,7 @@
 | Item | Status | Evidence |
 |---|---|---|
 | VM01 Console / Visual / Split in the Mix window, persisted per session (`mix.view`) | IMPLEMENTED; rendered | `ui/console.png`, `ui/visual.png`, `ui/split.png` |
-| VM01 one node per visible track/bus/return keyed by id; Master not a node; name/colour/selection/mute/solo/activity; list with select/hide/numeric gain/width; filter | IMPLEMENTED (route badge, clipping cue and rename in list not done) | UI source; `visual-mixer-ui-tests.log` |
+| VM01 one node per visible track/bus/return keyed by id; Master not a node; name/colour/selection/mute/solo/activity; list with select/hide/numeric gain/width; filter | IMPLEMENTED (Sprint 4 follow-up: list route badge with active-send count, CLIP cue from the shared meter, double-click rename via `track.rename`; `route_badge_names_destination_and_active_sends`, render `docs/evidence/sprint_04/ui/visual-list-badges.png`) | UI source; `visual-mixer-ui-tests.log` |
 | VM02 x = existing pan/balance, y = existing fader; −60..+12 dB view without clamping stored values; edge indicator; centre/0 dB guides; Shift axis lock; Alt fine; double-click reset; Escape cancel; stereo centre/span rule with narrowing | IMPLEMENTED | `mixmath` + `visual_mixer` unit tests |
 | VM02 multi-selection group drag, locks | NOT IMPLEMENTED (single-node gestures only) | — |
 | VM03 native Width in Console and Visual, same parameter, M/S formula, exact 100 % identity, 10 ms-scale per-block ramp, mono disabled | IMPLEMENTED | `mixmath-tests.log`, `slot-graph-tests.log` (vmt3) |

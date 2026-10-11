@@ -121,6 +121,12 @@ pub struct UiState {
     pub device_choice: Option<(String, String)>,
     #[serde(skip)]
     pub buffer_choice: u32,
+    /// Input devices found by the last scan, and the input request used for recording
+    /// (`None` = the host's default input device).
+    #[serde(skip)]
+    pub input_devices: Vec<soundcraft_playback::device::DeviceCaps>,
+    #[serde(skip)]
+    pub input_request: Option<soundcraft_playback::device::DeviceRequest>,
 }
 
 impl Default for UiState {
@@ -179,6 +185,8 @@ impl Default for UiState {
             output_devices: Vec::new(),
             device_choice: None,
             buffer_choice: 0,
+            input_devices: Vec::new(),
+            input_request: None,
         }
     }
 }
@@ -565,7 +573,7 @@ impl SoundApp {
         if self.recorder.is_some() || self.recorder_failed || self.player.is_none() {
             return;
         }
-        match soundcraft_playback::record::Recorder::open() {
+        match soundcraft_playback::record::Recorder::open_with(self.ui.input_request.as_ref()) {
             Ok(r) => {
                 if let Some(p) = &self.player {
                     p.set_input(std::sync::Arc::clone(&r.monitor));
@@ -577,6 +585,22 @@ impl SoundApp {
                 self.ui.status = format!("No audio input: {e}");
             }
         }
+    }
+
+    /// R01: switch recording to `req` (stopped only). On failure the current input stays open
+    /// and the request is not remembered — never a silent substitution.
+    pub fn reopen_input(&mut self, req: Option<soundcraft_playback::device::DeviceRequest>) -> Result<(), String> {
+        if self.engine.transport.recording || self.is_playing() {
+            return Err("stop the transport to change the input device".into());
+        }
+        let r = soundcraft_playback::record::Recorder::open_with(req.as_ref())?;
+        if let Some(p) = &self.player {
+            p.set_input(std::sync::Arc::clone(&r.monitor));
+        }
+        self.recorder = Some(r);
+        self.recorder_failed = false;
+        self.ui.input_request = req;
+        Ok(())
     }
 
     fn finish_recording(&mut self) {
@@ -1026,6 +1050,25 @@ mod tests {
             assert!(app.is_playing());
             assert_eq!(app.position(), insertion + i64::from(app.engine.session().sample_rate.hz()) / 4);
         }
+    }
+
+    #[test]
+    fn failed_input_switch_keeps_the_current_input_and_request() {
+        let mut app = SoundApp::new(soundcraft_engine::demo::demo_engine(), None, Services::default());
+        let missing = soundcraft_playback::device::DeviceRequest {
+            host: Some("NoSuchHost".into()),
+            device: Some("No Such Interface".into()),
+            sample_rate: 48_000,
+            buffer_frames: Some(64),
+            channels: 2,
+        };
+        let err = app.reopen_input(Some(missing)).unwrap_err();
+        assert!(err.contains("NoSuchHost"), "{err}");
+        assert!(app.ui.input_request.is_none(), "a failed request is not remembered");
+        assert!(app.recorder.is_none(), "no other device was substituted");
+        app.run("transport.play", json!({})).unwrap();
+        app.handle_transport(0.01);
+        assert!(app.reopen_input(None).unwrap_err().contains("stop the transport"));
     }
 
     #[test]

@@ -221,7 +221,8 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
             section_label(ui, sec, "SLOTS");
             for (k, kind) in rows.iter().enumerate() {
                 let sr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + k as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
-                dedicated_slot(app, ui, &track, *kind, sr);
+                let io = snap.and_then(|m| m.tracks.get(&id)).and_then(|m| m.slots.get(kind.instance_index() - 1000).copied());
+                dedicated_slot(app, ui, &track, *kind, sr, io);
             }
             if width_row {
                 let wr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + rows.len() as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
@@ -452,7 +453,7 @@ fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&MeterSnapsh
 /// right-click (or click, when none is set) picks another instrument.
 /// One dedicated slot row: provider name (Clean/None when empty), click for the slot menu
 /// (installed plugins, Clean/None, bypass, trim, Master Tape Pre/Post). No model knobs exist.
-fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcraft_model::SlotKind, r: Rect) {
+fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcraft_model::SlotKind, r: Rect, io: Option<soundcraft_mix::SlotIo>) {
     let scan = app.plugin_scan.clone();
     use soundcraft_model::{SlotKind, TapePosition};
     let t = Tokens::current();
@@ -484,8 +485,21 @@ fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcra
     ui.painter().rect_filled(r, 1.0, t.counter_bg);
     let label = format!("{prefix} {name}{}", if bypass { " (byp)" } else { "" });
     ui.painter().text(pos2(r.min.x + 3.0, r.center().y), Align2::LEFT_CENTER, label, regular(10.0), col);
+    // R23 slot I/O meters: two thin bars (in | out) at the right edge, -60..0 dBFS.
+    let io = io.filter(|m| m.active);
+    if let Some(m) = io {
+        for (k, v) in [m.input, m.output].into_iter().enumerate() {
+            let x = r.max.x - 9.0 + k as f32 * 4.0;
+            let frac = ((soundcraft_dsp::gain_to_db(v) + 60.0) / 60.0).clamp(0.0, 1.0);
+            let bar = Rect::from_min_max(pos2(x, r.max.y - 1.0 - frac * (r.height() - 2.0)), pos2(x + 3.0, r.max.y - 1.0));
+            ui.painter().rect_filled(bar, 0.0, if v >= 1.0 { Color32::from_rgb(220, 60, 60) } else { Color32::from_rgb(90, 190, 110) });
+        }
+    }
+    let io_text = io.map_or("Meters: no signal measured (stopped, empty or deactivated)".to_string(), |m| {
+        format!("In {:.1} dBFS → Out {:.1} dBFS", soundcraft_dsp::gain_to_db(m.input), soundcraft_dsp::gain_to_db(m.output))
+    });
     let resp = ui.interact(r, ui.id().with(("dslot", track.id.0, kind.id())), Sense::click()).on_hover_text(format!(
-        "{} slot: {}{}\nTrim {:.1} dB. Click for options.",
+        "{} slot: {}{}\nTrim {:.1} dB. {io_text}. Click for options.",
         kind.id(),
         name,
         if missing { " (MISSING — passes audio through)" } else { "" },

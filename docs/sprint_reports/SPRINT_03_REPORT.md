@@ -99,4 +99,4 @@ verification of every item above (H1–H3).
 | R08 recording view | Window › Recording: input/output, selected track arm/monitor/meter, monitoring mode, Stop/Play/Record, Mixer | rendered `ui/recording_panel.png` (not natively exercised) |
 | VM02 group gestures | Ctrl/Cmd+click multi-select; group drag with common dB/pan delta, relative offsets kept, −∞ member rejects vertical, Esc restores all | `ui-egui visual_mixer::tests::group_drag_deltas` |
 | Nudge UI | legacy grid-style nudge value removed from the toolbar (dedicated NUDGE group is the only nudge value shown; `edit.nudge` command kept for compatibility) | — |
-Remaining PARTIAL: slot/I-O meter taps in the inspector; rename/route badges in the Visual list.
+Remaining PARTIAL: slot/I-O meter taps in the inspector; rename/route badges in the Visual list. (Both closed in the Sprint 4 follow-up batch — see `SPRINT_04_REPORT.md`.)

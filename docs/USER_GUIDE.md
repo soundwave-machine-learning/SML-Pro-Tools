@@ -80,6 +80,9 @@ Pitch correction uses your own VST3 pitch plugin (not yet validated with a named
   Summing slot does not see the individual tracks.
 - Slot bypass bypasses the plugin and its trim but keeps its delay, so timing stays aligned.
   Change a slot's plugin or Pre/Post position while stopped.
+- During playback each slot row shows two thin meters at its right edge — slot **input** and
+  **output** — and its tooltip gives both in dBFS, so you can gain-stage into and out of a slot
+  plugin. No meters are drawn when the slot is empty-and-unconfigured or deactivated for tracking.
 - Native analog summing and tape models are **not included yet** (deferred to a later pass); no
   drive/noise/bias controls are shown because none exist.
 - Audition bypass (`mix.audition_bypass`) temporarily silences all Summing, Tape and/or insert
@@ -100,7 +103,9 @@ The Mix window header switches **Console** (channel strips), **Visual** (soundst
 pan, up/down = fader, side handles = width) and **Split** (both). Both views edit the same mixer;
 opening or closing a view never changes the sound. Drag a node (Shift locks an axis, Alt is fine
 control, Esc cancels, double-click resets to 0 dB/centre). The channel list beside the canvas
-selects, hides (view only) and edits values numerically. Snapshots **A/B/C** store gain, pan,
+selects, hides (view only) and edits values numerically; double-click a name to rename the
+channel. Under each name a badge shows where it goes (e.g. "→ Vocal Bus +1 send"; muted sends are
+not counted) and a red **CLIP** tag appears while its meter shows a clip. Snapshots **A/B/C** store gain, pan,
 width, mute, solo and visibility (click to recall while stopped, Shift+click to save). Plugins,
 slots, routing, trims and automation are not part of snapshots.
 
@@ -122,6 +127,10 @@ slots, routing, trims and automation are not part of snapshots.
   error and the previous device stays open — nothing is substituted silently. The window shows the
   requested buffer, the range the driver reports, the callback size actually delivered and the
   stream clock. Clock lock and driver latency show *Unknown* unless measured.
+- **Recording input**: in the same window, *Scan input devices* and pick your interface. It opens
+  immediately (stopped only) at the session rate and the buffer chosen above, with every input
+  channel the device offers; if it cannot, you get an error and the current input stays as it was.
+  "default input" uses the system default device.
 - **Take placement**: when the audio backend provides stream timestamps, each take is placed from
   them (playback presentation time vs. capture time) plus any measured residual / manual offset
   (`record.offset_samples`); otherwise from the transport position. The recorded file never changes.

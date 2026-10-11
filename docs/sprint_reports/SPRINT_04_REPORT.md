@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (596 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (600 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -64,6 +64,23 @@ exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **N
 5. **Docs**: `docs/USER_GUIDE.md` (recording, Nudge, vocal comping, buses/FX returns, slots,
    profile/pan/width, Console/Visual/Split, monitoring/exports, device/latency/tracking, plugin
    risks — see §10), `docs/TARGET_MACHINE_GAUNTLET.md`.
+
+## Follow-up batch (after the A4 regression, same rules)
+Carried PARTIAL rows closed in software, each with a test (full `cargo xtask ci` rerun before
+commit; result in `regression.log`):
+- **R01 input device picker** — Playback Engine *Scan input devices* + picker; opens the device at
+  the session rate and chosen buffer with every float input channel
+  (`device::input_request`), stopped only; a failed request keeps the current input and is not
+  remembered (`device::tests::input_request_captures_every_input_and_negotiates_exactly`,
+  `tests::failed_input_switch_keeps_the_current_input_and_request`). Render:
+  `ui/playback-engine-input.png`. Physical device behaviour remains H1.
+- **R23 slot I/O meters** — every dedicated slot publishes input/output peak and an active flag
+  with the strip meter (no extra allocation); Console SLOTS rows draw in/out bars and dBFS in the
+  tooltip (`sml_graph_slot_io_meters_report_slot_input_and_output`: trim, bypass, deactivation,
+  Summing on a bus, Master Tape on Main).
+- **R19 Visual list** — route badge (destination + active sends), CLIP cue from the shared meter,
+  double-click rename through `track.rename`; two-line rows so values fit the 230 px list
+  (`route_badge_names_destination_and_active_sends`; render `ui/visual-list-badges.png`).
 
 ## Evidence
 `regression.log`, `release-build.log`, `profile-run.log`, `callback-profile.csv`,

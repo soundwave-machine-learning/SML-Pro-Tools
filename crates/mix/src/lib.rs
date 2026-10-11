@@ -171,6 +171,18 @@ pub struct StripMeter {
     pub peaks: Vec<f32>,
     /// Gain reduction of the first dynamics insert, dB.
     pub gain_reduction_db: f32,
+    /// R23 dedicated slot I/O peaks, indexed Tape, Summing, Master Tape (`SlotKind` order).
+    pub slots: [SlotIo; 3],
+}
+
+/// Input and output peak (linear, max over channels, last block) of one dedicated slot. Both
+/// zero when the slot is not configured on the strip.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct SlotIo {
+    pub input: f32,
+    pub output: f32,
+    /// False when the slot is not configured or not in the graph (Tracking deactivation).
+    pub active: bool,
 }
 
 impl StripMeter {
@@ -179,6 +191,7 @@ impl StripMeter {
         self.peak = o.peak;
         self.peaks.clone_from(&o.peaks);
         self.gain_reduction_db = o.gain_reduction_db;
+        self.slots = o.slots;
     }
 
     fn measure(&mut self, bufs: &[Vec<f32>], frames: usize, gr: f32) {
@@ -247,6 +260,8 @@ struct Strip {
     /// bypassed so compensation stays valid (SL05).
     dedicated: [Option<PluginSlot>; 3],
     slot_delay: [DelayLine; 3],
+    /// I/O peaks of the dedicated slots in the last block (published with the strip meter).
+    slot_io: [SlotIo; 3],
     /// Last applied native Stereo Width (for the per-block ramp).
     width_prev: f32,
     /// Excluded by solo (gates every contribution, pre-fader sends included).
@@ -326,6 +341,7 @@ impl Strip {
             outbuf: Vec::new(),
             dedicated: [None, None, None],
             slot_delay: [DelayLine::default(), DelayLine::default(), DelayLine::default()],
+            slot_io: [SlotIo::default(); 3],
             width_prev: 1.0,
             soloed_out: false,
             mute_only: false,
@@ -892,9 +908,10 @@ impl MixEngine {
                 {
                     let [_, sum_i, mt_i] = &mut strip.dedicated;
                     let [_, sum_d, mt_d] = &mut strip.slot_delay;
-                    run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, audition.summing, false);
+                    let [_, sum_io, mt_io] = &mut strip.slot_io;
+                    run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, sum_io, &mut strip.buf, frames, audition.summing, false);
                     if t.mixer.slots.master_tape_position == TapePosition::Pre {
-                        run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape, false);
+                        run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, mt_io, &mut strip.buf, frames, audition.tape, false);
                     }
                 }
                 for (i, ins) in t.mixer.inserts.iter().enumerate() {
@@ -919,7 +936,8 @@ impl MixEngine {
                 if t.mixer.slots.master_tape_position == TapePosition::Post {
                     let [_, _, mt_i] = &mut strip.dedicated;
                     let [_, _, mt_d] = &mut strip.slot_delay;
-                    run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape, false);
+                    let [_, _, mt_io] = &mut strip.slot_io;
+                    run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, mt_io, &mut strip.buf, frames, audition.tape, false);
                 }
                 for (ch, src) in strip.buf.iter().enumerate().take(self.main.len()) {
                     if let Some(m) = self.main.get_mut(ch) {
@@ -930,7 +948,9 @@ impl MixEngine {
                         }
                     }
                 }
-                self.meters.entry(t.id).or_default().measure(&self.main, frames, 0.0);
+                let m = self.meters.entry(t.id).or_default();
+                m.measure(&self.main, frames, 0.0);
+                m.slots = strip.slot_io;
             }
         }
         // Metronome: summed after the master fader, so it reaches the speakers without passing
@@ -955,7 +975,9 @@ impl MixEngine {
 
     /// Send, meter and pan a processed strip into the busses / main mix.
     fn route_strip(&mut self, t: &Track, strip: &mut Strip, pos: Samples, frames: usize) {
-        self.meters.entry(t.id).or_default().measure(&strip.buf, frames, strip.gr);
+        let m = self.meters.entry(t.id).or_default();
+        m.measure(&strip.buf, frames, strip.gr);
+        m.slots = strip.slot_io;
         let src_fmt = strip_format(t, strip.buf.len());
         let law = self.pan_law;
         let v2 = s_graph_v2(t, self.graph_version);
@@ -1176,11 +1198,13 @@ fn process_strip(
     {
         let [tape_i, sum_i, mt_i] = &mut strip.dedicated;
         let [tape_d, sum_d, mt_d] = &mut strip.slot_delay;
+        let [tape_io, sum_io, mt_io] = &mut strip.slot_io;
         if is_bus {
             latency += run_dedicated(
                 t.mixer.slots.summing.as_ref(),
                 sum_i,
                 sum_d,
+                sum_io,
                 &mut strip.buf,
                 frames,
                 live.audition.summing,
@@ -1200,6 +1224,7 @@ fn process_strip(
                     t.mixer.slots.master_tape.as_ref(),
                     mt_i,
                     mt_d,
+                    mt_io,
                     &mut strip.buf,
                     frames,
                     live.audition.tape,
@@ -1211,6 +1236,7 @@ fn process_strip(
                 t.mixer.slots.tape.as_ref(),
                 tape_i,
                 tape_d,
+                tape_io,
                 &mut strip.buf,
                 frames,
                 live.audition.tape,
@@ -1330,10 +1356,12 @@ fn process_strip(
     if is_bus && t.mixer.slots.master_tape_position == TapePosition::Post {
         let [_, _, mt_i] = &mut strip.dedicated;
         let [_, _, mt_d] = &mut strip.slot_delay;
+        let [_, _, mt_io] = &mut strip.slot_io;
         latency += run_dedicated(
             t.mixer.slots.master_tape.as_ref(),
             mt_i,
             mt_d,
+            mt_io,
             &mut strip.buf,
             frames,
             live.audition.tape,
@@ -1353,24 +1381,33 @@ fn hardware_monitoring(s: &Session) -> bool {
 /// audition-bypassed) slot skips provider *and* trim together but keeps the provider's latency
 /// as a plain delay so path compensation stays valid. An empty unity slot touches nothing.
 /// Returns the latency the slot contributes. Provider settings come from its own state/editor.
+#[allow(clippy::too_many_arguments)]
 fn run_dedicated(
     cfg: Option<&DedicatedSlot>,
     inst: &mut Option<PluginSlot>,
     delay: &mut DelayLine,
+    io: &mut SlotIo,
     buf: &mut [Vec<f32>],
     frames: usize,
     audition_off: bool,
     deactivated: bool,
 ) -> usize {
-    let Some(cfg) = cfg else { return 0 };
+    let block_peak = |buf: &[Vec<f32>]| buf.iter().map(|c| peak(c.get(..frames).unwrap_or(&[]))).fold(0.0f32, f32::max);
+    let Some(cfg) = cfg else {
+        *io = SlotIo::default();
+        return 0;
+    };
+    let input = block_peak(buf);
     if deactivated {
         // CL03 Tracking deactivation: out of the live graph entirely (no processing, no delay).
+        *io = SlotIo { input, output: input, active: false };
         return 0;
     }
     let lat = inst.as_ref().map_or(0, |p| p.plugin.latency());
     if cfg.bypass || audition_off {
         delay.set(lat, buf.len());
         delay.process(buf, frames);
+        *io = SlotIo { input, output: block_peak(buf), active: true };
         return lat;
     }
     if let Some(p) = inst.as_mut() {
@@ -1382,6 +1419,7 @@ fn run_dedicated(
             c.iter_mut().take(frames).for_each(|x| *x *= g);
         }
     }
+    *io = SlotIo { input, output: block_peak(buf), active: true };
     lat
 }
 
@@ -2894,6 +2932,42 @@ mod sml_graph_tests {
         let a = s.add_track(TrackKind::Aux, ChannelFormat::Stereo, Some(name));
         s.track_mut(a).unwrap().mixer.input = Route::Bus(b);
         (a, b)
+    }
+
+    /// R23: each dedicated slot publishes its input and output peak with the strip meter; trim
+    /// shows as the difference, bypass as equal peaks, Tracking deactivation as inactive.
+    #[test]
+    fn sml_graph_slot_io_meters_report_slot_input_and_output() {
+        let mut s = Session::default();
+        let a = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        let (bt, b) = bus(&mut s, "Vox");
+        s.track_mut(a).unwrap().mixer.output = Route::Bus(b);
+        s.track_mut(a).unwrap().mixer.slots.tape = slot(1, Some("test:identity"), -6.0);
+        s.track_mut(bt).unwrap().mixer.slots.summing = slot(2, Some("test:identity"), 0.0);
+        let m = s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+        s.track_mut(m).unwrap().mixer.slots.master_tape = slot(3, None, 0.0);
+        let mut eng = MixEngine::new(48_000.0, 256);
+        let mut out = vec![vec![0.0f32; 256]; 2];
+        eng.render(&s, 0, 256, &mut out);
+        let tape = eng.meters[&a].slots[0];
+        assert!(tape.active);
+        assert!((tape.input - 0.5).abs() < 1e-6, "{tape:?}");
+        assert!((tape.output - 0.5 * db_to_gain(-6.0)).abs() < 1e-6, "trim visible: {tape:?}");
+        assert_eq!(eng.meters[&a].slots[1], SlotIo::default(), "not configured on a track");
+        let sum = eng.meters[&bt].slots[1];
+        assert!(sum.active && sum.input > 0.0 && (sum.input - sum.output).abs() < 1e-6, "{sum:?}");
+        let mt = eng.meters[&m].slots[2];
+        assert!(mt.active && mt.input > 0.0 && mt.input == mt.output, "empty Master Tape slot passes: {mt:?}");
+        // Bypass: input = output; Tracking deactivation: reported inactive.
+        s.track_mut(a).unwrap().mixer.slots.tape.as_mut().unwrap().bypass = true;
+        eng.render(&s, 256, 256, &mut out);
+        let tape = eng.meters[&a].slots[0];
+        assert!(tape.active && tape.input == tape.output, "{tape:?}");
+        s.track_mut(a).unwrap().mixer.slots.tape.as_mut().unwrap().bypass = false;
+        s.tracking_off.insert((a, SlotKind::Tape.instance_index()));
+        eng.realtime_overrides = true;
+        eng.render(&s, 512, 256, &mut out);
+        assert!(!eng.meters[&a].slots[0].active);
     }
 
     /// SL-T1 / VM-T2: empty/Clean slots at unity, 100 % width and mixer view state are

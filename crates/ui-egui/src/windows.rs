@@ -417,11 +417,11 @@ pub fn playback_engine(app: &mut SoundApp, ctx: &egui::Context) {
             ui.label(format!("{} Hz", app.engine.session().sample_rate.hz()));
             ui.end_row();
             ui.label("Input device");
-            ui.label(
-                app.recorder
-                    .as_ref()
-                    .map_or("opened on first record".to_string(), |r| format!("{} ({} ch @ {} Hz)", r.device_name, r.channels, r.sample_rate)),
-            );
+            ui.label(app.recorder.as_ref().map_or("opened on first record".to_string(), |r| {
+                let buf =
+                    r.config.as_ref().and_then(|n| n.requested_buffer).map_or("default buffer".to_string(), |b| format!("{b} frames requested"));
+                format!("{} ({} ch @ {} Hz, {buf})", r.device_name, r.channels, r.sample_rate)
+            }));
             ui.end_row();
             ui.label("Live render");
             ui.label("exactly each callback's frames at equal rates (max 512); 512-frame blocks when resampling");
@@ -505,6 +505,50 @@ pub fn playback_engine(app: &mut SoundApp, ctx: &egui::Context) {
             #[cfg(target_arch = "wasm32")]
             let _ = req;
         }
+        ui.separator();
+        // R01: recording input device (opened with the session rate and the chosen buffer).
+        ui.horizontal(|ui| {
+            if ui.button("Scan input devices").clicked() {
+                app.ui.input_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Input);
+                if app.ui.input_devices.is_empty() {
+                    app.ui.status = "No input devices found by this build's audio hosts".into();
+                }
+            }
+            let current = app.ui.input_request.as_ref().and_then(|r| Some(format!("{}: {}", r.host.as_deref()?, r.device.as_deref()?)));
+            let mut pick: Option<Option<soundcraft_playback::device::DeviceCaps>> = None;
+            egui::ComboBox::from_id_salt("pe_input").selected_text(current.unwrap_or_else(|| "default input".to_string())).width(200.0).show_ui(
+                ui,
+                |ui| {
+                    if ui.selectable_label(app.ui.input_request.is_none(), "default input").clicked() {
+                        pick = Some(None);
+                    }
+                    for d in &app.ui.input_devices {
+                        let sel = app
+                            .ui
+                            .input_request
+                            .as_ref()
+                            .is_some_and(|r| r.device.as_deref() == Some(d.name.as_str()) && r.host.as_deref() == Some(d.host.as_str()));
+                        if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
+                            pick = Some(Some(d.clone()));
+                        }
+                    }
+                },
+            );
+            if let Some(choice) = pick {
+                let rate = app.engine.session().sample_rate.hz();
+                let buffer = (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice);
+                let req = match &choice {
+                    None => Ok(None),
+                    Some(d) => soundcraft_playback::device::input_request(d, rate, buffer)
+                        .map(Some)
+                        .ok_or_else(|| format!("`{}` has no 32-bit float input at {rate} Hz", d.name)),
+                };
+                app.ui.status = match req.and_then(|r| app.reopen_input(r)) {
+                    Ok(()) => "Input device opened with the requested settings".into(),
+                    Err(e) => format!("Input not changed: {e}"),
+                };
+            }
+        });
         let mut dc = app.engine.session().edit.delay_compensation;
         if ui.checkbox(&mut dc, "Delay compensation").changed() {
             let _ = app.run("options.delay_compensation", json!({"value": dc}));

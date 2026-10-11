@@ -33,7 +33,7 @@ counter available); see "Budget" below.
 ## Requirement coverage (R01–R26)
 | ID | Status | Evidence / gap |
 |---|---|---|
-| R01 device/input, actual rate/buffer | IMPLEMENTED; native H1 pending | `device.rs` negotiation (fixtures), Playback Engine panel (requested/reported/effective); input device picker uses default device unless requested via API |
+| R01 device/input, actual rate/buffer | IMPLEMENTED; native H1 pending | `device.rs` negotiation (fixtures), Playback Engine panel (requested/reported/effective) with output **and input** device pickers (input: all channels at session rate, no substitution; `input_request_*`, `failed_input_switch_*` tests) |
 | R02 arm/monitor/transport, dry recording | IMPLEMENTED; H1 pending | dry tap before mixer; Recording panel; Hardware Monitor mode |
 | R03 bounded disk capture/recovery | PASS (portable) | `capture-tests.log`, `failure-recovery.log` |
 | R04 remove bundled catalogue | PASS | routes removed and implementations deleted (`plugin-removal-inventory.md`) |
@@ -51,11 +51,11 @@ counter available); see "Budget" below.
 | R16 Summing slot | PASS (software) | |
 | R17 slot integrity; models deferred | M-T1/2/5/6 PASS; M-T7 native pending; M-T3/4/8 DEFERRED BY OWNER | |
 | R18 Console/Visual/Split one mixer | PASS (software); native interaction pending | renders, VM-T1/2/4/6 |
-| R19 spatial gain/pan/width/list/snapshots | PASS (software) with PARTIAL list rename/badges | `visual-mixer-coverage.md` |
+| R19 spatial gain/pan/width/list/snapshots | PASS (software); list rename, route badges and CLIP cue added | `visual-mixer-coverage.md`, `sprint_04/ui/visual-list-badges.png` |
 | R20 automation/undo/persistence/shared routing | undo/persistence PASS; automation arbitration not separately tested | |
 | R21 Track Tape / Master Tape with position | PASS (software) | |
 | R22 provider lifecycle/PDC/state/category bypass/group schema | PASS (software); tape-group linking schema only (as specified) | |
-| R23 spill, independent send pan, gain staging | spill/send pan PASS; slot I/O meters PARTIAL | |
+| R23 spill, independent send pan, gain staging | PASS (software): spill, send pan, dedicated-slot I/O meters (`sml_graph_slot_io_meters_*`) | |
 | R24 audio clock, negotiation, provenance | PASS (portable) | `clock-tests.log` |
 | R25 monitoring modes, compensation, placement | modes/PDC/timestamp placement PASS (software); calibration CL-T6 pending | |
 | R26 bounded realtime work, metrics | capture path fixed; render allocation-free in steady state (serial, test); remaining callback findings documented; native metrics pending | `realtime-audit.md`, `realtime_alloc` test |
@@ -67,7 +67,7 @@ counter available); see "Budget" below.
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
   CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
-  (**596 passed, 0 failed, exit 0**).
+  (**600 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired
