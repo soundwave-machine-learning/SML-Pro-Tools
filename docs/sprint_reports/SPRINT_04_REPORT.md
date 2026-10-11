@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (600 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (603 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -81,6 +81,15 @@ commit; result in `regression.log`):
 - **R19 Visual list** — route badge (destination + active sends), CLIP cue from the shared meter,
   double-click rename through `track.rename`; two-line rows so values fit the 230 px list
   (`route_badge_names_destination_and_active_sends`; render `ui/visual-list-badges.png`).
+- **V07/CL04 loop recording placement** — loop passes are split at the capture index of the loop
+  start derived from the timestamp (or transport) capture start: audio captured before the loop
+  start is skipped, late capture shortens and shifts only the first take; punch-in while already
+  looping is no longer misaligned (`loop_passes_follow_the_timestamp_capture_start`).
+- **R20 automation arbitration** — recall refused while playing; a recalled static value never
+  overrides a Read envelope in rendered audio; Off makes the recalled value audible; saving
+  while playing captures static model values (`vmt5_snapshot_recall_and_read_automation_arbitration`).
+- **CL05 session swap** — replaced `Arc<Session>` returned to the UI thread for dropping
+  (`replaced_sessions_are_dropped_off_the_audio_thread`).
 
 ## Evidence
 `regression.log`, `release-build.log`, `profile-run.log`, `callback-profile.csv`,

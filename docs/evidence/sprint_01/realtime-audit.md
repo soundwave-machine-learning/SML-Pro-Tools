@@ -13,7 +13,7 @@ execution container; see `environment.json`).
 | Plugin destruction | Retired instances returned to the UI thread on a channel (`take_retired`). | Unchanged. | OK (INSPECTED) |
 | Plugin state capture | `CaptureStates` answered between blocks *on the audio thread* (allocates, calls plugin `save_state`). | Unchanged. Documented as not realtime-safe; the host should capture while stopped. | OPEN (documented) |
 | Meter snapshot | `try_lock` only; `HashMap::insert` on first sight of a track (allocation once per new track). | Unchanged. | MINOR (first-block allocation) |
-| Session swap | `Arc<Session>` swapped; old Arc dropped on the audio thread (may free a whole session). | Unchanged. | OPEN (documented) |
+| Session swap | `Arc<Session>` swapped; old Arc dropped on the audio thread (may free a whole session). | Sprint 4 follow-up: the replaced `Arc<Session>` is sent back on the garbage channel and freed on the UI thread (`replaced_sessions_are_dropped_off_the_audio_thread`). The std channel itself may allocate a block every few dozen messages (same class as the existing plugin return path). | FIXED (RERUN) |
 | Stream clock | None: position = rendered-block end. | `StreamClock` (generation + integer frames serviced) advanced per callback; effective callback size range recorded. | NEW (`clock.rs`, tests RERUN) |
 
 ## Input callback (`crates/playback/src/record.rs`)

@@ -623,15 +623,9 @@ impl SoundApp {
             );
         }
         let rate = take.sample_rate;
-        let sel = self.engine.session().edit.selection;
-        if self.engine.session().edit.loop_record && !sel.is_empty() {
-            // Split the capture into one take per loop pass; each pass gets its own playlist.
-            let made = soundcraft_engine::io::add_loop_recording(&mut self.engine, sel, &take.channels, rate);
-            self.ui.status = format!("Loop-recorded {made} take(s)");
-            return;
-        }
-        // CL04: place the take from backend timestamps (output presentation anchor vs input
-        // capture instant, same host clock) when both exist; otherwise the transport estimate.
+        // CL04: place the take (or, loop recording, the capture's first frame) from backend
+        // timestamps (output presentation anchor vs input capture instant, same host clock) when
+        // both exist; otherwise the transport estimate.
         let mut start = self.record_start;
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -652,6 +646,13 @@ impl SoundApp {
             } else {
                 log::info!("take placed by transport estimate (backend timestamps unavailable)");
             }
+        }
+        let sel = self.engine.session().edit.selection;
+        if self.engine.session().edit.loop_record && !sel.is_empty() {
+            // Split the capture into one take per loop pass; each pass gets its own playlist.
+            let made = soundcraft_engine::io::add_loop_recording_at(&mut self.engine, sel, start, &take.channels, rate);
+            self.ui.status = format!("Loop-recorded {made} take(s)");
+            return;
         }
         match soundcraft_engine::io::add_recording(&mut self.engine, start, take.channels, rate) {
             Ok(ids) => {

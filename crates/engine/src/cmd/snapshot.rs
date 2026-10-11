@@ -144,6 +144,48 @@ mod tests {
         assert!(e.execute("snapshot.recall", &json!({"slot": "C"})).is_err());
     }
 
+    /// VM-T5 / R20 stop/play automation arbitration: recall is refused while playing; a recalled
+    /// static value never overrides a Read-mode envelope in the rendered audio (envelope wins);
+    /// with automation Off the recalled value is heard; saving during playback captures the
+    /// acknowledged static model values, not the envelope's instantaneous value.
+    #[test]
+    fn vmt5_snapshot_recall_and_read_automation_arbitration() {
+        use soundcraft_audio_io::AudioBuffer;
+        use soundcraft_model::{Clip, SourceAudio, SourceId};
+        use std::sync::Arc;
+        let mut e = Engine::default();
+        let a = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Vox"));
+        let s = e.session_mut();
+        s.pool.insert(SourceId(1), Arc::new(SourceAudio::new(AudioBuffer { sample_rate: 48_000, channels: vec![vec![0.5; 4800]] })));
+        let cid = s.new_clip_id();
+        s.track_mut(a).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(cid, "c", SourceId(1), 0, 0, 4800));
+        s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+        e.execute("mix.volume", &json!({"tracks": [a.0], "db": 0.0})).unwrap();
+        e.execute("snapshot.save", &json!({"slot": "A"})).unwrap();
+        e.execute("automation.write_range", &json!({"tracks": [a.0], "param": "volume", "start": 0, "end": 4800, "value": -12.0})).unwrap();
+        e.execute("mix.volume", &json!({"tracks": [a.0], "db": -3.0})).unwrap();
+        let peak = |e: &Engine| {
+            let out = soundcraft_mix::render_range(e.session(), soundcraft_time::Range::new(1000, 3000), 256);
+            out.iter().flat_map(|c| c.iter()).fold(0.0f32, |m, x| m.max(x.abs()))
+        };
+        let read_peak = peak(&e);
+        // Playing: recall refused, nothing changes.
+        e.transport.playing = true;
+        assert!(e.execute("snapshot.recall", &json!({"slot": "A"})).is_err());
+        assert_eq!(e.session().track(a).unwrap().mixer.volume_db, -3.0);
+        // Saving while playing captures the static (acknowledged) value, not the envelope's.
+        e.execute("snapshot.save", &json!({"slot": "B"})).unwrap();
+        assert_eq!(e.session().mix_snapshots["B"].channels[0].volume_db, -3.0);
+        e.transport.playing = false;
+        e.execute("snapshot.recall", &json!({"slot": "A"})).unwrap();
+        assert_eq!(e.session().track(a).unwrap().mixer.volume_db, 0.0, "static value recalled");
+        assert_eq!(peak(&e), read_peak, "Read envelope still governs the audio after recall");
+        assert!(!e.session().track(a).unwrap().automation.is_empty(), "automation is outside the snapshot scope");
+        e.execute("mix.automation_mode", &json!({"tracks": [a.0], "mode": "off"})).unwrap();
+        let off_peak = peak(&e);
+        assert!(off_peak > read_peak * 3.0, "Off: recalled 0 dB heard ({off_peak} vs {read_peak})");
+    }
+
     #[test]
     fn width_is_unavailable_on_mono() {
         let mut e = Engine::default();

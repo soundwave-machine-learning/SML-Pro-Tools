@@ -52,13 +52,13 @@ counter available); see "Budget" below.
 | R17 slot integrity; models deferred | M-T1/2/5/6 PASS; M-T7 native pending; M-T3/4/8 DEFERRED BY OWNER | |
 | R18 Console/Visual/Split one mixer | PASS (software); native interaction pending | renders, VM-T1/2/4/6 |
 | R19 spatial gain/pan/width/list/snapshots | PASS (software); list rename, route badges and CLIP cue added | `visual-mixer-coverage.md`, `sprint_04/ui/visual-list-badges.png` |
-| R20 automation/undo/persistence/shared routing | undo/persistence PASS; automation arbitration not separately tested | |
+| R20 automation/undo/persistence/shared routing | PASS (software): undo/persistence; stop/play automation arbitration (`vmt5_snapshot_recall_and_read_automation_arbitration`) | |
 | R21 Track Tape / Master Tape with position | PASS (software) | |
 | R22 provider lifecycle/PDC/state/category bypass/group schema | PASS (software); tape-group linking schema only (as specified) | |
 | R23 spill, independent send pan, gain staging | PASS (software): spill, send pan, dedicated-slot I/O meters (`sml_graph_slot_io_meters_*`) | |
 | R24 audio clock, negotiation, provenance | PASS (portable) | `clock-tests.log` |
 | R25 monitoring modes, compensation, placement | modes/PDC/timestamp placement PASS (software); calibration CL-T6 pending | |
-| R26 bounded realtime work, metrics | capture path fixed; render allocation-free in steady state (serial, test); remaining callback findings documented; native metrics pending | `realtime-audit.md`, `realtime_alloc` test |
+| R26 bounded realtime work, metrics | capture path fixed; render allocation-free in steady state (serial, test); replaced sessions freed off the audio thread; remaining findings (graph `sync` on structure change, unbounded command queue, state capture) documented; native metrics pending | `realtime-audit.md`, `realtime_alloc` test |
 
 ## Actual commands and results (all RERUN in this container)
 - Baseline: `cargo xtask ci` failed on environment (missing ALSA headers; then no GPU adapter);
@@ -67,7 +67,7 @@ counter available); see "Budget" below.
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
   CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
-  (**600 passed, 0 failed, exit 0**).
+  (**603 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired

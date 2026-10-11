@@ -604,22 +604,36 @@ pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, ra
 /// of takes made. Pass boundaries are exact sample multiples of the loop length (at the capture
 /// rate); the capture file itself is not modified.
 pub fn add_loop_recording(e: &mut Engine, sel: soundcraft_time::Range, channels: &[Vec<f32>], rate: u32) -> usize {
-    let pass =
-        usize::try_from(soundcraft_time::to_samples(sel.len() as f64 * f64::from(rate) / e.session().sample_rate.as_f64())).unwrap_or(0).max(1);
-    let total = channels.first().map_or(0, Vec::len);
-    let passes = total.div_ceil(pass).max(1);
+    add_loop_recording_at(e, sel, sel.start, channels, rate)
+}
+
+/// Loop recording whose first captured frame belongs at session position `capture_start` (from
+/// stream timestamps, CL04). Pass `k` is the capture span that played during loop pass `k`:
+/// audio captured before the loop start is not part of any pass; when capture began late, the
+/// first take starts later than the loop start by that amount. The capture is never resampled.
+pub fn add_loop_recording_at(e: &mut Engine, sel: soundcraft_time::Range, capture_start: Samples, channels: &[Vec<f32>], rate: u32) -> usize {
+    let to_capture = |session_samples: i64| soundcraft_time::to_samples(session_samples as f64 * f64::from(rate) / e.session().sample_rate.as_f64());
+    let pass = to_capture(sel.len()).max(1);
+    // Capture index of the loop start (negative: capture began after it).
+    let lead = to_capture(sel.start - capture_start);
+    let total = channels.first().map_or(0, Vec::len) as i64;
+    let passes = (total - lead).max(0).div_euclid(pass) + i64::from((total - lead).max(0).rem_euclid(pass) > 0);
     let mut made = 0;
-    for k in 0..passes {
-        let chunk: Vec<Vec<f32>> =
-            channels.iter().map(|c| c.get(k * pass..((k + 1) * pass).min(c.len())).map(<[f32]>::to_vec).unwrap_or_default()).collect();
-        if chunk.first().is_none_or(|c| c.len() < pass / 8) {
+    for k in 0..passes.max(1) {
+        let begin = lead + k * pass;
+        let (from, late) = if begin < 0 { (0, -begin) } else { (begin, 0) };
+        let end = (begin + pass).min(total);
+        if end - from < pass / 8 {
             continue;
         }
+        let (Ok(from_u), Ok(end_u)) = (usize::try_from(from), usize::try_from(end)) else { continue };
+        let chunk: Vec<Vec<f32>> = channels.iter().map(|c| c.get(from_u..end_u.min(c.len())).map(<[f32]>::to_vec).unwrap_or_default()).collect();
         if made > 0 {
             let armed: Vec<u64> = e.session().tracks.iter().filter(|t| t.mixer.record_arm).map(|t| t.id.0).collect();
             let _ = e.execute("track.playlist_new", &serde_json::json!({"tracks": armed}));
         }
-        if add_recording(e, sel.start, chunk, rate).is_ok() {
+        let at = sel.start + soundcraft_time::to_samples(late as f64 * e.session().sample_rate.as_f64() / f64::from(rate));
+        if add_recording(e, at, chunk, rate).is_ok() {
             made += 1;
         }
     }
@@ -654,6 +668,37 @@ mod loop_record_tests {
         let t2 = e2.session_mut().add_track(TrackKind::Audio, soundcraft_model::ChannelFormat::Mono, None);
         e2.session_mut().track_mut(t2).unwrap().mixer.record_arm = true;
         assert_eq!(add_loop_recording(&mut e2, sel, &[sliver], 48_000), 3, "100-sample tail (< 1/8 pass) dropped");
+    }
+
+    /// CL04 + V07: with a timestamp-derived capture start, passes split at the loop start's
+    /// capture index — early capture (pre-roll/latency) is skipped, late capture shortens and
+    /// shifts only the first take; later passes still begin exactly at the loop start.
+    #[test]
+    fn loop_passes_follow_the_timestamp_capture_start() {
+        let sel = soundcraft_time::Range::new(48_000, 48_000 + 1000);
+        let capture: Vec<f32> = (0..3300).map(|i| i as f32).collect();
+        for (capture_start, first_at, first_sample, takes) in [(47_700i64, 48_000i64, 300.0f32, 3usize), (48_050, 48_050, 0.0, 4)] {
+            let mut e = Engine::default();
+            let t = e.session_mut().add_track(TrackKind::Audio, soundcraft_model::ChannelFormat::Mono, Some("Vox"));
+            e.session_mut().track_mut(t).unwrap().mixer.record_arm = true;
+            assert_eq!(add_loop_recording_at(&mut e, sel, capture_start, std::slice::from_ref(&capture), 48_000), takes, "start {capture_start}");
+            let tr = e.session().track(t).unwrap();
+            for (k, pl) in tr.playlists.iter().enumerate() {
+                let c = &pl.clips[0];
+                let ClipContent::Audio { source, offset } = c.content else { panic!() };
+                let first = e.session().pool.get(source).unwrap().channel(0).unwrap()[offset as usize];
+                if k == 0 {
+                    assert_eq!((c.start, first), (first_at, first_sample), "start {capture_start}: first take");
+                } else {
+                    assert_eq!(c.start, 48_000);
+                    // Pass k begins where the loop start recurs in the capture.
+                    assert_eq!(first, (sel.start - capture_start + k as i64 * 1000) as f32);
+                }
+            }
+            if capture_start > sel.start {
+                assert_eq!(tr.playlists[0].clips[0].length, 950, "late capture: first take is short");
+            }
+        }
     }
 }
 
