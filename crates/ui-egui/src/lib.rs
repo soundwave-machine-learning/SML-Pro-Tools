@@ -109,6 +109,14 @@ pub struct UiState {
     /// Visual mixer node drag in progress (start values for Escape-cancel).
     #[serde(skip)]
     pub visual_gesture: Option<visual_mixer::VisualGesture>,
+    /// Output devices found by the last scan in the Playback Engine window.
+    #[serde(skip)]
+    pub output_devices: Vec<soundcraft_playback::device::DeviceCaps>,
+    /// Requested output device (host, name) and buffer (0 = backend default).
+    #[serde(skip)]
+    pub device_choice: Option<(String, String)>,
+    #[serde(skip)]
+    pub buffer_choice: u32,
 }
 
 impl Default for UiState {
@@ -163,6 +171,9 @@ impl Default for UiState {
             theme: theme::ThemeMode::Dark,
             visual_filter: String::new(),
             visual_gesture: None,
+            output_devices: Vec::new(),
+            device_choice: None,
+            buffer_choice: 0,
         }
     }
 }
@@ -587,7 +598,30 @@ impl SoundApp {
             self.ui.status = format!("Loop-recorded {made} take(s)");
             return;
         }
-        match soundcraft_engine::io::add_recording(&mut self.engine, self.record_start, take.channels, rate) {
+        // CL04: place the take from backend timestamps (output presentation anchor vs input
+        // capture instant, same host clock) when both exist; otherwise the transport estimate.
+        let mut start = self.record_start;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let anchor = self.player.as_ref().and_then(|p| p.play_anchor());
+            let first = r.first_capture.lock().ok().and_then(|f| *f);
+            if let (Some((play, pos)), Some(cap)) = (anchor, first) {
+                let diff = match cap.duration_since(&play) {
+                    Some(d) => d.as_secs_f64(),
+                    None => play.duration_since(&cap).map_or(0.0, |d| -d.as_secs_f64()),
+                };
+                let ledger = soundcraft_playback::clock::LatencyLedger {
+                    manual: self.engine.session().edit.value("record.offset_samples", 0.0) as i64,
+                    ..Default::default()
+                };
+                let p = soundcraft_playback::clock::place_by_timestamps(pos, diff, self.engine.session().sample_rate.hz(), &ledger);
+                log::info!("take placed by timestamps at {} (transport estimate {})", p.session_start, self.record_start);
+                start = p.session_start;
+            } else {
+                log::info!("take placed by transport estimate (backend timestamps unavailable)");
+            }
+        }
+        match soundcraft_engine::io::add_recording(&mut self.engine, start, take.channels, rate) {
             Ok(ids) => {
                 if let Some(p) = self.punch.take() {
                     // Keep only the punch range of each new take (merged into the Record undo step).
@@ -810,6 +844,16 @@ impl SoundApp {
             if !ctx.egui_wants_keyboard_input() && self.touched.is_empty() {
                 self.engine.end_merge();
             }
+        }
+        // CL04: plugin latency changed while recording — finalize the committed capture, stop
+        // with a named error; resuming is an explicit user action.
+        if self.engine.transport.recording && self.player.as_ref().is_some_and(|p| p.take_latency_alarm()) {
+            self.finish_recording();
+            if let Some(p) = &self.player {
+                p.stop();
+            }
+            self.engine.transport.playing = false;
+            self.ui.status = "Recording stopped: plugin latency changed during the take (alignment would be wrong). The take so far was kept; press Record to continue.".into();
         }
         // Stop the old playback before sending a replacement session to the audio thread.
         self.handle_transport(dt);

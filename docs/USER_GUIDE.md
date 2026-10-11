@@ -115,3 +115,19 @@ slots, routing, trims and automation are not part of snapshots.
   saved state). Summing processed stems is not guaranteed to recreate a mix with shared or
   nonlinear processing.
 - Exports refuse to run while a missing plugin would be silently skipped, unless you acknowledge it.
+
+## 9. Audio device, latency and tracking
+- **Setup › Playback Engine**: *Scan output devices*, pick host/device and buffer (32–1024 or
+  default) and *Apply* while stopped. If the device cannot run exactly those settings you get an
+  error and the previous device stays open — nothing is substituted silently. The window shows the
+  requested buffer, the range the driver reports, the callback size actually delivered and the
+  stream clock. Clock lock and driver latency show *Unknown* unless measured.
+- **Take placement**: when the audio backend provides stream timestamps, each take is placed from
+  them (playback presentation time vs. capture time) plus any measured residual / manual offset
+  (`record.offset_samples`); otherwise from the transport position. The recorded file never changes.
+- **Plugin latency changed during a take** (e.g. you switched a plugin to a lookahead mode):
+  recording stops with a message; everything captured so far is kept; press Record to continue.
+- **Tracking deactivation** (`mix.tracking_deactivate`, stopped): takes latent plugins out of the
+  live monitoring path to reduce delay; `mix.tracking_restore` brings them back. This is temporary,
+  never saved, and exports always use your normal mix.
+- **Post-fader inserts**: right-click an insert › *Post-fader* (stopped) to run it after the fader.

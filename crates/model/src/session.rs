@@ -319,6 +319,10 @@ pub struct Session {
     /// Temporary audition bypass (never saved; exports ignore it).
     #[serde(skip)]
     pub audition: crate::AuditionBypass,
+    /// CL03 temporary Tracking deactivations: (track, insert slot or dedicated-slot index).
+    /// Realtime only; never saved; exports use the normal graph.
+    #[serde(skip)]
+    pub tracking_off: std::collections::BTreeSet<(crate::TrackId, usize)>,
     #[serde(skip)]
     pub pool: SourcePool,
 }
@@ -357,6 +361,7 @@ impl Session {
             mix_profile: crate::MixProfile { graph_version: crate::GRAPH_VERSION, ..crate::MixProfile::default() },
             mix_snapshots: std::collections::BTreeMap::new(),
             audition: crate::AuditionBypass::default(),
+            tracking_off: std::collections::BTreeSet::new(),
             pool: SourcePool::default(),
         };
         s.edit.pre_roll = sample_rate.samples(2.0);

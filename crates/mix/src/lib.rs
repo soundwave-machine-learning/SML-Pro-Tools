@@ -370,6 +370,11 @@ pub struct MixEngine {
     /// Temporary audition bypass (SL05). Set by the realtime host only; offline renders and
     /// exports always use the saved normal state.
     pub audition: AuditionBypass,
+    /// Realtime host: honour temporary Tracking deactivations (never set for offline renders).
+    pub realtime_overrides: bool,
+    /// Total compensation latency changed while recording (CL04 capture-integrity event).
+    latency_event: bool,
+    rec_latency: Option<usize>,
     /// Mix profile and graph version of the session last rendered (set in `render`).
     profile: MixProfileView,
     graph_version: u32,
@@ -509,6 +514,9 @@ impl MixEngine {
             adopt: HashMap::new(),
             retired: Vec::new(),
             audition: AuditionBypass::default(),
+            realtime_overrides: false,
+            latency_event: false,
+            rec_latency: None,
             profile: MixProfileView::default(),
             graph_version: 1,
             main_acc: Vec::new(),
@@ -531,6 +539,11 @@ impl MixEngine {
         }
         // Force a re-sync so waiting slots pick their instance up.
         self.synced = (usize::MAX, usize::MAX, usize::MAX);
+    }
+
+    /// True once if the total compensation latency changed while recording (then cleared).
+    pub fn take_latency_event(&mut self) -> bool {
+        std::mem::take(&mut self.latency_event)
     }
 
     /// Instances taken out of service since the last call (drop them off the audio thread).
@@ -754,7 +767,13 @@ impl MixEngine {
             }
         }
         let busses = std::mem::take(&mut self.busses);
-        let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording, audition: self.audition };
+        let live_in = LiveInput {
+            input: &self.input,
+            monitor_only: self.monitor_only,
+            recording: self.recording,
+            audition: self.audition,
+            tracking: self.realtime_overrides,
+        };
         run_strips(&mut work, |(t, st)| process_strip(s, t, st, &busses, &live_in, pos, frames, any_solo));
         self.busses = busses;
         // Delay compensation: align every strip to the slowest; direct-to-main outputs also wait
@@ -763,7 +782,18 @@ impl MixEngine {
         let lmax_t = if pdc { work.iter().map(|(_, st)| st.latency).max().unwrap_or(0) } else { 0 };
         let lmax_a =
             if pdc { self.strips.iter().filter(|(id, _)| s.track(**id).is_some_and(is_aux)).map(|(_, st)| st.latency).max().unwrap_or(0) } else { 0 };
-        self.latency = lmax_t + lmax_a;
+        let total = lmax_t + lmax_a;
+        // Compare against the latency the take started with (not the first block's change).
+        match (self.recording, self.rec_latency) {
+            (true, None) => self.rec_latency = Some(total),
+            (true, Some(l)) if l != total => {
+                self.latency_event = true;
+                self.rec_latency = Some(total);
+            }
+            (false, _) => self.rec_latency = None,
+            _ => {}
+        }
+        self.latency = total;
         for (t, st) in work.iter_mut() {
             let ch = st.buf.len();
             st.align.set(lmax_t.saturating_sub(st.latency), ch);
@@ -794,7 +824,13 @@ impl MixEngine {
             if st.scratch.len() < self.max_block {
                 st.scratch.resize(self.max_block, 0.0);
             }
-            let live_in = LiveInput { input: &self.input, monitor_only: self.monitor_only, recording: self.recording, audition: self.audition };
+            let live_in = LiveInput {
+                input: &self.input,
+                monitor_only: self.monitor_only,
+                recording: self.recording,
+                audition: self.audition,
+                tracking: self.realtime_overrides,
+            };
             process_strip(s, t, &mut st, &self.busses, &live_in, pos, frames, any_solo);
             let ch = st.buf.len();
             st.align.set(if pdc { lmax_a.saturating_sub(st.latency) } else { 0 }, ch);
@@ -825,9 +861,9 @@ impl MixEngine {
                 {
                     let [_, sum_i, mt_i] = &mut strip.dedicated;
                     let [_, sum_d, mt_d] = &mut strip.slot_delay;
-                    run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, audition.summing);
+                    run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, audition.summing, false);
                     if t.mixer.slots.master_tape_position == TapePosition::Pre {
-                        run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape);
+                        run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape, false);
                     }
                 }
                 for (i, ins) in t.mixer.inserts.iter().enumerate() {
@@ -852,7 +888,7 @@ impl MixEngine {
                 if t.mixer.slots.master_tape_position == TapePosition::Post {
                     let [_, _, mt_i] = &mut strip.dedicated;
                     let [_, _, mt_d] = &mut strip.slot_delay;
-                    run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape);
+                    run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, audition.tape, false);
                 }
                 for (ch, src) in strip.buf.iter().enumerate().take(self.main.len()) {
                     if let Some(m) = self.main.get_mut(ch) {
@@ -992,6 +1028,8 @@ struct LiveInput<'a> {
     recording: bool,
     /// Temporary audition bypass (realtime only; offline renders/exports pass the default).
     audition: AuditionBypass,
+    /// Honour the session's temporary Tracking deactivations (realtime host only).
+    tracking: bool,
 }
 
 fn process_strip(
@@ -1108,7 +1146,15 @@ fn process_strip(
         let [tape_i, sum_i, mt_i] = &mut strip.dedicated;
         let [tape_d, sum_d, mt_d] = &mut strip.slot_delay;
         if is_bus {
-            latency += run_dedicated(t.mixer.slots.summing.as_ref(), sum_i, sum_d, &mut strip.buf, frames, live.audition.summing);
+            latency += run_dedicated(
+                t.mixer.slots.summing.as_ref(),
+                sum_i,
+                sum_d,
+                &mut strip.buf,
+                frames,
+                live.audition.summing,
+                live.tracking && s.tracking_off.contains(&(t.id, SlotKind::Summing.instance_index())),
+            );
         }
         let trim = db_to_gain(t.mixer.trim_db) * if t.mixer.phase_invert { -1.0 } else { 1.0 };
         if (trim - 1.0).abs() > f32::EPSILON {
@@ -1119,16 +1165,33 @@ fn process_strip(
         // Track Tape (before user inserts) / bus Master Tape when Pre.
         if is_bus {
             if t.mixer.slots.master_tape_position == TapePosition::Pre {
-                latency += run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, live.audition.tape);
+                latency += run_dedicated(
+                    t.mixer.slots.master_tape.as_ref(),
+                    mt_i,
+                    mt_d,
+                    &mut strip.buf,
+                    frames,
+                    live.audition.tape,
+                    live.tracking && s.tracking_off.contains(&(t.id, SlotKind::MasterTape.instance_index())),
+                );
             }
         } else {
-            latency += run_dedicated(t.mixer.slots.tape.as_ref(), tape_i, tape_d, &mut strip.buf, frames, live.audition.tape);
+            latency += run_dedicated(
+                t.mixer.slots.tape.as_ref(),
+                tape_i,
+                tape_d,
+                &mut strip.buf,
+                frames,
+                live.audition.tape,
+                live.tracking && s.tracking_off.contains(&(t.id, SlotKind::Tape.instance_index())),
+            );
         }
     }
     let mut gr = 0.0f32;
+    let v2_graph = s.mix_profile.graph_version >= 2;
     for (i, ins) in t.mixer.inserts.iter().enumerate() {
         let (Some(ins), Some(Some(slot))) = (ins, strip.plugins.get_mut(i)) else { continue };
-        if !ins.active || ins.bypass {
+        if !ins.active || ins.bypass || (v2_graph && ins.post_fader) || (live.tracking && s.tracking_off.contains(&(t.id, i))) {
             continue;
         }
         if live.audition.inserts {
@@ -1216,11 +1279,35 @@ fn process_strip(
             }
         }
     }
+    // User Post inserts (graph v2): after the fader, before Master Tape Post / post-fader tap.
+    // (While inserts are audition-bypassed their latency is already in `audition_delay`.)
+    if v2_graph {
+        for (i, ins) in t.mixer.inserts.iter().enumerate() {
+            let (Some(ins), Some(Some(slot))) = (ins, strip.plugins.get_mut(i)) else { continue };
+            if !ins.active || ins.bypass || !ins.post_fader || (live.tracking && s.tracking_off.contains(&(t.id, i))) {
+                continue;
+            }
+            latency = latency.saturating_add(slot.plugin.latency());
+            if live.audition.inserts {
+                continue;
+            }
+            apply_params(slot, ins, t, i, pos);
+            slot.plugin.process(&mut strip.buf, frames);
+        }
+    }
     // Bus Master Tape when Post: after the fader (and user Post inserts), before the post tap.
     if is_bus && t.mixer.slots.master_tape_position == TapePosition::Post {
         let [_, _, mt_i] = &mut strip.dedicated;
         let [_, _, mt_d] = &mut strip.slot_delay;
-        latency += run_dedicated(t.mixer.slots.master_tape.as_ref(), mt_i, mt_d, &mut strip.buf, frames, live.audition.tape);
+        latency += run_dedicated(
+            t.mixer.slots.master_tape.as_ref(),
+            mt_i,
+            mt_d,
+            &mut strip.buf,
+            frames,
+            live.audition.tape,
+            live.tracking && s.tracking_off.contains(&(t.id, SlotKind::MasterTape.instance_index())),
+        );
     }
     strip.latency = latency;
 }
@@ -1242,8 +1329,13 @@ fn run_dedicated(
     buf: &mut [Vec<f32>],
     frames: usize,
     audition_off: bool,
+    deactivated: bool,
 ) -> usize {
     let Some(cfg) = cfg else { return 0 };
+    if deactivated {
+        // CL03 Tracking deactivation: out of the live graph entirely (no processing, no delay).
+        return 0;
+    }
     let lat = inst.as_ref().map_or(0, |p| p.plugin.latency());
     if cfg.bypass || audition_off {
         delay.set(lat, buf.len());
@@ -2005,6 +2097,33 @@ fn apply_matrix_acc(src: &[Vec<f32>], frames: usize, dst: &mut [Vec<f64>], m: &M
             }
         }
     }
+}
+
+/// Every active processor (inserts by index, dedicated slots by their instance index) with its
+/// reported latency, for the CL03 Tracking ledger. Creates instances: call off the audio thread.
+pub fn processor_latencies(s: &Session) -> Vec<(TrackId, usize, String, usize)> {
+    let sr = s.sample_rate.as_f64() as f32;
+    let main_ch = main_channels(s);
+    let mut out = Vec::new();
+    for t in &s.tracks {
+        let ch = strip_channels(t, main_ch);
+        let mut probe = |idx: usize, ins: &soundcraft_model::Insert| {
+            if let Some(p) = create_instance(&ins.plugin, ins.state_bytes().as_deref(), sr, 512, ch) {
+                out.push((t.id, idx, ins.plugin.clone(), p.latency()));
+            }
+        };
+        for (i, ins) in t.mixer.inserts.iter().enumerate() {
+            if let Some(ins) = ins.as_ref().filter(|x| x.active && !x.bypass) {
+                probe(i, ins);
+            }
+        }
+        for k in SlotKind::ALL {
+            if let Some(ins) = t.mixer.slots.get(k).filter(|x| !x.bypass).and_then(|x| x.provider.as_ref()) {
+                probe(k.instance_index(), ins);
+            }
+        }
+    }
+    out
 }
 
 /// Per-strip processing latency (inserts + dedicated slots, plugin-reported) after one silent
@@ -3070,5 +3189,64 @@ mod sml_graph_tests {
         // Slot trim alone is visible processing.
         s.track_mut(t).unwrap().mixer.slots.tape = slot(4, None, -6.0);
         assert!((render(&s)[0][100] / base[0][100] - 10f32.powf(-6.0 / 20.0)).abs() < 1e-5);
+    }
+}
+
+#[cfg(test)]
+mod sml_post_insert_tests {
+    use super::*;
+    use soundcraft_audio_io::AudioBuffer;
+    use soundcraft_model::{Insert, SourceAudio, SourceId};
+    use std::sync::Arc;
+
+    /// SL-T2 Post inserts: a noncommuting affine Post insert runs after the fader; a Pre one
+    /// before it; legacy v1 sessions ignore the flag (all inserts pre-fader as before).
+    #[test]
+    fn sml_graph_post_inserts_follow_the_fader() {
+        let mut s = Session::default();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        s.pool.insert(SourceId(1), Arc::new(SourceAudio::new(AudioBuffer { sample_rate: 48_000, channels: vec![vec![0.25; 2048]] })));
+        let cid = s.new_clip_id();
+        let tr = s.track_mut(t).unwrap();
+        tr.playlist_mut().unwrap().clips.push(Clip::audio(cid, "dc", SourceId(1), 0, 0, 2048));
+        tr.mixer.pan = vec![-1.0];
+        tr.mixer.volume_db = -6.0;
+        let mut ins = Insert::new("test:affine:2:0.1");
+        ins.post_fader = true;
+        tr.mixer.inserts[0] = Some(ins);
+        let g = 10f32.powf(-6.0 / 20.0);
+        let v = render_range(&s, Range::new(0, 2048), 256)[0][1000];
+        assert!((v - (0.25 * g * 2.0 + 0.1)).abs() < 1e-6, "post: {v}");
+        s.track_mut(t).unwrap().mixer.inserts[0].as_mut().unwrap().post_fader = false;
+        let v = render_range(&s, Range::new(0, 2048), 256)[0][1000];
+        assert!((v - ((0.25 * 2.0 + 0.1) * g)).abs() < 1e-6, "pre: {v}");
+        s.track_mut(t).unwrap().mixer.inserts[0].as_mut().unwrap().post_fader = true;
+        s.mix_profile.graph_version = 1;
+        let v = render_range(&s, Range::new(0, 2048), 256)[0][1000];
+        assert!((v - ((0.25 * 2.0 + 0.1) * g)).abs() < 1e-6, "legacy keeps pre-fader order: {v}");
+    }
+
+    /// CL04: a compensation-latency change during recording raises one event; a latent plugin
+    /// present when the take starts does not; nothing fires while not recording.
+    #[test]
+    fn latency_change_while_recording_raises_an_event() {
+        let mut s = Session::default();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        s.track_mut(t).unwrap().mixer.inserts[0] = Some(Insert::new("test:delay:64"));
+        let mut eng = MixEngine::new(48_000.0, 256);
+        let mut out = vec![vec![0.0f32; 256]; 2];
+        eng.render(&s, 0, 256, &mut out);
+        eng.recording = true;
+        eng.render(&s, 256, 256, &mut out);
+        eng.render(&s, 512, 256, &mut out);
+        assert!(!eng.take_latency_event(), "steady latency at take start is fine");
+        s.track_mut(t).unwrap().mixer.inserts[1] = Some(Insert::new("test:delay:128"));
+        eng.render(&s, 768, 256, &mut out);
+        assert!(eng.take_latency_event(), "latency changed mid-take");
+        assert!(!eng.take_latency_event(), "reported once");
+        eng.recording = false;
+        s.track_mut(t).unwrap().mixer.inserts[1] = None;
+        eng.render(&s, 1024, 256, &mut out);
+        assert!(!eng.take_latency_event());
     }
 }

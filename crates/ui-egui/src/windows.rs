@@ -423,10 +423,88 @@ pub fn playback_engine(app: &mut SoundApp, ctx: &egui::Context) {
                     .map_or("opened on first record".to_string(), |r| format!("{} ({} ch @ {} Hz)", r.device_name, r.channels, r.sample_rate)),
             );
             ui.end_row();
-            ui.label("Mix block size");
-            ui.label("512 samples (resampled to the device rate when they differ)");
+            ui.label("Live render");
+            ui.label("exactly each callback's frames at equal rates (max 512); 512-frame blocks when resampling");
             ui.end_row();
+            if let Some(p) = &app.player {
+                let (generation, frames, last) = p.stream_clock();
+                ui.label("Requested buffer");
+                ui.label(p.negotiated.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames")));
+                ui.end_row();
+                ui.label("Reported buffer range");
+                ui.label(p.negotiated.as_ref().map_or("not queried".to_string(), |n| format!("{:?}", n.reported_buffer)));
+                ui.end_row();
+                ui.label("Effective callback");
+                ui.label(if last == 0 {
+                    "no callback yet".to_string()
+                } else {
+                    format!("{last} frames ({:.2} ms)", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
+                });
+                ui.end_row();
+                ui.label("Stream clock");
+                ui.label(format!("generation {generation}, {frames} frames serviced"));
+                ui.end_row();
+                ui.label("Clock lock / driver latency");
+                ui.label("Unknown (not reported by this backend; not assumed zero)");
+                ui.end_row();
+            }
         });
+        ui.separator();
+        ui.horizontal(|ui| {
+            if ui.button("Scan output devices").clicked() {
+                app.ui.output_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Output);
+                if app.ui.output_devices.is_empty() {
+                    app.ui.status = "No output devices found by this build's audio hosts".into();
+                }
+            }
+            let label = app.ui.device_choice.as_ref().map_or("default device".to_string(), |(h, d)| format!("{h}: {d}"));
+            egui::ComboBox::from_id_salt("pe_device").selected_text(label).width(200.0).show_ui(ui, |ui| {
+                if ui.selectable_label(app.ui.device_choice.is_none(), "default device").clicked() {
+                    app.ui.device_choice = None;
+                }
+                for d in app.ui.output_devices.clone() {
+                    let sel = app.ui.device_choice.as_ref() == Some(&(d.host.clone(), d.name.clone()));
+                    if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
+                        app.ui.device_choice = Some((d.host, d.name));
+                    }
+                }
+            });
+            egui::ComboBox::from_id_salt("pe_buffer")
+                .selected_text(if app.ui.buffer_choice == 0 { "default buffer".to_string() } else { format!("{} frames", app.ui.buffer_choice) })
+                .show_ui(ui, |ui| {
+                    for b in [0u32, 32, 64, 128, 256, 512, 1024] {
+                        let l = if b == 0 { "default buffer".to_string() } else { format!("{b} frames") };
+                        if ui.selectable_label(app.ui.buffer_choice == b, l).clicked() {
+                            app.ui.buffer_choice = b;
+                        }
+                    }
+                });
+        });
+        let playing = app.is_playing() || app.engine.transport.recording;
+        if ui
+            .add_enabled(!playing, egui::Button::new("Apply (stopped only)"))
+            .on_disabled_hover_text("Stop the transport to change the device")
+            .clicked()
+        {
+            let req = soundcraft_playback::device::DeviceRequest {
+                host: app.ui.device_choice.as_ref().map(|c| c.0.clone()),
+                device: app.ui.device_choice.as_ref().map(|c| c.1.clone()),
+                sample_rate: app.engine.session().sample_rate.hz(),
+                buffer_frames: (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice),
+                channels: 2,
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            match soundcraft_playback::Player::open_requested(app.engine.session_arc(), &req) {
+                Ok(p) => {
+                    app.player = Some(p);
+                    app.ui.status = "Audio device opened with the requested settings".into();
+                }
+                // The previous device stays open: no silent substitution.
+                Err(e) => app.ui.status = format!("Device not changed: {e}"),
+            }
+            #[cfg(target_arch = "wasm32")]
+            let _ = req;
+        }
         let mut dc = app.engine.session().edit.delay_compensation;
         if ui.checkbox(&mut dc, "Delay compensation").changed() {
             let _ = app.run("options.delay_compensation", json!({"value": dc}));

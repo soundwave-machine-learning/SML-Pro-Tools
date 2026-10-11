@@ -438,6 +438,9 @@ pub struct Insert {
     /// state), standard base64. Restored into a new instance before it first processes.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub state: Option<String>,
+    /// SL02 user Post insert: processed after the fader (graph version 2). Default Pre.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub post_fader: bool,
 }
 
 fn yes() -> bool {
@@ -446,7 +449,15 @@ fn yes() -> bool {
 
 impl Insert {
     pub fn new(plugin: impl Into<String>) -> Self {
-        Insert { plugin: plugin.into(), params: BTreeMap::new(), bypass: false, active: true, preset: String::from("<factory default>"), state: None }
+        Insert {
+            plugin: plugin.into(),
+            params: BTreeMap::new(),
+            bypass: false,
+            active: true,
+            preset: String::from("<factory default>"),
+            state: None,
+            post_fader: false,
+        }
     }
 
     /// The decoded plugin state (`None` when absent or malformed).

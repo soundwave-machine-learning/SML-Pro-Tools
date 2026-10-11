@@ -75,3 +75,18 @@ in tolerances.
 | R22 provider lifecycle/PDC/state/category bypass/group-ready schema | PASS (software); tape-group linking not implemented (schema only, as specified) |
 | R23 spill, independent send pan, gain staging | PASS (software); slot meters/I-O meter taps not added (PARTIAL) |
 | R25 monitoring modes/compensation | modes + PDC PASS; calibrated placement and tracking deactivation PARTIAL |
+
+## Carry-over completed after the A3 commit (before entering Sprint 4)
+Mandatory items earlier reports listed as PARTIAL, implemented and tested (full CI exit 0, 616
+passed — `docs/evidence/sprint_03/ci-sprint3-carryover.log`):
+| Item | Change | Test |
+|---|---|---|
+| SL02 user Post inserts | `Insert.post_fader` (graph v2), `mix.insert_post` (stopped), insert-menu toggle, signal-flow readout | `mix sml_graph_post_inserts_follow_the_fader` (noncommuting fixture; legacy v1 unchanged) |
+| CL03 Tracking deactivation | `mix.tracking_deactivate` / `mix.tracking_restore` (stopped; realtime-only, never saved, exports keep the normal graph); latency report lists latent processors | `engine cl03_tracking_deactivation_is_realtime_only` |
+| CL04 latency change while recording | engine raises one event when compensation latency changes mid-take; UI finalizes the take, stops with a named error, resume is explicit | `mix latency_change_while_recording_raises_an_event` |
+| R01/CL02/CL06 device selection | `Player::open_requested` (exact host/device/rate/buffer or error; old device kept); Playback Engine window: scan, choose device/buffer, apply stopped, requested vs reported vs effective callback, stream generation, Unknown clock lock/latency | negotiation fixtures (Sprint 1); UI not natively exercised (no devices here) |
+| CL04 timestamp placement | output callback records (presentation instant, session sample); input records the first capture instant; takes are placed by `clock::place_by_timestamps` (driver terms inside the instants, residual/manual once), else transport estimate | `playback timestamp_placement_signs`, `playback_anchor_maps_instant_to_session_position` |
+
+Still PARTIAL: background/cancellable plugin scanning; multi-select Visual drag; slot I/O meters;
+simplified recording view; loop-record placement uses the loop start (not timestamps); native
+verification of every item above (H1–H3).

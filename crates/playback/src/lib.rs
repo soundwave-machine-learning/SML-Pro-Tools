@@ -81,6 +81,10 @@ struct Shared {
     stream_generation: std::sync::atomic::AtomicU64,
     stream_frames: std::sync::atomic::AtomicU64,
     last_callback_frames: AtomicU32,
+    /// Set by the audio thread when compensation latency changed during recording.
+    latency_alarm: AtomicBool,
+    /// Latest (presentation instant, session sample presented then) while playing (CL04).
+    play_anchor: Mutex<Option<(cpal::StreamInstant, Samples)>>,
 }
 
 impl Shared {
@@ -93,6 +97,8 @@ impl Shared {
             stream_generation: std::sync::atomic::AtomicU64::new(0),
             stream_frames: std::sync::atomic::AtomicU64::new(0),
             last_callback_frames: AtomicU32::new(0),
+            latency_alarm: AtomicBool::new(false),
+            play_anchor: Mutex::new(None),
         }
     }
 }
@@ -126,6 +132,7 @@ struct AudioState {
 fn new_engine(sr: f32) -> MixEngine {
     let mut m = MixEngine::new(sr, BLOCK);
     m.set_external_instances(true);
+    m.realtime_overrides = true;
     m.metronome = true;
     m
 }
@@ -258,6 +265,10 @@ impl AudioState {
         self.mix.monitor_only = !self.playing;
         self.mix.recording = self.recording;
         self.mix.render(&self.session, self.pos, n, &mut self.block);
+        if self.mix.take_latency_event() {
+            // CL04: a latency change while recording is a capture-integrity event.
+            self.shared.latency_alarm.store(true, Ordering::Release);
+        }
         self.send_garbage();
         for (d, s) in self.pending.iter_mut().zip(self.block.iter()) {
             if let (Some(dd), Some(ss)) = (d.get_mut(..n), s.get(..n)) {
@@ -281,6 +292,19 @@ impl AudioState {
                 }
             }
         }
+    }
+
+    /// [`AudioState::fill`] with the backend's presentation instant for the buffer: records the
+    /// (instant, session position) anchor used to place recordings by timestamp. `try_lock` only.
+    fn fill_stamped(&mut self, out: &mut [f32], channels: usize, playback: cpal::StreamInstant) {
+        self.drain();
+        if self.playing {
+            let queued = (self.pending_len as f64 - self.read).max(0.0) as i64;
+            if let Ok(mut a) = self.shared.play_anchor.try_lock() {
+                *a = Some((playback, self.pos - queued));
+            }
+        }
+        self.fill(out, channels);
     }
 
     /// Fill an interleaved device buffer.
@@ -397,6 +421,8 @@ pub struct Player {
     pub device_channels: u16,
     /// True when no audio device could be opened (silent clock).
     pub silent: bool,
+    /// The negotiated configuration when a specific device/rate/buffer was requested.
+    pub negotiated: Option<device::NegotiatedConfig>,
 }
 
 impl Player {
@@ -412,14 +438,37 @@ impl Player {
         self.side.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
+    /// Opens exactly the requested output host/device/rate/buffer (CL02). A request the device
+    /// cannot honour is an error — never a silent substitution — and the caller keeps its
+    /// current player. Change devices only while stopped.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn open_requested(session: Arc<Session>, req: &device::DeviceRequest) -> Result<Player, String> {
+        let caps = device::enumerate(device::Direction::Output);
+        let neg = device::negotiate(req, &caps).map_err(|e| e.to_string())?;
+        let dev = device::find_device(&neg, device::Direction::Output)?;
+        let cfg = device::stream_config(&neg);
+        let mut p = Player::open_from(Arc::clone(&session), Ok((dev, cfg, neg.device.clone())));
+        if p.silent {
+            return Err(format!("`{}` could not start a stream with the negotiated settings", neg.device));
+        }
+        p.negotiated = Some(neg);
+        p.update_session(session);
+        Ok(p)
+    }
+
     fn open(session: Arc<Session>) -> Player {
+        let want = session.sample_rate.hz();
+        let want_ch = u16::try_from(main_channels(&session)).unwrap_or(2);
+        Player::open_from(session, open_device(want, want_ch))
+    }
+
+    fn open_from(session: Arc<Session>, dev: Result<(cpal::Device, cpal::StreamConfig, String), String>) -> Player {
         let (gtx, grx) = channel();
         let side = Mutex::new(Side { shadow: HashMap::new(), rate: session.sample_rate.as_f64() as f32, editors: HashMap::new(), garbage: grx });
         let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let want = session.sample_rate.hz();
-        let want_ch = u16::try_from(main_channels(&session)).unwrap_or(2);
-        match open_device(want, want_ch) {
+        match dev {
             Ok((device, config, name)) => {
                 let rate = config.sample_rate.0;
                 let channels = usize::from(config.channels);
@@ -433,9 +482,9 @@ impl Player {
                 use cpal::traits::{DeviceTrait, StreamTrait};
                 match device.build_output_stream(
                     &config,
-                    move |data: &mut [f32], _: &cpal::OutputCallbackInfo| {
+                    move |data: &mut [f32], info: &cpal::OutputCallbackInfo| {
                         mark_audio_thread();
-                        state.fill(data, channels);
+                        state.fill_stamped(data, channels, info.timestamp().playback);
                     },
                     err_fn,
                     None,
@@ -454,6 +503,7 @@ impl Player {
                             device_rate: rate,
                             device_channels: config.channels,
                             silent: false,
+                            negotiated: None,
                         }
                     }
                     Err(e) => {
@@ -527,6 +577,7 @@ impl Player {
             device_rate: rate,
             device_channels: 0,
             silent: true,
+            negotiated: None,
         }
     }
 
@@ -548,6 +599,7 @@ impl Player {
             device_rate: session.sample_rate.hz(),
             device_channels: 0,
             silent: true,
+            negotiated: None,
         }
     }
 
@@ -657,6 +709,16 @@ impl Player {
 
     pub fn is_playing(&self) -> bool {
         self.shared.playing.load(Ordering::Relaxed)
+    }
+
+    /// The latest playback anchor: the backend instant at which session sample `pos` is presented.
+    pub fn play_anchor(&self) -> Option<(cpal::StreamInstant, Samples)> {
+        self.shared.play_anchor.lock().map(|a| *a).unwrap_or(None)
+    }
+
+    /// True once after the audio thread saw the compensation latency change while recording.
+    pub fn take_latency_alarm(&self) -> bool {
+        self.shared.latency_alarm.swap(false, Ordering::AcqRel)
     }
 
     /// Stream clock telemetry: (generation, device frames serviced, last callback size).
@@ -923,6 +985,22 @@ mod tests {
         assert_eq!(st.clock.frames(), total as u64);
         assert_eq!(st.clock.generation(), g);
         assert_eq!(shared.stream_frames.load(Ordering::Relaxed), total as u64);
+    }
+
+    /// CL04 anchor: the output callback records which session sample is presented at the
+    /// backend's playback instant (exact rendering → nothing queued, so it is the transport pos).
+    #[test]
+    fn playback_anchor_maps_instant_to_session_position() {
+        let s = Arc::new(soundcraft_model::Session::default());
+        let shared = Arc::new(Shared::new());
+        let (tx, rx) = channel();
+        let mut st = AudioState::new(rx, Arc::clone(&shared), s, 48_000.0, channel().0);
+        tx.send(Cmd::Play { from: 5_000, end: None, looped: None }).unwrap();
+        let mut out = vec![0.0f32; 256];
+        st.fill_stamped(&mut out, 2, cpal::StreamInstant::new(10, 0));
+        assert_eq!(*shared.play_anchor.lock().unwrap(), Some((cpal::StreamInstant::new(10, 0), 5_000)));
+        st.fill_stamped(&mut out, 2, cpal::StreamInstant::new(10, 2_666_667));
+        assert_eq!(shared.play_anchor.lock().unwrap().unwrap().1, 5_128);
     }
 
     #[test]

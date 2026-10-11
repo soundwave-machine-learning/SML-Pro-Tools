@@ -104,6 +104,29 @@ pub fn specs() -> Vec<CommandSpec> {
             has_selection,
             insert_params
         ),
+        cmd!(
+            "mix.insert_post",
+            "Insert Pre/Post Fader",
+            [],
+            None,
+            "{track?, slot, post: bool} — graph v2; change while stopped",
+            has_selection,
+            |e, p| {
+                let (t, slot) = track_slot(e, p, "mix.insert_post", INSERT_SLOTS)?;
+                let post = p.get("post").and_then(Value::as_bool).ok_or_else(|| bad("mix.insert_post", "`post` (bool) required"))?;
+                if e.transport.playing {
+                    return Err(bad("mix.insert_post", "stop playback to move an insert before/after the fader"));
+                }
+                let s = e.session_mut();
+                let ins = s
+                    .track_mut(t)
+                    .and_then(|tr| tr.mixer.inserts.get_mut(slot))
+                    .and_then(Option::as_mut)
+                    .ok_or_else(|| bad("mix.insert_post", "empty slot"))?;
+                ins.post_fader = post;
+                Ok(json!({"slot": slot, "post_fader": post}))
+            }
+        ),
         cmd!("mix.insert_move", "Move Insert", [], None, "{track?, from, to}", has_selection, insert_move),
         cmd!("mix.send", "Assign Send", [], None, "{track?, slot?: 0..9|a..j, bus: name, level_db?: 0, pre_fader?: false}", has_selection, send),
         cmd!("mix.send_remove", "Remove Send", [], None, "{track?, slot}", has_selection, |e, p| {

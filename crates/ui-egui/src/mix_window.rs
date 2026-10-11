@@ -610,6 +610,12 @@ pub fn plugin_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, slot: usize, oc
         if ui.button("no insert").clicked() {
             let _ = app.run("mix.insert_remove", json!({"track": id.0, "slot": slot}));
         }
+        let post = app.engine.session().track(id).and_then(|t| t.mixer.inserts.get(slot)).and_then(Option::as_ref).is_some_and(|i| i.post_fader);
+        if ui.selectable_label(post, "Post-fader (after the fader)").clicked()
+            && let Err(e) = app.run("mix.insert_post", json!({"track": id.0, "slot": slot, "post": !post}))
+        {
+            app.ui.status = e;
+        }
         ui.separator();
     }
     let mut cats: Vec<soundcraft_dsp::Category> = Vec::new();

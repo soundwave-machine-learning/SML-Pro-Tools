@@ -254,6 +254,20 @@ impl LatencyLedger {
     }
 }
 
+/// CL04 placement from backend stream timestamps: the output stream reported that session sample
+/// `play_pos` is presented at instant P; the input stream reported that the take's first frame
+/// was captured at instant C (same host clock). `capture_minus_playback` = C − P in seconds
+/// (signed). The take starts at `play_pos + round((C − P)·rate)`, then the measured residual and
+/// manual offsets are subtracted once. Driver latencies are already inside the instants, so they
+/// are not applied again. The raw file is never modified — only placement metadata.
+pub fn place_by_timestamps(play_pos: i64, capture_minus_playback: f64, rate: u32, ledger: &LatencyLedger) -> Placement {
+    let d = (capture_minus_playback * f64::from(rate)).round_ties_even();
+    let raw = if d.is_finite() && d.abs() < 9.0e15 { play_pos.saturating_add(d as i64) } else { play_pos };
+    let residual = ledger.measured_residual.samples.unwrap_or(0);
+    let correction = residual.saturating_add(ledger.manual);
+    Placement { session_start: raw.saturating_sub(correction), correction, incomplete: false }
+}
+
 /// Bounded statistics for callback timing (CL05/CL06). Load uses frames serviced / rate as the
 /// denominator, never the observed wall interval.
 #[derive(Debug, Clone, Default, PartialEq, serde::Serialize)]
@@ -392,6 +406,19 @@ mod tests {
         assert!(p.incomplete);
         assert_eq!(p.session_start, 48_300, "nothing invented");
         assert!(u.place(&map, 8, 1).is_err(), "stale generation rejected");
+    }
+
+    /// CL04 timestamp placement: a take whose first frame was captured 2.5 ms after the instant
+    /// session sample 96 000 was presented starts at 96 120 (48 kHz); a measured +D residual is
+    /// subtracted exactly once; manual offsets add their sign.
+    #[test]
+    fn timestamp_placement_signs() {
+        let l = LatencyLedger::default();
+        assert_eq!(place_by_timestamps(96_000, 0.0025, 48_000, &l).session_start, 96_120);
+        assert_eq!(place_by_timestamps(96_000, -0.001, 48_000, &l).session_start, 95_952);
+        let l = LatencyLedger { measured_residual: Timed::known(12, Provenance::Measured), manual: -2, ..LatencyLedger::default() };
+        let p = place_by_timestamps(96_000, 0.0025, 48_000, &l);
+        assert_eq!((p.session_start, p.correction), (96_110, 10));
     }
 
     #[test]

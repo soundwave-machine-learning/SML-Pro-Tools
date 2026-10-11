@@ -48,6 +48,8 @@ pub struct Recorder {
     pub channels: usize,
     /// The negotiated configuration when one was requested (None = host default device).
     pub config: Option<NegotiatedConfig>,
+    /// Backend capture instant of the current take's first frame (CL04 placement).
+    pub first_capture: Arc<Mutex<Option<cpal::StreamInstant>>>,
 }
 
 /// Seconds of capture ring headroom (the writer must stay within this of the callback).
@@ -89,17 +91,25 @@ impl Recorder {
         let ring = CaptureRing::new(channels, (f64::from(rate) * RING_SECONDS) as usize);
         let stats = Arc::new(StreamStats::default());
         let (mon, rg, st) = (Arc::clone(&monitor), Arc::clone(&ring), Arc::clone(&stats));
+        let first_capture: Arc<Mutex<Option<cpal::StreamInstant>>> = Arc::new(Mutex::new(None));
+        let fc = Arc::clone(&first_capture);
         let mut clock = StreamClock::new(rate);
         st.generation.store(clock.generation(), Ordering::Release);
         st.min_block.store(u32::MAX, Ordering::Release);
         let stream = device
             .build_input_stream(
                 &config,
-                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                move |data: &[f32], info: &cpal::InputCallbackInfo| {
                     crate::mark_audio_thread();
                     let stamp = clock.advance(data.len() / channels);
                     mon.push(data);
-                    rg.push(data, stamp.generation, stamp.stream_frame);
+                    let first = rg.accepted_frames() == 0;
+                    if rg.push(data, stamp.generation, stamp.stream_frame)
+                        && first
+                        && let Ok(mut f) = fc.try_lock()
+                    {
+                        *f = Some(info.timestamp().capture);
+                    }
                     st.frames.store(clock.frames(), Ordering::Release);
                     st.min_block.fetch_min(stamp.frames, Ordering::AcqRel);
                     st.max_block.fetch_max(stamp.frames, Ordering::AcqRel);
@@ -123,6 +133,7 @@ impl Recorder {
             sample_rate: rate,
             channels,
             config: negotiated,
+            first_capture,
         })
     }
 
@@ -140,6 +151,9 @@ impl Recorder {
         let mut a = self.active();
         if a.is_some() {
             return Err("a take is already being recorded".into());
+        }
+        if let Ok(mut f) = self.first_capture.lock() {
+            *f = None;
         }
         let cap =
             ActiveCapture::start_on_ring(Arc::clone(&self.ring), dir, base, self.sample_rate, WriterConfig::default()).map_err(|e| e.to_string())?;

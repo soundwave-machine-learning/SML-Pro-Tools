@@ -75,6 +75,31 @@ pub fn specs() -> Vec<CommandSpec> {
         }),
         cmd!(noundo "mix.audition_bypass", "Audition Bypass", [], None, "{summing?, tape?, inserts?, all?: bool} — temporary; never saved or exported", always, audition),
         cmd!(noundo "mix.monitor_mode", "Monitoring Mode", [], None, "{mode: tracking|mixing|hardware}", always, monitor_mode),
+        cmd!(noundo "mix.tracking_deactivate", "Tracking: Deactivate Latent Processors", [], None, "{min_latency_samples?: 1} — stopped only; temporary, never saved or exported", always, |e, p| {
+            let cmd = "mix.tracking_deactivate";
+            if e.transport.playing {
+                return Err(bad(cmd, "stop playback first (removing latency rebuilds the graph)"));
+            }
+            let min = usize::try_from(i64_or(p, "min_latency_samples", 1).max(1)).unwrap_or(1);
+            let rows = soundcraft_mix::processor_latencies(e.session());
+            let s = e.session_mut();
+            let mut list = Vec::new();
+            for (t, idx, id, lat) in rows {
+                if lat >= min {
+                    s.tracking_off.insert((t, idx));
+                    list.push(json!({"track": s.track(t).map(|x| x.name.clone()), "slot": idx, "plugin": id, "latency_samples": lat}));
+                }
+            }
+            Ok(json!({"deactivated": list, "notice": "monitoring now differs from the saved mix; exports still use the normal graph; use mix.tracking_restore to return"}))
+        }),
+        cmd!(noundo "mix.tracking_restore", "Tracking: Restore Processors", [], None, "{}", always, |e, _| {
+            if e.transport.playing {
+                return Err(bad("mix.tracking_restore", "stop playback first"));
+            }
+            let n = e.session().tracking_off.len();
+            e.session_mut().tracking_off.clear();
+            Ok(json!({"restored": n}))
+        }),
         cmd!(query "mix.latency_report", "Latency Report", [], None, "{}", always, |e, _| Ok(latency_report(e))),
         cmd!(query "mix.signal_flow", "Signal Flow", [], None, "{track}", has_tracks, signal_flow),
         cmd!(noundo "file.export_path", "Export Named Path", [], None, "{path, kind: raw|edited_dry|processed|full_mix, track?, start?, end?, acknowledge_missing?}", always, export_path),
@@ -228,11 +253,16 @@ fn latency_report(e: &Engine) -> Value {
     let s = e.session();
     let rows = soundcraft_mix::strip_latencies(s);
     let worst = rows.iter().map(|(_, l)| *l).max().unwrap_or(0);
+    let processors: Vec<Value> = soundcraft_mix::processor_latencies(s)
+        .into_iter()
+        .filter(|x| x.3 > 0)
+        .map(|(t, idx, id, lat)| json!({"track": s.track(t).map(|x| x.name.clone()), "slot": idx, "plugin": id, "latency_samples": lat, "tracking_deactivated": s.tracking_off.contains(&(t, idx))}))
+        .collect();
     let v: Vec<Value> = rows
         .iter()
         .filter_map(|(t, l)| s.track(*t).map(|tr| json!({"track": tr.name, "latency_samples": l, "ms": *l as f64 * 1000.0 / s.sample_rate.as_f64()})))
         .collect();
-    json!({"strips": v, "worst_samples": worst, "provenance": "plugin-reported latency (inserts + dedicated slots); device/driver latency is Unknown until measured"})
+    json!({"strips": v, "worst_samples": worst, "latent_processors": processors, "provenance": "plugin-reported latency (inserts + dedicated slots); device/driver latency is Unknown until measured"})
 }
 
 fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
@@ -242,8 +272,13 @@ fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
     let slot = |k: SlotKind| {
         tr.mixer.slots.get(k).map_or_else(|| "empty".to_string(), |x| x.provider.as_ref().map_or("Clean/None".into(), |i| i.plugin.clone()))
     };
-    let inserts: Vec<String> =
-        tr.mixer.inserts.iter().enumerate().filter_map(|(i, x)| x.as_ref().map(|x| format!("{}:{}", (b'a' + i as u8) as char, x.plugin))).collect();
+    let inserts: Vec<String> = tr
+        .mixer
+        .inserts
+        .iter()
+        .enumerate()
+        .filter_map(|(i, x)| x.as_ref().map(|x| format!("{}:{}{}", (b'a' + i as u8) as char, x.plugin, if x.post_fader { " (post)" } else { "" })))
+        .collect();
     let sends: Vec<String> = tr
         .mixer
         .sends
@@ -269,7 +304,13 @@ fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
             if pre {
                 v.push(format!("Master Tape Pre [{}]", slot(SlotKind::MasterTape)));
             }
-            v.extend(["user inserts".to_string(), format!("Width {:.0}%", tr.mixer.width * 100.0), "pre-fader send tap".into(), "fader".into()]);
+            v.extend([
+                "user Pre inserts".to_string(),
+                format!("Width {:.0}%", tr.mixer.width * 100.0),
+                "pre-fader send tap".into(),
+                "fader".into(),
+                "user Post inserts".into(),
+            ]);
             if !pre {
                 v.push(format!("Master Tape Post [{}]", slot(SlotKind::MasterTape)));
             }
@@ -284,17 +325,18 @@ fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
             "source (comp, clip gain/fades, edits)".into(),
             "utility trim/polarity".into(),
             format!("Tape [{}]", slot(SlotKind::Tape)),
-            "user inserts".into(),
+            "user Pre inserts".into(),
             format!("Width {:.0}%", tr.mixer.width * 100.0),
             "pre-fader send tap".into(),
             "fader".into(),
+            "user Post inserts".into(),
             "post-fader send tap".into(),
             "output panner".into(),
             "output route/mute".into(),
         ],
     };
     Ok(
-        json!({"track": tr.name, "order": order, "inserts": inserts, "sends": sends, "note": "user inserts are pre-fader in this build (no Post-insert section yet)"}),
+        json!({"track": tr.name, "order": order, "inserts": inserts, "sends": sends, "note": "inserts marked post_fader run after the fader (graph v2)"}),
     )
 }
 
@@ -433,6 +475,40 @@ mod tests {
         assert!(!back.audition.any(), "reopen resets audition overrides");
         let flow = e.execute("mix.signal_flow", &json!({"track": t.0})).unwrap();
         assert!(flow["order"].to_string().contains("Tape [test:delay:64]"));
+    }
+
+    /// CL03: Tracking deactivation removes a latent processor from the realtime graph only;
+    /// offline export keeps the normal graph; never saved; restore clears it; refused while playing.
+    #[test]
+    fn cl03_tracking_deactivation_is_realtime_only() {
+        let (mut e, t) = one_track();
+        e.execute("mix.slot", &json!({"track": t.0, "slot": "tape", "plugin": "test:delay:256"})).unwrap();
+        let r = e.execute("mix.tracking_deactivate", &json!({})).unwrap();
+        assert_eq!(r["deactivated"].as_array().unwrap().len(), 1);
+        let s = e.session().clone();
+        let mut rt = soundcraft_mix::MixEngine::new(48_000.0, 512);
+        rt.realtime_overrides = true;
+        let mut out = vec![vec![0.0f32; 512]; 2];
+        rt.render(&s, 0, 512, &mut out);
+        assert!(out[0][10].abs() > 0.0, "realtime: delay removed, audio immediate");
+        let mut normal_rt = soundcraft_mix::MixEngine::new(48_000.0, 512);
+        let mut out2 = vec![vec![0.0f32; 512]; 2];
+        normal_rt.render(&s, 0, 512, &mut out2);
+        assert_eq!(out2[0][10], 0.0, "normal graph: the 256-sample provider delays the signal");
+        let mut plain = s.clone();
+        plain.tracking_off.clear();
+        let range = soundcraft_time::Range::new(0, 4096);
+        assert_eq!(
+            soundcraft_mix::render_range(&s, range, 512),
+            soundcraft_mix::render_range(&plain, range, 512),
+            "export ignores Tracking deactivation"
+        );
+        let back: soundcraft_model::Session = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert!(back.tracking_off.is_empty(), "never saved");
+        e.transport.playing = true;
+        assert!(e.execute("mix.tracking_restore", &json!({})).is_err());
+        e.transport.playing = false;
+        assert_eq!(e.execute("mix.tracking_restore", &json!({})).unwrap()["restored"], 1);
     }
 
     /// V13: the four named paths differ exactly as declared (Edited Dry excludes the fader and
