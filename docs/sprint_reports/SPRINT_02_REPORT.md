@@ -52,7 +52,7 @@ Coverage per row: `docs/evidence/sprint_02/vocal-coverage.csv`.
 - N09 (100 actions / 16 tracks / 2000 clips, p95 ≤ 50 ms, zero xruns): native gate, not run.
 - N10 Pro Tools comparison: not performed; no parity claim. Shift+Num± intentionally unassigned.
 - V07: take placement still from the transport start position, not backend capture timestamps
-  (CL04 placement wiring PARTIAL); no musical count-in exists (upstream or here) — only pre-roll; count-in is NOT IMPLEMENTED (correction made in Sprint 4).
+  (CL04 placement wiring PARTIAL); the upstream Count Off toggle did nothing at that point (correction made in Sprint 4, where it was implemented).
 - V12: needs a named owner pitch plugin (H2).
 - V13 named export paths: Sprint 3.
 - No UI screenshots captured this sprint.

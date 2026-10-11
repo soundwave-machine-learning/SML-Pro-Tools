@@ -22,6 +22,11 @@ today; anything not yet validated on the target machine is marked.
   the input device lacks that channel, Record refuses to start and says which track and channel;
   it never records (or monitors) a different input instead. A one-input device can feed a stereo track (the
   same signal on both sides).
+- **Count Off** (toolbar, beside Meter/Tempo; bars in Setup › Click/Countoff): Record starts the
+  transport that many whole bars before the record point (selection start, or the playhead)
+  and the click sounds during those bars even when the click is off; the take starts exactly
+  at the record point (the count-off audio stays in the file, outside the clip). Not applied
+  to loop recording or to punching in while already playing.
 - If the input device runs at a different rate than the session, the take is resampled to the
   session rate and the status line says so (the capture file keeps the device rate). For
   bit-exact dry takes, open the input at the session rate (§9).

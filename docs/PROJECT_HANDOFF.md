@@ -10,7 +10,7 @@ Final source commit: see the "Checkpoint" line at the bottom (written after comm
 | Target/readiness | State |
 |---|---|
 | Prompt package | verified (`tools/verify_prompt_package.py` PASS), integrated under `docs/` with provenance in `docs/package_provenance/` |
-| Portable build/tests | **PASS** — `cargo xtask ci` exit 0, 613 tests (final: `docs/evidence/sprint_04/regression.log`) |
+| Portable build/tests | **PASS** — `cargo xtask ci` exit 0, 616 tests (final: `docs/evidence/sprint_04/regression.log`) |
 | Feature coverage | A1–A4 executed rows PASS; named PARTIAL rows in `docs/AUTONOMOUS_BUILD_FINAL_REPORT.md` |
 | Windows artifact | unsigned cross-built zip (mingw) in `dist/release/` — **never run on Windows** |
 | Linux artifact | tarball in `dist/release/` — headless CLI smoke PASS |

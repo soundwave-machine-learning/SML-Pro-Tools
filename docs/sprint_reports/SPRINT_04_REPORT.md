@@ -4,7 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (613 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (616 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -110,8 +110,13 @@ commit; result in `regression.log`):
   start derived from the timestamp (or transport) capture start: audio captured before the loop
   start is skipped, late capture shortens and shifts only the first take; punch-in while already
   looping is no longer misaligned (`loop_passes_follow_the_timestamp_capture_start`).
-  Review also found the earlier V07 note "count-in UI unchanged from upstream" misleading: no
-  musical count-in exists (pre-roll only). V07 stays PARTIAL; count-in is NOT IMPLEMENTED.
+  Review also found that the upstream **Count Off** toggle and bar setting did nothing (a
+  non-working control). Now implemented: Record starts `countoff_bars` whole bars (tempo/meter
+  map) before the record point, the click is forced on until it (realtime only, applied to the
+  next Play only, cleared on Stop), and the take is trimmed to start at the record point
+  (`countoff_counts_whole_bars_back_from_the_record_point`,
+  `countoff_clicks_only_before_the_record_point`, `countoff_applies_to_the_next_play_only`).
+  Loop recording and punch-in while playing do not count off.
 - **R20 automation arbitration** — recall refused while playing; a recalled static value never
   overrides a Read envelope in rendered audio; Off makes the recalled value audible; saving
   while playing captures static model values (`vmt5_snapshot_recall_and_read_automation_arbitration`).

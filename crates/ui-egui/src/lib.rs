@@ -242,6 +242,8 @@ pub struct SoundApp {
     record_start: Samples,
     /// Punch range to trim the take to (pre/post-roll recordings).
     punch: Option<Range>,
+    /// Count Off: the record point the current take starts at (audio before it is trimmed off).
+    countoff_at: Option<Samples>,
     recorder_failed: bool,
     pub ui: UiState,
     pub audio_health_report: Option<Result<Value, String>>,
@@ -305,6 +307,7 @@ impl SoundApp {
             recorder: None,
             record_start: 0,
             punch: None,
+            countoff_at: None,
             recorder_failed: false,
             plugin_scan: plugin_scan::Scanner::default(),
             ui: UiState::default(),
@@ -405,6 +408,7 @@ impl SoundApp {
     fn stop_play(&mut self) {
         if let Some(p) = &self.player {
             p.stop();
+            p.set_click_until(None);
         }
         if self.engine.transport.recording {
             self.finish_recording();
@@ -481,6 +485,8 @@ impl SoundApp {
             }
         }
         self.engine.transport.recording = true;
+        // Count Off applies to a fresh, non-loop start only (set below).
+        self.countoff_at = None;
         if already_playing {
             // Punch in on the fly at the current playhead.
             self.record_start = self.position();
@@ -497,7 +503,18 @@ impl SoundApp {
             // Record into the selection when there is one (punch), with pre/post-roll if enabled;
             // the take is trimmed back to the punch range afterwards.
             let (pre, post) = if e.pre_post_roll { (e.pre_roll, e.post_roll) } else { (0, 0) };
-            let from = (sel.start - pre).max(0);
+            let mut from = (sel.start - pre).max(0);
+            // Count Off (CL-T3): whole bars of click before the record point (click forced on
+            // until it, even when the click is off); the take starts at the record point.
+            self.countoff_at = None;
+            if e.countoff {
+                let at = if sel.is_empty() { self.position() } else { sel.start };
+                from = from.min(soundcraft_engine::io::countoff_start(self.engine.session(), at, e.countoff_bars));
+                self.countoff_at = Some(at);
+                if let Some(p) = &self.player {
+                    p.set_click_until(Some(at));
+                }
+            }
             self.record_start = from;
             self.punch = (!sel.is_empty()).then_some(sel);
             let end = (!sel.is_empty()).then_some(sel.end + post);
@@ -669,6 +686,9 @@ impl SoundApp {
         }
         match soundcraft_engine::io::add_recording(&mut self.engine, start, take.channels, rate) {
             Ok(ids) => {
+                if let Some(at) = self.countoff_at.take() {
+                    soundcraft_engine::io::trim_takes_to_start(&mut self.engine, &ids, at);
+                }
                 if let Some(p) = self.punch.take() {
                     // Keep only the punch range of each new take (merged into the Record undo step).
                     let clip_ids: Vec<u64> = ids.iter().map(|c| c.0).collect();

@@ -557,6 +557,38 @@ pub fn open_session(e: &mut Engine, path: &str) -> Result<Vec<String>> {
 /// Turn a recorded take into clips on the record-armed tracks (one undo step: "Record").
 /// `channels` is the planar input capture at `rate`; each track takes the input channels its
 /// input route names ("In 3" → channel 2), defaulting to the first channels.
+/// Count Off: where the transport starts so `bars` whole bars (of the meter in force before
+/// each bar line, at the tempo map's tempos) are counted before `record_at`. Clamped at the
+/// session start, so a count-off near zero is shorter.
+pub fn countoff_start(s: &Session, record_at: Samples, bars: u32) -> Samples {
+    let sr = s.sample_rate;
+    let mut tick = s.tempo.samples_to_ticks(record_at.max(0), sr);
+    for _ in 0..bars {
+        let bar = s.tempo.meter_at_tick(tick.saturating_sub(1).max(0)).ticks_per_bar();
+        tick = tick.saturating_sub(bar);
+        if tick <= 0 {
+            return 0;
+        }
+    }
+    // Same count-off length in samples as the tempo map gives, ending exactly at `record_at`.
+    let len = s.tempo.tick_to_samples(s.tempo.samples_to_ticks(record_at.max(0), sr), sr) - s.tempo.tick_to_samples(tick, sr);
+    record_at.saturating_sub(len).max(0)
+}
+
+/// Trims freshly recorded clips to start no earlier than `from` (Count Off / pre-roll audio is
+/// kept in the file, outside the clip). Part of the Record step: call right after
+/// [`add_recording`].
+pub fn trim_takes_to_start(e: &mut Engine, clips: &[soundcraft_model::ClipId], from: Samples) {
+    let s = e.session_mut();
+    for id in clips {
+        if let Some(c) = s.find_clip_mut(*id)
+            && c.start < from
+        {
+            c.trim_start_to(from);
+        }
+    }
+}
+
 /// Zero-based first capture channel of an armed track ("In 3" → 2, "In 1-2" → 0; other
 /// inputs → 0).
 fn first_input_channel(t: &soundcraft_model::Track) -> usize {
@@ -722,6 +754,38 @@ mod input_channel_tests {
         assert!(input_channel_problems(e.session(), 1).is_empty());
         e.session_mut().track_mut(st).unwrap().mixer.input = Route::Hardware("In 2-3".into());
         assert_eq!(input_channel_problems(e.session(), 2).len(), 1, "In 2-3 needs 3 inputs");
+    }
+}
+
+#[cfg(test)]
+mod countoff_tests {
+    use super::*;
+
+    /// CL-T3 count-in: N bars of the meter in force before each bar line, ending exactly at the
+    /// record point, across tempo and meter changes; clamped at zero.
+    #[test]
+    fn countoff_counts_whole_bars_back_from_the_record_point() {
+        let mut s = Session::default();
+        let sr = s.sample_rate;
+        let tpb = s.tempo.meter_at_tick(0).ticks_per_beat();
+        s.tempo.set_tempo(0, 100.0).unwrap();
+        s.tempo.set_meter(8 * tpb, 3, 4).unwrap(); // 4/4 for two bars, then 3/4
+        s.tempo.set_tempo(8 * tpb, 140.0).unwrap();
+        // Record at the start of the 2nd 3/4 bar: 2 bars back = one 3/4 bar + one 4/4 bar.
+        let rec_tick = 8 * tpb + 3 * tpb;
+        let rec = s.tempo.tick_to_samples(rec_tick, sr);
+        let from = countoff_start(&s, rec, 2);
+        assert_eq!(from, s.tempo.tick_to_samples(rec_tick - 3 * tpb - 4 * tpb, sr));
+        assert_eq!(countoff_start(&s, rec, 0), rec);
+        assert_eq!(countoff_start(&s, s.tempo.tick_to_samples(tpb, sr), 2), 0, "clamped at the start");
+        // Trimming the take leaves the count-off audio outside the clip.
+        let mut e = Engine::default();
+        let t = e.session_mut().add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+        e.session_mut().track_mut(t).unwrap().mixer.record_arm = true;
+        let ids = add_recording(&mut e, 1000, vec![vec![0.5; 4000]], 48_000).unwrap();
+        trim_takes_to_start(&mut e, &ids, 3000);
+        let c = e.session().track(t).unwrap().clips()[0].clone();
+        assert_eq!((c.start, c.length, c.source_offset()), (3000, 2000, 2000));
     }
 }
 

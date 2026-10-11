@@ -60,6 +60,8 @@ enum Cmd {
     Session(Arc<Session>, Vec<PreparedInstance>),
     /// Read every plugin state and reply.
     CaptureStates(Sender<PluginStates>),
+    /// Count Off: click before this session position even with the click off.
+    ClickUntil(Samples),
     Input(Arc<record::InputRing>),
     Recording(bool),
     Play {
@@ -132,6 +134,8 @@ struct AudioState {
     garbage: Sender<Garbage>,
     /// Device-frame clock of this stream (CL01).
     clock: clock::StreamClock,
+    /// A Count Off arrived for the next Play.
+    countoff_armed: bool,
 }
 
 /// What the audio thread hands back to the UI thread to drop.
@@ -187,6 +191,7 @@ impl AudioState {
             input: None,
             recording: false,
             clock: clock::StreamClock::new(device_rate as u32),
+            countoff_armed: false,
         }
     }
 
@@ -196,6 +201,10 @@ impl AudioState {
             match c {
                 Cmd::Input(r) => self.input = Some(r),
                 Cmd::Recording(r) => self.recording = r,
+                Cmd::ClickUntil(at) => {
+                    self.mix.click_until = at;
+                    self.countoff_armed = true;
+                }
                 Cmd::CaptureStates(reply) => {
                     self.mix.ensure_synced(&self.session);
                     let _ = reply.send(self.mix.capture_states());
@@ -223,6 +232,10 @@ impl AudioState {
                     let _ = self.garbage.send(Garbage { plugins: Vec::new(), _session: Some(old) });
                 }
                 Cmd::Play { from, end, looped } => {
+                    // A count-off applies to the one Play that follows it, never to a later one.
+                    if !std::mem::take(&mut self.countoff_armed) {
+                        self.mix.click_until = Samples::MIN;
+                    }
                     self.pos = from;
                     self.end = end;
                     self.looped = looped.filter(|r| r.len() > 64);
@@ -232,6 +245,7 @@ impl AudioState {
                     self.mix.reset();
                 }
                 Cmd::Stop => {
+                    self.mix.click_until = Samples::MIN;
                     self.playing = false;
                     self.mix.reset();
                 }
@@ -705,6 +719,11 @@ impl Player {
         let _ = self.tx.send(Cmd::Play { from, end, looped });
     }
 
+    /// Count Off: the click sounds on beats before `at` (None = off). Realtime only.
+    pub fn set_click_until(&self, at: Option<Samples>) {
+        let _ = self.tx.send(Cmd::ClickUntil(at.unwrap_or(Samples::MIN)));
+    }
+
     /// Feed live input (from a `record::Recorder`) into the mix for input monitoring.
     pub fn set_input(&self, ring: Arc<record::InputRing>) {
         let _ = self.tx.send(Cmd::Input(ring));
@@ -976,6 +995,28 @@ mod tests {
         tx.send(Cmd::Session(Arc::new(s44), Vec::new())).unwrap();
         st.fill(&mut out, 2);
         assert_eq!(retired(&grx), 1);
+    }
+
+    /// Count Off reaches the engine for exactly the next Play; Stop or a later Play without a
+    /// new count-off clears it.
+    #[test]
+    fn countoff_applies_to_the_next_play_only() {
+        let shared = Arc::new(Shared::new());
+        let (tx, rx) = channel();
+        let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::new(soundcraft_model::Session::default()), 48_000.0, channel().0);
+        let mut out = vec![0.0f32; 256];
+        tx.send(Cmd::ClickUntil(96_000)).unwrap();
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        st.fill(&mut out, 2);
+        assert_eq!(st.mix.click_until, 96_000);
+        tx.send(Cmd::Stop).unwrap();
+        st.fill(&mut out, 2);
+        assert_eq!(st.mix.click_until, Samples::MIN);
+        tx.send(Cmd::ClickUntil(96_000)).unwrap();
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        st.fill(&mut out, 2);
+        assert_eq!(st.mix.click_until, Samples::MIN, "a later Play without a count-off clears it");
     }
 
     /// CL-T2 output disconnect: the first stream error's reason is kept and reported.

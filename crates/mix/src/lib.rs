@@ -406,6 +406,9 @@ pub struct MixEngine {
     /// Render independent strips on worker threads (default) or serially on the calling thread
     /// (CL05: benchmark single worker vs additional workers).
     pub parallel_strips: bool,
+    /// Count Off (realtime only): the click sounds on beats before this session position even
+    /// when the click is off. `Samples::MIN` = no count-off.
+    pub click_until: Samples,
 }
 
 /// The parts of the session mix profile the router needs (Copy, no allocation per block).
@@ -550,6 +553,7 @@ impl MixEngine {
             main_acc: Vec::new(),
             work: Vec::new(),
             parallel_strips: true,
+            click_until: Samples::MIN,
         }
     }
 
@@ -982,8 +986,13 @@ impl MixEngine {
         // through any track, send or insert. Only the playback engine sets `metronome`.
         // Not while monitoring only (transport stopped): the position does not advance there, so the
         // start of the same beat would repeat every block as a buzz.
-        if self.metronome && !self.monitor_only && s.edit.click && (!s.edit.flag("click.only_during_record") || self.recording) {
-            click::render(s, pos, frames, &mut self.main);
+        if self.metronome && !self.monitor_only {
+            if s.edit.click && (!s.edit.flag("click.only_during_record") || self.recording) {
+                click::render(s, pos, frames, &mut self.main, Samples::MAX);
+            } else if pos < self.click_until {
+                // Count Off: the click sounds before the record point even when it is off.
+                click::render(s, pos, frames, &mut self.main, self.click_until);
+            }
         }
         // Output: min(out.len(), main channels) channels; any further output channels are silent.
         for (c, o) in out.iter_mut().enumerate() {
@@ -1712,7 +1721,8 @@ mod click {
     /// Blip length in seconds.
     const LEN_S: f64 = 0.03;
 
-    pub fn render(s: &Session, pos: Samples, frames: usize, main: &mut [Vec<f32>]) {
+    /// Clicks on beats before `until` (exclusive).
+    pub fn render(s: &Session, pos: Samples, frames: usize, main: &mut [Vec<f32>], until: Samples) {
         let sr = s.sample_rate;
         let rate = sr.as_f64();
         let len = (LEN_S * rate) as i64;
@@ -1726,7 +1736,7 @@ mod click {
         // Blocks hold a few beats at most; the guard only protects against a malformed tempo map.
         for _ in 0..4096 {
             let at = s.tempo.tick_to_samples(tick, sr);
-            if at >= end {
+            if at >= end || at >= until {
                 break;
             }
             if at.saturating_add(len) > pos {
@@ -2816,6 +2826,37 @@ mod tests {
             assert!(out[0][at.saturating_sub(20)..=at].iter().all(|x| *x == 0.0), "silence before beat {b}");
             assert_ne!(out[0][at + 1], 0.0, "beat {b} onset exactly at sample {at}");
         }
+    }
+
+    /// Count Off: with the click off, beats before `click_until` click and nothing after;
+    /// offline renders never click.
+    #[test]
+    fn countoff_clicks_only_before_the_record_point() {
+        let s = Session::default();
+        assert!(!s.edit.click);
+        let beat = 24_000usize; // 120 BPM at 48 kHz
+        let len = beat * 8;
+        let mut eng = MixEngine::new(48_000.0, 512);
+        eng.metronome = true;
+        eng.click_until = (beat * 4) as i64;
+        let mut out = vec![vec![0.0f32; len]; 2];
+        let mut tmp = vec![vec![0.0f32; 512]; 2];
+        let mut done = 0usize;
+        while done < len {
+            let n = (len - done).min(300);
+            eng.render(&s, done as i64, n, &mut tmp);
+            out[0][done..done + n].copy_from_slice(&tmp[0][..n]);
+            done += n;
+        }
+        for b in 0..8usize {
+            let peak = out[0][b * beat..b * beat + 400].iter().fold(0.0f32, |m, x| m.max(x.abs()));
+            if b < 4 {
+                assert!(peak > 0.1, "count-off beat {b}");
+            } else {
+                assert_eq!(peak, 0.0, "beat {b} at/after the record point is silent");
+            }
+        }
+        assert!(render_range(&s, Range::new(0, len as i64), 512).iter().all(|c| c.iter().all(|x| *x == 0.0)));
     }
 
     #[test]
