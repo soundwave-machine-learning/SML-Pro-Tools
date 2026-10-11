@@ -380,6 +380,11 @@ pub struct MixEngine {
     graph_version: u32,
     /// f64 main-mix accumulator (graph version 2).
     main_acc: Vec<Vec<f64>>,
+    /// Reused per-block strip work list (keeps `render` allocation-free in steady state).
+    work: Vec<(usize, Strip)>,
+    /// Render independent strips on worker threads (default) or serially on the calling thread
+    /// (CL05: benchmark single worker vs additional workers).
+    pub parallel_strips: bool,
 }
 
 /// The parts of the session mix profile the router needs (Copy, no allocation per block).
@@ -520,6 +525,8 @@ impl MixEngine {
             profile: MixProfileView::default(),
             graph_version: 1,
             main_acc: Vec::new(),
+            work: Vec::new(),
+            parallel_strips: true,
         }
     }
 
@@ -754,13 +761,16 @@ impl MixEngine {
         let live = |t: &&Track| !(t.kind == TrackKind::Master || t.inactive || t.kind == TrackKind::Vca);
         let is_aux = |t: &Track| matches!(t.kind, TrackKind::Aux | TrackKind::Folder);
         // Phase 1: independent strips (audio, instrument, MIDI) in parallel.
-        let mut work: Vec<(&Track, Strip)> = order
-            .iter()
-            .filter_map(|&i| s.tracks.get(i))
-            .filter(live)
-            .filter(|t| !is_aux(t))
-            .filter_map(|t| self.strips.remove(&t.id).map(|st| (t, st)))
-            .collect();
+        // Reused buffer (no per-block allocation once warmed up): (track index, strip).
+        let mut work = std::mem::take(&mut self.work);
+        work.clear();
+        for &i in &order {
+            if let Some(t) = s.tracks.get(i).filter(live).filter(|t| !is_aux(t))
+                && let Some(st) = self.strips.remove(&t.id)
+            {
+                work.push((i, st));
+            }
+        }
         for (_, st) in work.iter_mut() {
             if st.scratch.len() < self.max_block {
                 st.scratch.resize(self.max_block, 0.0);
@@ -774,7 +784,22 @@ impl MixEngine {
             audition: self.audition,
             tracking: self.realtime_overrides,
         };
-        run_strips(&mut work, |(t, st)| process_strip(s, t, st, &busses, &live_in, pos, frames, any_solo));
+        let strip_fn = |(i, st): &mut (usize, Strip)| {
+            if let Some(t) = s.tracks.get(*i) {
+                process_strip(s, t, st, &busses, &live_in, pos, frames, any_solo);
+            }
+        };
+        // CL05: worker threads only pay off for strips with hosted processing; light strips
+        // (clip playback, gain, pan) render faster serially (measured: docs/evidence/sprint_04).
+        let heavy = work
+            .iter()
+            .filter(|(_, st)| st.plugins.iter().any(Option::is_some) || st.dedicated.iter().any(Option::is_some) || st.instrument.is_some())
+            .count();
+        if self.parallel_strips && heavy >= PARALLEL_MIN_HEAVY_STRIPS {
+            run_strips(&mut work, strip_fn);
+        } else {
+            work.iter_mut().for_each(strip_fn);
+        }
         self.busses = busses;
         // Delay compensation: align every strip to the slowest; direct-to-main outputs also wait
         // for the slowest aux return (aux latencies are from the previous block; they are stable).
@@ -794,7 +819,8 @@ impl MixEngine {
             _ => {}
         }
         self.latency = total;
-        for (t, st) in work.iter_mut() {
+        for (i, st) in work.iter_mut() {
+            let Some(t) = s.tracks.get(*i) else { continue };
             let ch = st.buf.len();
             st.align.set(lmax_t.saturating_sub(st.latency), ch);
             st.align.process(&mut st.buf, frames);
@@ -804,12 +830,17 @@ impl MixEngine {
             }
             st.out_extra.set(if t.mixer.output == Route::Main { lmax_a } else { 0 }, ch);
         }
-        for (t, st) in work.iter_mut() {
-            self.route_strip(t, st, pos, frames);
+        for (i, st) in work.iter_mut() {
+            if let Some(t) = s.tracks.get(*i) {
+                self.route_strip(t, st, pos, frames);
+            }
         }
-        for (t, st) in work {
-            self.strips.insert(t.id, st);
+        for (i, st) in work.drain(..) {
+            if let Some(t) = s.tracks.get(i) {
+                self.strips.insert(t.id, st);
+            }
         }
+        self.work = work;
         let is_aux = |t: &Track| matches!(t.kind, TrackKind::Aux | TrackKind::Folder);
         // Phase 2: auxes in dependency order (they read busses).
         let v2 = self.graph_version >= 2;
@@ -1526,6 +1557,9 @@ fn as_audio_thread(audio: bool, f: impl FnOnce()) {
     let _restore = Restore(AUDIO_THREAD.replace(audio));
     f();
 }
+
+/// Strips hosting processors needed before rendering fans out to worker threads.
+pub const PARALLEL_MIN_HEAVY_STRIPS: usize = 4;
 
 /// Process strips, in parallel on native targets when there are enough of them.
 #[cfg(not(target_arch = "wasm32"))]
@@ -3224,6 +3258,40 @@ mod sml_post_insert_tests {
         s.mix_profile.graph_version = 1;
         let v = render_range(&s, Range::new(0, 2048), 256)[0][1000];
         assert!((v - ((0.25 * 2.0 + 0.1) * g)).abs() < 1e-6, "legacy keeps pre-fader order: {v}");
+    }
+
+    /// CL05: serial and parallel strip rendering produce bit-identical audio for a session with
+    /// enough hosted processors to fan out.
+    #[test]
+    fn serial_and_parallel_strips_render_identically() {
+        let mut s = Session::default();
+        for k in 0..6u64 {
+            let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
+            s.pool.insert(
+                SourceId(10 + k),
+                Arc::new(SourceAudio::new(AudioBuffer {
+                    sample_rate: 48_000,
+                    channels: vec![(0..4096).map(|i| ((i as f32) * 0.01 * (k as f32 + 1.0)).sin() * 0.2).collect()],
+                })),
+            );
+            let cid = s.new_clip_id();
+            let tr = s.track_mut(t).unwrap();
+            tr.playlist_mut().unwrap().clips.push(Clip::audio(cid, "c", SourceId(10 + k), 0, 0, 4096));
+            tr.mixer.inserts[0] = Some(Insert::new(format!("test:gain:-{k}")));
+        }
+        let render = |parallel: bool| {
+            let mut eng = MixEngine::new(48_000.0, 256);
+            eng.parallel_strips = parallel;
+            let mut all = Vec::new();
+            let mut out = vec![vec![0.0f32; 256]; 2];
+            for b in 0..16 {
+                eng.render(&s, b * 256, 256, &mut out);
+                all.extend_from_slice(&out[0]);
+            }
+            all
+        };
+        const { assert!(PARALLEL_MIN_HEAVY_STRIPS <= 6) };
+        assert_eq!(render(true), render(false));
     }
 
     /// CL04: a compensation-latency change during recording raises one event; a latent plugin

@@ -26,7 +26,13 @@ execution container; see `environment.json`).
 
 ## Mix engine (`crates/mix`)
 
-Steady-state rendering does not allocate per the crate docs (INSPECTED, not re-measured here).
+Steady-state rendering: **0 heap allocations/reallocations over 200 blocks** in serial strip mode
+(RERUN, Sprint 4: `cargo test -p soundcraft-mix --test realtime_alloc`, graph v2 with buses, sends,
+FX return, width, a Tape-slot fixture, profile pans and live input). The per-block strip work list
+was a fresh `Vec` before Sprint 4 and is now a reused buffer (FIXED). Strip parallelism is
+adaptive: rayon workers only when ≥4 strips host processing (measured 3–5× scheduler overhead for
+light strips; `docs/evidence/sprint_04/callback-profile*.csv`); in parallel mode rayon itself
+allocated 3 times in 200 blocks (OPEN, third-party scheduler; documented).
 `sync` allocates and runs inside `render` when the session structure changes (document edits);
 in realtime use that happens on the audio thread after a session swap — a known CL05 gap
 (graph construction should move off the callback). Recorded as OPEN, not fixed in this pass.

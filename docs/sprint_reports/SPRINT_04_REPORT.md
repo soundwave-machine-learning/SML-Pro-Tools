@@ -4,8 +4,7 @@ Entered after A1–A3 portable PASS (with named PARTIAL rows) and the carry-over
 Linux x86_64 container — no Windows machine, audio interface, driver, owner plugins or owner.
 
 ## Verdict
-**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (594 tests in 56
-test binaries, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
+**A4 PORTABLE REGRESSION: PASS** — `cargo xtask ci` exit 0 on the final source (596 tests, fmt, clippy -D warnings, assets, layers, wasm), `docs/evidence/sprint_04/regression.log`.
 **H1–H4 / CL-T6 / CL-T7 / owner review: BLOCKED FOR TARGET VALIDATION** (no target access). The
 exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **NO**.
 
@@ -14,17 +13,40 @@ exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **N
    2 armed live-input tracks, Vocal Bus, FX return, Master, graph v2, width ≠ 100 %; 60 s of
    consecutive callbacks at 64/128/256 frames, 48 kHz; load = compute/(N/Fs).
 
-   | Frames | budget | p50 | p99 | max | p99 load | overruns |
-   |---|---|---|---|---|---|---|
-   | 64 | 1333 µs | 92.6 µs | 289.2 µs | 3602 µs | 0.217 | **13 / 45 000** |
-   | 128 | 2667 µs | 99.0 µs | 310.1 µs | 1654 µs | 0.116 | 0 / 22 500 |
-   | 256 | 5333 µs | 123.3 µs | 245.5 µs | 2113 µs | 0.046 | 0 / 11 250 |
+   First run (before optimization; strips always distributed over rayon workers): p99 load
+   0.217 / 0.116 / 0.046 at 64 / 128 / 256 frames with **13 / 45 000 overruns at 64 frames**
+   (max 3.6 ms). A repeat comparing rayon against serial strips
+   (`callback-profile-before-adaptive.csv`) showed the work-stealing scheduler costing 3–5× the
+   strip work itself for light strips (64 frames: parallel p99 257 µs, 10 overruns; serial p99
+   56.5 µs).
 
-   Fader command acknowledgment (event → model revision, engine only): p50 16.6 µs, p95 25.5 µs,
-   max 415 µs (1000 samples). These are container measurements with a shared, noisy scheduler —
-   **not** native results and not a CL-T7 PASS. The 64-frame overruns are a real finding to check
-   on the target (candidate causes: rayon strip scheduling, session fingerprint hashing per block,
-   allocation on structure change). No optimization was made without a native measurement.
+   **CL05 optimization (measured, then re-measured):** strips with no hosted processing render
+   serially; worker threads are used only when ≥ `PARALLEL_MIN_HEAVY_STRIPS` (4) strips host a
+   plugin, dedicated-slot provider or instrument (`MixEngine::parallel_strips` can disable them
+   entirely). The strip work list is a reused buffer. Output is bit-identical in both modes
+   (`serial_and_parallel_strips_render_identically`). Result (`callback-profile.csv`):
+
+   | Frames | budget | mode | p50 | p99 | max | p99 load | overruns |
+   |---|---|---|---|---|---|---|---|
+   | 64 | 1333 µs | adaptive | 25.7 µs | 55.4 µs | 950 µs | 0.042 | **0 / 45 000** |
+   | 64 | 1333 µs | serial | 25.7 µs | 54.9 µs | 2948 µs | 0.041 | 2 / 45 000 |
+   | 128 | 2667 µs | adaptive | 41.9 µs | 77.8 µs | 358 µs | 0.029 | 0 / 22 500 |
+   | 128 | 2667 µs | serial | 41.8 µs | 63.0 µs | 819 µs | 0.024 | 0 / 22 500 |
+   | 256 | 5333 µs | adaptive | 74.7 µs | 137.6 µs | 1704 µs | 0.026 | 0 / 11 250 |
+   | 256 | 5333 µs | serial | 74.9 µs | 135.5 µs | 2165 µs | 0.025 | 0 / 11 250 |
+
+   The profile session has no hosted plugins, so "adaptive" runs serially and the two rows
+   measure the same code path; the 2 serial overruns and the multi-ms maxima are scheduler
+   pauses of the shared VM (single run, p99 unaffected). Allocation guard
+   (`crates/mix/tests/realtime_alloc.rs`, `stats_alloc` global allocator): **0 allocations and
+   reallocations over 200 steady-state blocks in serial mode** (graph v2, buses, sends, FX
+   return, width, Tape-slot fixture, profile pans, live input); with 4 heavy strips in parallel
+   mode rayon's scheduler itself allocated 3 times in 200 blocks (reported, not asserted).
+
+   Fader command acknowledgment (event → model revision, engine only): p50 13.3 µs, p95 19.9 µs,
+   max 76.5 µs (1000 samples, `response-profile.csv`). These are container measurements with a
+   shared, noisy scheduler — **not** native results and not a CL-T7 PASS. The native machine
+   must still be checked at 64 frames with owner plugins (heavy strips → workers).
 2. **Native H1–H3, CL-T6/7**: not executable here; gauntlet written with topologies, counts,
    thresholds and evidence file names.
 3. **Native vocal workflow (VM-T8/V-E2E native, N07/N09/VM-T7/SL-T8, screen/scale matrix)**:
@@ -45,6 +67,7 @@ exact pending procedure is `docs/TARGET_MACHINE_GAUNTLET.md`. RELEASE READY: **N
 
 ## Evidence
 `regression.log`, `release-build.log`, `profile-run.log`, `callback-profile.csv`,
+`callback-profile-before-adaptive.csv`,
 `response-profile.csv`, `package-linux.log`, `package-smoke.log`, `package-smoke.md`,
 `windows-cross-build.log`, `artifact-manifest.json`.
 

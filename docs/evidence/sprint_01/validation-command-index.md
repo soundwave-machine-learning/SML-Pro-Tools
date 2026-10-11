@@ -26,6 +26,7 @@ All commands run from the repository root on the execution host recorded in `env
 | CL04 timestamp placement | `cargo test -p soundcraft-playback -- timestamp_placement playback_anchor` | |
 | SL-T6 real CLAP fixture in a slot | `cargo test -p soundcraft-engine --test clap_e2e` | builds the repo CLAP fixture |
 | Background plugin scan | `cargo test -p soundcraft-ui-egui plugin_scan` | |
+| CL-T5 render allocation guard, serial/parallel equality (A4) | `cargo test -p soundcraft-mix --test realtime_alloc` and `cargo test -p soundcraft-mix serial_and_parallel` | `stats_alloc` global allocator |
 | Headless callback/response profile (A4, not native) | `cargo run --release -p soundcraft-engine --example sml_profile -- callback.csv response.csv` | |
 | UI renders | `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png script.jsonl --size 1600x1000` | needs a Vulkan driver (lavapipe here) |
 | Linux package | `cargo build --release --locked -p soundcraft -p soundcraft-cli && packaging/linux/package.sh --skip-build --formats tar` | |

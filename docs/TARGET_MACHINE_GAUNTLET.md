@@ -55,9 +55,10 @@ Evidence: `package-smoke-windows.md`, images.
 - UI: p95 event→visible ≤50 ms (Console↔Visual cross-view), frame time p95 ≤25 ms, no stall
   >100 ms; report measurement resolution. N09: 100 nudge key actions during playback on 16
   tracks / 2000 clips; VM-T7: 60 s continuous node drag + automation.
-- Headless reference (this container, NOT native): `callback-profile.csv` showed p99 load
-  0.22/0.12/0.05 at 64/128/256 frames but **13 deadline overruns at 64 frames** (max 3.6 ms) on a
-  shared VM — check the native machine specifically for this.
+- Headless reference (this container, NOT native): the first profile showed **13 deadline
+  overruns at 64 frames** caused by rayon scheduling of light strips; after adaptive strip
+  scheduling `callback-profile.csv` shows p99 load 0.04/0.03/0.03 and 0 overruns. Workers are
+  still used with ≥4 plugin-hosting strips — check 64 frames with workload (b) specifically.
 - Evidence: `callback-profile.csv`, `response-profile.csv` (native), stress log.
 
 ## 5. H2 owner plugins and N07/N10, owner review

@@ -41,7 +41,7 @@ counter available); see "Budget" below.
 | R06 own VST3/CLAP, editors/state/export | software PASS (repo CLAP fixture in insert and Tape slot); background scan; H2 owner plugins pending | `plugin-compatibility.csv` |
 | R07 mixer/routing/compensation | PASS (software) | SL02 graph v2, PDC through slots (0–1024), cycles, mute/solo policy |
 | R08 simple recording view, usable mixer | IMPLEMENTED; UX pending | Recording panel, Console SLOTS/Width rows (renders) |
-| R09 measured responsiveness | PARTIAL | headless profile (13 overruns @64 frames on the VM) — native H3 pending |
+| R09 measured responsiveness | PARTIAL | headless profile: 13 overruns @64 frames found, cause measured (rayon overhead on light strips), adaptive strip scheduling → 0 overruns @64/128/256 on the VM — native H3 pending |
 | R10 regression, candidate, manual, delivery | regression PASS; candidates + manual done; native delivery checks pending | `regression.log`, `artifact-manifest.json`, `USER_GUIDE.md` |
 | R11 vocal tool families V01–V14 | PARTIAL | `vocal-coverage.csv` (V02/04/05/06/08/09/10/11 verified in software; V12 needs owner plugin) |
 | R12 dedicated Nudge | software PASS (N01–N06, N08, N07 unit); N07 physical/N09 native pending; N10 claim-only | Sprint 2 |
@@ -58,7 +58,7 @@ counter available); see "Budget" below.
 | R23 spill, independent send pan, gain staging | spill/send pan PASS; slot I/O meters PARTIAL | |
 | R24 audio clock, negotiation, provenance | PASS (portable) | `clock-tests.log` |
 | R25 monitoring modes, compensation, placement | modes/PDC/timestamp placement PASS (software); calibration CL-T6 pending | |
-| R26 bounded realtime work, metrics | capture path fixed; remaining callback findings documented; native metrics pending | `realtime-audit.md` |
+| R26 bounded realtime work, metrics | capture path fixed; render allocation-free in steady state (serial, test); remaining callback findings documented; native metrics pending | `realtime-audit.md`, `realtime_alloc` test |
 
 ## Actual commands and results (all RERUN in this container)
 - Baseline: `cargo xtask ci` failed on environment (missing ALSA headers; then no GPU adapter);
@@ -66,7 +66,8 @@ counter available); see "Budget" below.
 - Milestone CI: Sprint 1 `ci-sprint1.log` (581 passed), Sprint 2 `ci-sprint2.log` (593),
   Sprint 3 `ci-sprint3.log` (611), carry-overs `ci-sprint3-carryover.log` (616),
   `ci-module-removal.log` (591 — 25 processor-only tests retired), `ci-carryover2.log` (594),
-  final regression `docs/evidence/sprint_04/regression.log` (**594 passed, 0 failed, exit 0**).
+  CL05 optimization `ci` rerun, final regression `docs/evidence/sprint_04/regression.log`
+  (**596 passed, 0 failed, exit 0**).
 - Feature suites and commands: `docs/evidence/sprint_01/validation-command-index.md`.
 
 ## Tests changed or retired
@@ -87,9 +88,14 @@ ignored latency pre-roll) — the product behaviour was right in both cases.
 | Repo CLAP fixture | PASS in insert and Tape slot |
 
 ## Measured latency / performance
-Physical latency: **not measured**. Headless release profile (`callback-profile.csv`): p99 load
-0.217 / 0.116 / 0.046 at 64 / 128 / 256 frames (48 kHz), 13 overruns at 64 frames (max 3.6 ms) on
-the shared VM; fader command ack p95 25.5 µs. Not evidence of native performance.
+Physical latency: **not measured**. Headless release profile on the shared VM (not native):
+the first run found **13 deadline overruns at 64 frames** (p99 load 0.217); measurement showed
+rayon scheduling costing 3–5× the work of light strips. After the adaptive rule (workers only for
+≥4 strips with hosted processing; reused work buffer; bit-identical output), `callback-profile.csv`
+shows p99 load 0.042 / 0.029 / 0.026 at 64 / 128 / 256 frames and **0 overruns** in the adaptive
+rows (forced-serial rows: 2 overruns at 64 frames from VM pauses). Render is allocation-free in
+steady state (serial; test). Fader command ack p95 19.9 µs (engine only). Not evidence of native
+performance; owner plugins (heavy strips) are not represented.
 
 ## Owner review
 None performed (owner not available). Nothing approved on the owner's behalf.

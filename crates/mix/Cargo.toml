@@ -25,5 +25,9 @@ log.workspace = true
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rayon.workspace = true
 
+[dev-dependencies]
+stats_alloc = "0.1"
+soundcraft-mix = { path = ".", features = ["test-providers"] }
+
 [lints]
 workspace = true
