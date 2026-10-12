@@ -441,6 +441,16 @@ pub struct Insert {
     /// SL02 user Post insert: processed after the fader (graph version 2). Default Pre.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub post_fader: bool,
+    /// External sidechain source (R24/R25/R29): a bus whose signal feeds the plugin's secondary
+    /// input. On aux/master strips the detector is sample-accurate; on audio/instrument strips it
+    /// hears the bus one block late (the bus is summed in the same pass). Ignored by plugins
+    /// without a sidechain input.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sidechain: Option<BusId>,
+    /// The plugin's version string when it was inserted (R31): reopening with another version
+    /// installed is reported (`session.plugin_versions`), never silently accepted as the same.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plugin_version: Option<String>,
 }
 
 fn yes() -> bool {
@@ -457,6 +467,8 @@ impl Insert {
             preset: String::from("<factory default>"),
             state: None,
             post_fader: false,
+            sidechain: None,
+            plugin_version: None,
         }
     }
 

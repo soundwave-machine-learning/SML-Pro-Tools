@@ -262,7 +262,25 @@ fn latency_report(e: &Engine) -> Value {
         .iter()
         .filter_map(|(t, l)| s.track(*t).map(|tr| json!({"track": tr.name, "latency_samples": l, "ms": *l as f64 * 1000.0 / s.sample_rate.as_f64()})))
         .collect();
-    json!({"strips": v, "worst_samples": worst, "latent_processors": processors, "provenance": "plugin-reported latency (inserts + dedicated slots); device/driver latency is Unknown until measured"})
+    let sidechains: Vec<Value> = s
+        .tracks
+        .iter()
+        .flat_map(|t| {
+            t.mixer.inserts.iter().enumerate().filter_map(move |(i, ins)| {
+                let ins = ins.as_ref()?;
+                let b = ins.sidechain?;
+                let aux = matches!(t.kind, TrackKind::Aux | TrackKind::Folder | TrackKind::Master);
+                Some(json!({
+                    "track": t.name,
+                    "slot": i,
+                    "plugin": ins.plugin,
+                    "bus": s.busses.iter().find(|x| x.id == b).map(|x| x.name.clone()),
+                    "detector_lag": if aux { "none (bus complete before this strip)" } else { "one audio block (the bus is summed in the same pass)" },
+                }))
+            })
+        })
+        .collect();
+    json!({"strips": v, "worst_samples": worst, "latent_processors": processors, "sidechains": sidechains, "provenance": "plugin-reported latency (inserts + dedicated slots; bypassed inserts keep theirs as a plain delay); device/driver latency is Unknown until measured"})
 }
 
 fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
@@ -277,7 +295,13 @@ fn signal_flow(e: &mut Engine, p: &Value) -> Result<Value> {
         .inserts
         .iter()
         .enumerate()
-        .filter_map(|(i, x)| x.as_ref().map(|x| format!("{}:{}{}", (b'a' + i as u8) as char, x.plugin, if x.post_fader { " (post)" } else { "" })))
+        .filter_map(|(i, x)| {
+            x.as_ref().map(|x| {
+                let sc =
+                    x.sidechain.and_then(|b| s.busses.iter().find(|y| y.id == b)).map(|b| format!(" <- sidechain: {}", b.name)).unwrap_or_default();
+                format!("{}:{}{}{}", (b'a' + i as u8) as char, x.plugin, if x.post_fader { " (post)" } else { "" }, sc)
+            })
+        })
         .collect();
     let sends: Vec<String> = tr
         .mixer

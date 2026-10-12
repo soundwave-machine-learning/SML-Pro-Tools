@@ -96,6 +96,15 @@ pub fn specs() -> Vec<CommandSpec> {
         cmd!("mix.insert_bypass", "Bypass Insert", [], None, "{track?, slot, value?: bool}", has_selection, insert_bypass),
         cmd!("mix.insert_param", "Set Plugin Parameter", [], None, "{track?, slot, param, value}", has_selection, insert_param),
         cmd!(
+            "mix.insert_sidechain",
+            "Insert Sidechain Source",
+            [],
+            None,
+            "{track?, slot, bus?: name|id|null} — a bus feeds the plugin's sidechain input (plugins without one ignore it; audio tracks hear it one block late, auxes exactly)",
+            has_selection,
+            insert_sidechain
+        ),
+        cmd!(
             "mix.insert_params",
             "Set Plugin Parameters",
             [],
@@ -323,7 +332,10 @@ fn insert(e: &mut Engine, p: &Value) -> Result<Value> {
     let tr = s.track_mut(t).ok_or_else(|| bad("mix.insert", "no track"))?;
     let slot =
         explicit.or_else(|| tr.mixer.inserts.iter().position(Option::is_none)).ok_or_else(|| bad("mix.insert", "all insert slots are in use"))?;
-    let mut ins = Insert::new(info.id);
+    // A `sandbox:` request keeps its prefix: the slot is hosted out of process (R31 opt-in).
+    let stored: String = if plugin.starts_with(soundcraft_mix::SANDBOX_PREFIX) { plugin.clone() } else { info.id.to_string() };
+    let mut ins = Insert::new(stored.clone());
+    ins.plugin_version = super::clap::installed_version(&stored);
     for pi in info.params {
         ins.params.insert(pi.id.to_string(), pi.default);
     }
@@ -339,7 +351,7 @@ fn insert(e: &mut Engine, p: &Value) -> Result<Value> {
     if let Some(sl) = tr.mixer.inserts.get_mut(slot) {
         *sl = Some(ins);
     }
-    Ok(json!({"track": t, "slot": slot, "plugin": info.id}))
+    Ok(json!({"track": t, "slot": slot, "plugin": stored}))
 }
 
 fn insert_remove(e: &mut Engine, p: &Value) -> Result<Value> {
@@ -363,6 +375,33 @@ fn insert_bypass(e: &mut Engine, p: &Value) -> Result<Value> {
         .ok_or_else(|| bad("mix.insert_bypass", "empty slot"))?;
     ins.bypass = val.unwrap_or(!ins.bypass);
     Ok(json!({"bypass": ins.bypass}))
+}
+
+/// External sidechain (R24/R25/R29): the bus whose signal feeds the insert's secondary input.
+fn insert_sidechain(e: &mut Engine, p: &Value) -> Result<Value> {
+    let (t, slot) = track_slot(e, p, "mix.insert_sidechain", INSERT_SLOTS)?;
+    let bus = match p.get("bus") {
+        None | Some(Value::Null) => None,
+        Some(Value::String(name)) => {
+            Some(e.session().bus_by_name(name).map(|b| b.id).ok_or_else(|| bad("mix.insert_sidechain", format!("no bus named `{name}`")))?)
+        }
+        Some(v) => {
+            let id = v.as_u64().ok_or_else(|| bad("mix.insert_sidechain", "`bus` must be a bus name, id or null"))?;
+            let b = soundcraft_model::BusId(id);
+            if !e.session().busses.iter().any(|x| x.id == b) {
+                return Err(bad("mix.insert_sidechain", format!("no bus {id}")));
+            }
+            Some(b)
+        }
+    };
+    let s = e.session_mut();
+    let ins = s
+        .track_mut(t)
+        .and_then(|tr| tr.mixer.inserts.get_mut(slot))
+        .and_then(Option::as_mut)
+        .ok_or_else(|| bad("mix.insert_sidechain", "empty slot"))?;
+    ins.sidechain = bus;
+    Ok(json!({"sidechain": bus.map(|b| b.0)}))
 }
 
 fn insert_param(e: &mut Engine, p: &Value) -> Result<Value> {

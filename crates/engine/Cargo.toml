@@ -23,6 +23,10 @@ serde_json.workspace = true
 thiserror.workspace = true
 log.workspace = true
 
+[[test]]
+name = "sandbox"
+harness = false
+
 [dev-dependencies]
 soundcraft-mix = { workspace = true, features = ["test-providers"] }
 proptest.workspace = true

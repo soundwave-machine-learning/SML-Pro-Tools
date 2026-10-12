@@ -187,6 +187,13 @@ fn main() -> eframe::Result {
     {
         std::process::exit(soundcraft_mix::scan_isolated::worker_main(std::path::Path::new(path)));
     }
+    // Sandboxed plugin worker (R31): this process hosts ONE plugin instance for the parent.
+    if let Some(i) = args.iter().position(|a| a == "--plugin-worker")
+        && let Some(id) = args.get(i + 1)
+    {
+        let dirs: Vec<std::path::PathBuf> = args.iter().skip(i + 2).map(std::path::PathBuf::from).collect();
+        std::process::exit(soundcraft_mix::sandbox::worker_main(id, &dirs));
+    }
     // Safe Open (R05): external plugins disabled (placeholders keep their state), no plugin scan;
     // `--reset-prefs` additionally sets the UI/theme preferences aside (restorable backup).
     let safe = args.iter().any(|a| a == "--safe");

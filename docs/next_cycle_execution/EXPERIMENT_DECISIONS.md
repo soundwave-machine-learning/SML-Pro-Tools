@@ -221,3 +221,34 @@ met by the model/layout work with margin, so a native stall would have to come f
 delivery, input latency or the GPU path, which this environment cannot measure. Native W1/W2
 cold/warm distributions, delivered frame intervals and audio continuity while operating menus
 remain TARGET_PENDING (R19 PARTIAL). No command was dropped to improve a percentile.
+
+## E03 follow-up — sandboxed instance mode (Sprint 3, R31) — IMPLEMENTED, portable numbers
+
+Implementation: `soundcraft_mix::sandbox` — `sandbox:<plugin id>` inserts run the real
+CLAP/VST3 plugin in a worker process (`soundcraft --plugin-worker`), one block ahead over
+pipes; declared added latency = one block; late replies become counted silent blocks (never a
+wait longer than half a block, ≤ 5 ms); at most three unanswered blocks are in flight so a
+stalled worker can never fill the pipe and block the callback; crash (EOF/EPIPE) and hang
+(40 consecutive late blocks) are faults: silence, log entry (`engine.host_faults`), kill, and
+an automatic restart with the last captured state and the applied parameters — disabled while
+recording (the playback host clears auto-restart on `Recording(true)`). Opt-in only; no native
+editor; metadata still read in-process once.
+
+`SML_SANDBOX_CSV=… cargo test -p soundcraft-engine --test sandbox` (debug build, container P,
+the test binary is its own worker) → `docs/evidence/next_cycle/sprint_03/sandbox-e03.csv`:
+
+| block | blocks | late | exchange p50 | p99 | max | worker RSS |
+|---|---|---|---|---|---|---|
+| 64 | 2000 | 1 | 37 µs | 112 µs | 0.77 ms | 5.9 MiB |
+| 128 | 2000 | 0 | 41 µs | 120 µs | 0.77 ms | 5.8 MiB |
+| 256 | 2000 | 0 | 46 µs | 112 µs | 0.32 ms | 5.5 MiB |
+| 1024 | 2000 | 0 | 66 µs | 199 µs | 2.8 ms | 5.5 MiB |
+| crash → audio back (restart) | | | | | 61 ms | |
+| hang → declared hung | | | | | 6.6 ms | |
+
+Reading: the per-block exchange cost matches E03's release measurement in order of magnitude
+(p50 ≈ 40 µs); the tails (0.3–2.8 ms) are scheduling in the container and are exactly what the
+one-block lead hides from the callback (0–1 late block in 2000). Output parity with in-process
+hosting holds to 1e-5 after PDC removes the lead. Native callback deadline misses, editor
+attachment and memory on the target machine remain pending; the mode ships labelled as
+compatibility mode, never default, with no containment claim for in-process plugins.

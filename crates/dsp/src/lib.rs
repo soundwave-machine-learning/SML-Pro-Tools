@@ -167,6 +167,43 @@ impl PluginInfo {
     }
 }
 
+/// What a hosted plugin actually exposes to this host, read from a live instance (R31 capability
+/// matrix). These are facts about the plugin's interface as hosted here — never about its sound,
+/// and never a compatibility claim for a plugin that was not instantiated on this machine.
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct HostCapabilities {
+    pub id: String,
+    /// `CLAP`, `VST3` or `AU`.
+    pub format: &'static str,
+    pub name: String,
+    pub vendor: String,
+    pub version: String,
+    pub path: String,
+    pub is_instrument: bool,
+    /// Channel count of each audio input port/bus, main first.
+    pub audio_inputs: Vec<u32>,
+    /// Channel count of each audio output port/bus, main first.
+    pub audio_outputs: Vec<u32>,
+    /// Input ports/buses beyond the main one (sidechain candidates).
+    pub aux_inputs: usize,
+    /// How this host treats those aux inputs today.
+    pub sidechain: &'static str,
+    pub note_input: bool,
+    /// Visible (automatable) parameters and the distinct units they declare.
+    pub params: usize,
+    pub param_units: Vec<String>,
+    /// `available (…)`, `none`, or why it cannot be hosted on this platform.
+    pub editor: String,
+    /// The plugin offers an opaque state blob (saved with the session).
+    pub state: bool,
+    pub latency_samples: usize,
+    pub tail_samples: usize,
+    /// Fixed probe conditions (sample rate / block / channels).
+    pub probed_at: &'static str,
+    /// Host-side limitations that apply to this plugin regardless of what it declares.
+    pub host_notes: Vec<&'static str>,
+}
+
 /// A realtime audio processor or instrument.
 ///
 /// Contract: `process` never allocates or panics. It processes `min(frames, io[c].len())` frames
@@ -192,6 +229,18 @@ pub trait Plugin: Send {
     /// Gain reduction in dB for metering (a non-negative amount); 0 for non-dynamics plugins.
     fn gain_reduction_db(&self) -> f32 {
         0.0
+    }
+    /// The plugin exposes a secondary (sidechain) audio input this host can feed.
+    fn accepts_sidechain(&self) -> bool {
+        false
+    }
+    /// Tells the instance it serves an offline render (no callback deadline): a host that trades
+    /// waiting for silence under a realtime deadline waits instead. Default: nothing to do.
+    fn set_offline(&mut self, _offline: bool) {}
+    /// Like [`Plugin::process`], with `side` (planar, at least `frames` long per channel) on the
+    /// plugin's sidechain input. Plugins without one ignore `side`. Same contract as `process`.
+    fn process_sidechain(&mut self, io: &mut [Vec<f32>], _side: &[Vec<f32>], frames: usize) {
+        self.process(io, frames);
     }
     /// Instruments: note events at sample offsets within the next block.
     fn note_on(&mut self, _offset: usize, _note: u8, _velocity: u8) {}

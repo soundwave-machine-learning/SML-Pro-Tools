@@ -97,6 +97,9 @@ mod api {
     pub fn add_search_dir(dir: &Path) -> usize {
         registry::add_search_dir(dir)
     }
+    pub fn extra_search_dirs() -> Vec<PathBuf> {
+        registry::extra_search_dirs()
+    }
     pub fn scan_paths(dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
         registry::scan_paths(dirs)
     }
@@ -108,6 +111,9 @@ mod api {
     }
     pub fn instantiate(id: &str) -> Result<Box<dyn Plugin>, ClapError> {
         registry::instantiate(id)
+    }
+    pub fn capabilities(id: &str) -> Result<soundcraft_dsp::HostCapabilities, ClapError> {
+        registry::capabilities(id)
     }
     pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {
         registry::plugin_info(id)
@@ -127,6 +133,9 @@ mod api {
     pub fn add_search_dir(_dir: &Path) -> usize {
         0
     }
+    pub fn extra_search_dirs() -> Vec<PathBuf> {
+        Vec::new()
+    }
     pub fn scan_paths(_dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
         Vec::new()
     }
@@ -135,6 +144,9 @@ mod api {
         Err(ClapError::Unsupported)
     }
     pub fn instantiate(_id: &str) -> Result<Box<dyn Plugin>, ClapError> {
+        Err(ClapError::Unsupported)
+    }
+    pub fn capabilities(_id: &str) -> Result<soundcraft_dsp::HostCapabilities, ClapError> {
         Err(ClapError::Unsupported)
     }
     pub fn plugin_info(_id: &str) -> Option<&'static PluginInfo> {
@@ -160,6 +172,11 @@ pub fn add_search_dir(dir: &Path) -> usize {
     api::add_search_dir(dir)
 }
 
+/// Directories added with [`add_search_dir`] (for a worker process that must see the same plugins).
+pub fn extra_search_dirs() -> Vec<PathBuf> {
+    api::extra_search_dirs()
+}
+
 /// Scans the given folders without touching the cache.
 pub fn scan_paths(dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
     api::scan_paths(dirs)
@@ -180,6 +197,19 @@ pub fn adopt_scanned(descriptors: Vec<ClapDescriptor>) {
 /// `soundcraft_dsp::create`), with the reason when it fails.
 pub fn instantiate(id: &str) -> Result<Box<dyn Plugin>, ClapError> {
     api::instantiate(id)
+}
+
+/// Like [`instantiate`], but returns the concrete [`ClapPlugin`] (for its extra methods).
+#[cfg(not(target_arch = "wasm32"))]
+pub fn instantiate_plugin(id: &str) -> Result<ClapPlugin, ClapError> {
+    registry::instantiate_plugin(id)
+}
+
+/// The capability record of a `clap:<id>` plugin (R31 host matrix): what it exposes to this
+/// host under fixed probe conditions. Instantiates it once; main thread only.
+pub fn capabilities(id: &str) -> Result<soundcraft_dsp::HostCapabilities, ClapError> {
+    parse_id(id).ok_or_else(|| ClapError::NotFound(id.to_string()))?;
+    api::capabilities(id)
 }
 
 /// Creates a plugin by `clap:<id>`; `None` if unknown or it fails to load.

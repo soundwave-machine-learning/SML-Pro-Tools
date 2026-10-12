@@ -1,0 +1,59 @@
+# utc: 2026-10-12T05:08:30Z P
+test tests::delay_compensation_aligns_latent_tracks ... ok
+test sml_graph_tests::sml_graph_clt4_compensation_through_slots ... ok
+test sml_graph_tests::insert_pdc_fixtures_parallel_nested_and_bypassed ... ok
+test sml_graph_tests::sidechain_bus_feeds_insert_exactly_on_aux_and_one_block_late_on_tracks ... FAILED
+
+failures:
+
+---- sml_graph_tests::sidechain_bus_feeds_insert_exactly_on_aux_and_one_block_late_on_tracks stdout ----
+
+thread 'sml_graph_tests::sidechain_bus_feeds_insert_exactly_on_aux_and_one_block_late_on_tracks' (2546) panicked at crates/mix/src/lib.rs:3819:13:
+assertion `left == right` failed: v2 false: track gate hears the bus one block late
+  left: []
+ right: [1256, 1257, 3256]
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+--
+test result: FAILED. 3 passed; 1 failed; 0 ignored; 0 measured; 42 filtered out; finished in 0.19s
+
+error: test failed, to rerun pass `-p soundcraft-mix --lib`
+test capability_matrix_reads_the_clap_fixture_from_a_live_instance ... ok
+test clap_insert_renders_through_the_mix ... ok
+test clap_provider_in_tape_slot_round_trips_state_and_renders ... ok
+test clap_sidechain_port_is_fed_from_the_insert_sidechain_bus ... ok
+test clap_state_is_captured_stored_and_restored_before_the_first_block ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.29s
+
+test scan::tests::os_paths_cover_the_standard_locations ... ok
+test scan::tests::features_map_to_categories ... ok
+test tests::ids_parse ... ok
+test tests::non_clap_ids_are_rejected_without_scanning ... ok
+test tests::garbage_files_are_errors_not_crashes ... ok
+test scan::tests::bundle_executable_falls_back_to_first_file ... ok
+test scan::tests::finds_files_and_bundles_recursively_but_not_inside_bundles ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/editor_main_thread.rs (target/debug/deps/editor_main_thread-c286a196627ea142)
+editor_main_thread: ok
+     Running tests/fixture_e2e.rs (target/debug/deps/fixture_e2e-fa26bc03bd4f775d)
+--
+test info_exposes_visible_params_with_names ... ok
+test editors_refuse_to_open_off_the_main_thread ... ok
+test gain_processes_audio_and_follows_params ... ok
+test many_instances_create_and_drop_cleanly ... ok
+test synth_plays_notes_at_their_offsets ... ok
+test scan_lists_both_fixture_plugins ... ok
+test state_saves_and_restores_into_a_new_instance ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+   Doc-tests soundcraft_clap_host
+
+running 0 tests
+--
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

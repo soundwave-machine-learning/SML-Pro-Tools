@@ -1,0 +1,16 @@
+# utc: 2026-10-12T05:46:08Z commit: 0baa780+worktree; P (linux x86_64 container), debug build; worker = the test binary itself; paced like a callback
+     Running tests/sandbox.rs (target/debug/deps/sandbox-498d32487bedabc1)
+sandbox block 64: 2000 blocks, 3 late, p50 22.7 us p99 97.0 us max 832.9 us rss 5452 KiB
+sandbox block 128: 2000 blocks, 1 late, p50 25.7 us p99 68.8 us max 1444.6 us rss 5396 KiB
+sandbox block 256: 800 blocks, 0 late, p50 31.0 us p99 64.2 us max 439.9 us rss 5532 KiB
+sandbox block 1024: 800 blocks, 0 late, p50 72.2 us p99 499.7 us max 3002.7 us rss 5584 KiB
+sandbox: restart 60.99789ms, hang detected in 1.046430343s
+sandbox: ok
+     Running tests/w1_hosted_load.rs (target/debug/deps/w1_hosted_load-d0b9c019ccb221f3)
+
+--
+W1 hosted: 3750 blocks of 256 @ 48000 Hz; render p50 277 / p95 466 / p99 1323 / max 8399 us (budget 5333); over budget 8; prepare 5.0 ms; 10 state captures (p50 0.2 ms max 0.3 ms); 9 autosave snapshots; sandbox faults 0; sandboxed true
+test w1_hosted_chain_under_autosave_and_state_capture ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.32s
+

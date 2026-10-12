@@ -214,11 +214,49 @@ pub fn bounce_bytes(e: &Engine, r: Range, opts: &EncodeOptions, normalize: bool)
 /// Render the main mix in its own format (every main channel, SMPTE/WAV order, with the WAV
 /// speaker mask of the main format), or an ITU stereo fold-down when `fold_stereo`.
 pub fn bounce_bytes_with(e: &Engine, r: Range, opts: &EncodeOptions, normalize: bool, fold_stereo: bool) -> Result<(Vec<u8>, (f32, f32, f32))> {
+    bounce_bytes_checked(e, r, opts, normalize, fold_stereo, &BounceGuard::default())
+}
+
+/// What an export may do when the render is not the mix the user hears (R31).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct BounceGuard {
+    /// Samples (or the declared maximum) rendered past the range end.
+    pub tail: soundcraft_mix::Tail,
+    /// The user explicitly accepts an export in which a plugin that failed to load is bypassed.
+    pub accept_substituted: bool,
+}
+
+/// Refuses a render in which a hosted plugin failed to load, unless the user accepted that.
+fn substituted_guard(cmd: &str, report: &soundcraft_mix::RenderReport, guard: &BounceGuard) -> Result<()> {
+    if report.failed_plugins.is_empty() || guard.accept_substituted {
+        return Ok(());
+    }
+    let list: Vec<String> = report.failed_plugins.iter().map(|(t, slot, id)| format!("{t} insert {}: {id}", (b'a' + *slot as u8) as char)).collect();
+    Err(EngineError::BadParams(
+        cmd.into(),
+        format!(
+            "{} plugin(s) failed to load, so this export would not be the mix you hear ({}); fix the plugin or pass acknowledge_missing: true to export without their sound",
+            list.len(),
+            list.join("; ")
+        ),
+    ))
+}
+
+pub fn bounce_bytes_checked(
+    e: &Engine,
+    r: Range,
+    opts: &EncodeOptions,
+    normalize: bool,
+    fold_stereo: bool,
+    guard: &BounceGuard,
+) -> Result<(Vec<u8>, (f32, f32, f32))> {
     let s = e.session();
     if r.len() > s.sample_rate.samples(4.0 * 3600.0) {
         return Err(EngineError::BadParams("file.bounce_mix".into(), "bounces are limited to 4 hours".into()));
     }
-    let (mut ch, fmt) = render_main(s, r, fold_stereo);
+    let report = soundcraft_mix::render_range_report(s, r, 1024, guard.tail);
+    substituted_guard("file.bounce_mix", &report, guard)?;
+    let (mut ch, fmt) = main_format_of(s, report.audio, fold_stereo);
     if normalize {
         soundcraft_dsp::offline::normalize(&mut ch, -0.1, false);
     }
@@ -233,9 +271,8 @@ pub fn bounce_bytes_with(e: &Engine, r: Range, opts: &EncodeOptions, normalize: 
     Ok((bytes, (peak, lufs, true_peak)))
 }
 
-/// The main mix over `r` and its format (folded to stereo on request).
-fn render_main(s: &Session, r: Range, fold_stereo: bool) -> (Vec<Vec<f32>>, ChannelFormat) {
-    let ch = soundcraft_mix::render_range(s, r, 1024);
+/// The main mix's format (folded to stereo on request).
+fn main_format_of(s: &Session, ch: Vec<Vec<f32>>, fold_stereo: bool) -> (Vec<Vec<f32>>, ChannelFormat) {
     let fmt = if ch.len() <= 2 { ChannelFormat::Stereo } else { s.main_format() };
     if fold_stereo && ch.len() > 2 { (soundcraft_mix::fold_down_stereo(fmt, &ch), ChannelFormat::Stereo) } else { (ch, fmt) }
 }
@@ -248,6 +285,10 @@ pub fn bounce_stems(e: &Engine, dir: &str, r: Range, opts: &EncodeOptions) -> Re
 
 /// [`bounce_stems`] in the main format, or folded down to stereo when `fold_stereo`.
 pub fn bounce_stems_with(e: &Engine, dir: &str, r: Range, opts: &EncodeOptions, fold_stereo: bool) -> Result<Vec<String>> {
+    bounce_stems_checked(e, dir, r, opts, fold_stereo, &BounceGuard::default())
+}
+
+pub fn bounce_stems_checked(e: &Engine, dir: &str, r: Range, opts: &EncodeOptions, fold_stereo: bool, guard: &BounceGuard) -> Result<Vec<String>> {
     let s = e.session();
     std::fs::create_dir_all(dir).map_err(|err| EngineError::Io(format!("{dir}: {err}")))?;
     let ext = match opts.format {
@@ -267,7 +308,9 @@ pub fn bounce_stems_with(e: &Engine, dir: &str, r: Range, opts: &EncodeOptions, 
         for t in &mut solo.tracks {
             t.mixer.solo = t.id == id;
         }
-        let (ch, fmt) = render_main(&solo, r, fold_stereo);
+        let report = soundcraft_mix::render_range_report(&solo, r, 1024, guard.tail);
+        substituted_guard("file.bounce_stems", &report, guard)?;
+        let (ch, fmt) = main_format_of(&solo, report.audio, fold_stereo);
         let buf = AudioBuffer { sample_rate: s.sample_rate.hz(), channels: ch };
         let bytes = soundcraft_audio_io::encode_with_channel_mask(&buf, opts, fmt.channel_mask()).map_err(|err| EngineError::Io(err.to_string()))?;
         let path = Path::new(dir).join(format!("{} - {}.{ext}", sanitize_name(&s.name), sanitize_name(&name)));
@@ -550,6 +593,10 @@ pub fn open_session(e: &mut Engine, path: &str) -> Result<Vec<String>> {
     e.path = Some(path.to_string());
     for m in &missing {
         e.message(format!("missing media: {m}"));
+    }
+    // Derived Bend media that did not load is rebuilt from the original (R30).
+    for m in crate::cmd::rerender_missing_warps(e) {
+        e.message(m);
     }
     Ok(missing)
 }

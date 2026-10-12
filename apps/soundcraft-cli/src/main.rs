@@ -83,6 +83,15 @@ fn main() -> ExitCode {
             let code = soundcraft_mix::scan_isolated::worker_main(std::path::Path::new(path));
             return if code == 0 { ExitCode::SUCCESS } else { ExitCode::from(u8::try_from(code).unwrap_or(1)) };
         }
+        // Sandboxed plugin worker (R31): hosts ONE plugin instance for the parent process.
+        "plugin-worker" | "--plugin-worker" => {
+            let Some(id) = rest.first() else {
+                eprintln!("usage: soundcraft-cli plugin-worker <plugin id> [search dirs…]");
+                return ExitCode::FAILURE;
+            };
+            let dirs: Vec<std::path::PathBuf> = rest.iter().skip(1).map(std::path::PathBuf::from).collect();
+            std::process::exit(soundcraft_mix::sandbox::worker_main(id, &dirs));
+        }
         // E03 experiment worker: a minimal out-of-process "plugin" (gain) over stdin/stdout.
         // Protocol: 4-byte little-endian frame count N, then N f32 samples; replies the same.
         // `--hang-after K` stops answering after K blocks; `--crash-after K` exits with SIGABRT.

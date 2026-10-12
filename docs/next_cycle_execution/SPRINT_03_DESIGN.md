@@ -48,3 +48,22 @@ repository; statuses stay in `REQUIREMENT_STATUS.csv`.
    unload/reload are covered by the fixture GUI stub portably; native editor behaviour is N.
 7. **W1 load (task 9)**: `sml_profile` chain with the fixture CLAP plugin + autosave + menu
    activity as a headless control; native remains pending.
+
+## Outcome against the decisions (2026-10-12, end of sprint)
+1. Capability matrix: as decided (`engine.plugin_capabilities`, CSV from the fixture tests).
+2. Sidechain: as decided for the model, mixer and CLAP; VST3 aux buses stay inactive and the
+   matrix says "not routed". The fixture gained a real `sidegate` plugin so the CLAP path is
+   proven end to end. Audio-track detectors lag one block (reported in the latency report).
+3. Offline render: `render_range_report` + `Tail`; the export refuses a render in which a
+   hosted plugin failed to load unless acknowledged. The "refuse while a Bend render is
+   pending" idea was NOT implemented: the clip keeps its last valid render, so an export is
+   always of a consistent document (`clip.warp_status` shows pending work).
+4. Sandboxed mode: as decided (one block ahead, silence-and-flag, auto-restart off while
+   recording), plus a bound on unanswered blocks so a stalled worker can never block the
+   callback on a full pipe. Measured in `sandbox-e03.csv`.
+5. Bend: re-render after reopen implemented; a separate `clip.warp_cancel` was not added —
+   `clip.warp_clear` already forgets pending work and restores the original (that is the
+   cancel path; documented in help).
+6. Host defects: none found in the fixture suites; native remains pending.
+7. W1 load: headless control with the fixture chain, two sandboxed instances, autosave snapshots
+   and state captures (`w1-hosted-load.csv`).

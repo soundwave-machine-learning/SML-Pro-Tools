@@ -123,6 +123,9 @@ mod api {
     pub fn add_search_dir(dir: &Path) -> usize {
         registry::add_search_dir(dir)
     }
+    pub fn extra_search_dirs() -> Vec<PathBuf> {
+        registry::extra_search_dirs()
+    }
     pub fn scan_paths(dirs: &[PathBuf]) -> Vec<Vst3Descriptor> {
         registry::scan_paths(dirs)
     }
@@ -134,6 +137,9 @@ mod api {
     }
     pub fn instantiate(id: &str) -> Result<Box<dyn Plugin>, Vst3Error> {
         registry::instantiate(id)
+    }
+    pub fn capabilities(id: &str) -> Result<soundcraft_dsp::HostCapabilities, Vst3Error> {
+        registry::capabilities(id)
     }
     pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {
         registry::plugin_info(id)
@@ -156,6 +162,9 @@ mod api {
     pub fn add_search_dir(_dir: &Path) -> usize {
         0
     }
+    pub fn extra_search_dirs() -> Vec<PathBuf> {
+        Vec::new()
+    }
     pub fn scan_paths(_dirs: &[PathBuf]) -> Vec<Vst3Descriptor> {
         Vec::new()
     }
@@ -164,6 +173,9 @@ mod api {
         Err(Vst3Error::Unsupported)
     }
     pub fn instantiate(_id: &str) -> Result<Box<dyn Plugin>, Vst3Error> {
+        Err(Vst3Error::Unsupported)
+    }
+    pub fn capabilities(_id: &str) -> Result<soundcraft_dsp::HostCapabilities, Vst3Error> {
         Err(Vst3Error::Unsupported)
     }
     pub fn plugin_info(_id: &str) -> Option<&'static PluginInfo> {
@@ -188,6 +200,11 @@ pub fn rescan() -> Vec<Vst3Descriptor> {
 /// plugins the folder holds.
 pub fn add_search_dir(dir: &Path) -> usize {
     api::add_search_dir(dir)
+}
+
+/// Directories added with [`add_search_dir`] (for a worker process that must see the same plugins).
+pub fn extra_search_dirs() -> Vec<PathBuf> {
+    api::extra_search_dirs()
 }
 
 /// Scans the given folders without touching the cache.
@@ -226,6 +243,13 @@ pub fn instantiate(id: &str) -> Result<Box<dyn Plugin>, Vst3Error> {
 #[cfg(not(target_arch = "wasm32"))]
 pub fn instantiate_plugin(id: &str) -> Result<Vst3Plugin, Vst3Error> {
     registry::instantiate_plugin(id)
+}
+
+/// The capability record of a `vst3:<class id>` plugin (R31 host matrix): what it exposes to
+/// this host under fixed probe conditions. Instantiates it once; main thread only.
+pub fn capabilities(id: &str) -> Result<soundcraft_dsp::HostCapabilities, Vst3Error> {
+    parse_id(id).ok_or_else(|| Vst3Error::NotFound(id.to_string()))?;
+    api::capabilities(id)
 }
 
 /// Creates a plugin by `vst3:<class id>`; `None` if unknown or it fails to load.

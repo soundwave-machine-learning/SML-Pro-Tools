@@ -232,3 +232,60 @@ fn editor_view_is_probed_and_edits_come_back_as_plain_values() {
     let synth = soundcraft_vst3_host::instantiate_plugin(&id_of("Fixture Synth")).unwrap();
     assert!(synth.editor_size().is_err());
 }
+
+/// R31 capability matrix: the VST3 fixture's record from a live instance (buses, latency, tail,
+/// state, editor probe result on this platform).
+#[test]
+fn capability_record_of_the_fixture() {
+    let gain = id_of("Fixture Gain");
+    let c = soundcraft_vst3_host::capabilities(&gain).unwrap();
+    assert_eq!(c.format, "VST3");
+    assert_eq!(c.audio_inputs, vec![2]);
+    assert_eq!(c.audio_outputs, vec![2]);
+    assert_eq!(c.aux_inputs, 0);
+    assert!(c.state);
+    assert!(c.params >= 1);
+    if cfg!(target_os = "macos") {
+        assert!(c.editor.starts_with("available"), "{}", c.editor);
+    } else {
+        assert!(c.editor.contains("not supported on this platform"), "{}", c.editor);
+    }
+    let synth = soundcraft_vst3_host::capabilities(&id_of("Fixture Synth")).unwrap();
+    assert!(synth.note_input && synth.is_instrument);
+    assert!(soundcraft_vst3_host::capabilities("vst3:00000000000000000000000000000000").is_err());
+    if let Some(path) = std::env::var_os("SML_HOST_MATRIX_CSV") {
+        use std::io::Write;
+        let new = !std::path::Path::new(&path).exists();
+        let mut f = std::fs::OpenOptions::new().create(true).append(true).open(&path).unwrap();
+        if new {
+            writeln!(f, "kind,id,format,name,version,audio_inputs,audio_outputs,aux_inputs,sidechain,note_input,params,param_units,editor,state,latency_samples,tail_samples,probed_at,host_notes,platform").unwrap();
+        }
+        for c in [&c, &synth] {
+            let j = |v: String| v.replace(',', ";").replace('"', "");
+            writeln!(
+                f,
+                "deterministic host fixture (VST3),{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{} {}",
+                c.id,
+                c.format,
+                c.name,
+                c.version,
+                j(format!("{:?}", c.audio_inputs)),
+                j(format!("{:?}", c.audio_outputs)),
+                c.aux_inputs,
+                c.sidechain,
+                c.note_input,
+                c.params,
+                j(format!("{:?}", c.param_units)),
+                c.editor,
+                c.state,
+                c.latency_samples,
+                c.tail_samples,
+                c.probed_at,
+                j(format!("{:?}", c.host_notes)),
+                std::env::consts::OS,
+                std::env::consts::ARCH
+            )
+            .unwrap();
+        }
+    }
+}

@@ -1,0 +1,7 @@
+    Checking soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+    Checking soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+    Checking soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-remote v0.5.0 (/home/user/SML-Pro-Tools/crates/remote)
+    Checking soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 15.28s

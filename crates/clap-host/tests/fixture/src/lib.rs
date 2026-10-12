@@ -34,6 +34,22 @@ unsafe impl<const N: usize> Sync for Features<N> {}
 
 static GAIN_FEATURES: Features<3> = Features([c"audio-effect".as_ptr(), c"stereo".as_ptr(), std::ptr::null()]);
 static SYNTH_FEATURES: Features<3> = Features([c"instrument".as_ptr(), c"synthesizer".as_ptr(), std::ptr::null()]);
+static SIDEGATE_FEATURES: Features<3> = Features([c"audio-effect".as_ptr(), c"stereo".as_ptr(), std::ptr::null()]);
+
+/// A gate keyed from a second (sidechain) input port: passes the main input only where the
+/// key exceeds 0.5. Proves that the host routes a sidechain bus into an aux port.
+static SIDEGATE_DESC: clap_plugin_descriptor = clap_plugin_descriptor {
+    clap_version: CLAP_VERSION,
+    id: c"org.soundcraft.test.sidegate".as_ptr(),
+    name: c"Fixture Sidegate".as_ptr(),
+    vendor: c"SoundCraft tests".as_ptr(),
+    url: c"".as_ptr(),
+    manual_url: c"".as_ptr(),
+    support_url: c"".as_ptr(),
+    version: c"1.0.0".as_ptr(),
+    description: c"test sidechain gate".as_ptr(),
+    features: SIDEGATE_FEATURES.0.as_ptr(),
+};
 
 static GAIN_DESC: clap_plugin_descriptor = clap_plugin_descriptor {
     clap_version: CLAP_VERSION,
@@ -65,6 +81,7 @@ struct Fx {
     plugin: clap_plugin,
     host: *const clap_host,
     synth: bool,
+    sidegate: bool,
     gain: f64,
     mode: f64,
     level: f64,
@@ -171,11 +188,12 @@ unsafe extern "C" fn process(p: *const clap_plugin, pr: *const clap_process) -> 
         }
         None
     } else {
-        if pr.audio_inputs_count != 1 {
+        if pr.audio_inputs_count != if f.sidegate { 2 } else { 1 } {
             return CLAP_PROCESS_ERROR;
         }
         Some(unsafe { &*pr.audio_inputs })
     };
+    let key: Option<&clap_audio_buffer> = if f.sidegate { Some(unsafe { &*pr.audio_inputs.add(1) }) } else { None };
     if f.gui_edit_pending {
         f.gui_edit_pending = false;
         f.gain = 0.25;
@@ -233,7 +251,13 @@ unsafe extern "C" fn process(p: *const clap_plugin, pr: *const clap_process) -> 
             let v = match input {
                 Some(inp) => {
                     let x = unsafe { *(*inp.data32.add(c.min(inp.channel_count as usize - 1))).add(i) };
-                    x * f.gain as f32
+                    match key {
+                        Some(k) => {
+                            let s = unsafe { *(*k.data32.add(c.min(k.channel_count as usize - 1))).add(i) };
+                            if s.abs() > 0.5 { x } else { 0.0 }
+                        }
+                        None => x * f.gain as f32,
+                    }
                 }
                 None => f.level as f32,
             };
@@ -246,7 +270,8 @@ unsafe extern "C" fn process(p: *const clap_plugin, pr: *const clap_process) -> 
 // ---- extensions ----
 
 unsafe extern "C" fn params_count(p: *const clap_plugin) -> u32 {
-    if unsafe { fx(p) }.synth { 0 } else { 3 }
+    let f = unsafe { fx(p) };
+    if f.synth || f.sidegate { 0 } else { 3 }
 }
 
 fn write_name(dst: &mut [c_char], s: &CStr) {
@@ -317,11 +342,27 @@ static PARAMS: clap_plugin_params = clap_plugin_params {
 };
 
 unsafe extern "C" fn ports_count(p: *const clap_plugin, is_input: bool) -> u32 {
-    if is_input && unsafe { fx(p) }.synth { 0 } else { 1 }
+    let f = unsafe { fx(p) };
+    match (is_input, f.synth, f.sidegate) {
+        (true, true, _) => 0,
+        (true, _, true) => 2,
+        _ => 1,
+    }
 }
 
 unsafe extern "C" fn ports_get(p: *const clap_plugin, index: u32, is_input: bool, info: *mut clap_audio_port_info) -> bool {
-    if index != 0 || (is_input && unsafe { fx(p) }.synth) {
+    let f = unsafe { fx(p) };
+    if is_input && f.sidegate && index == 1 {
+        let info = unsafe { &mut *info };
+        info.id = 2;
+        write_name(&mut info.name, c"sidechain");
+        info.flags = 0;
+        info.channel_count = 2;
+        info.port_type = CLAP_PORT_STEREO.as_ptr();
+        info.in_place_pair = clap_sys::id::CLAP_INVALID_ID;
+        return true;
+    }
+    if index != 0 || (is_input && f.synth) {
         return false;
     }
     let info = unsafe { &mut *info };
@@ -468,7 +509,8 @@ static GUI: clap_plugin_gui = clap_plugin_gui {
 
 unsafe extern "C" fn get_extension(p: *const clap_plugin, id: *const c_char) -> *const c_void {
     let id = unsafe { CStr::from_ptr(id) };
-    let synth = unsafe { fx(p) }.synth;
+    let f = unsafe { fx(p) };
+    let synth = f.synth || f.sidegate;
     if id == CLAP_EXT_PARAMS {
         &PARAMS as *const _ as *const c_void
     } else if id == CLAP_EXT_AUDIO_PORTS {
@@ -491,23 +533,26 @@ unsafe extern "C" fn on_main_thread(_p: *const clap_plugin) {}
 // ---- factory + entry ----
 
 unsafe extern "C" fn factory_count(_f: *const clap_plugin_factory) -> u32 {
-    2
+    3
 }
 
 unsafe extern "C" fn factory_desc(_f: *const clap_plugin_factory, i: u32) -> *const clap_plugin_descriptor {
     match i {
         0 => &GAIN_DESC,
         1 => &SYNTH_DESC,
+        2 => &SIDEGATE_DESC,
         _ => std::ptr::null(),
     }
 }
 
 unsafe extern "C" fn factory_create(_f: *const clap_plugin_factory, host: *const clap_host, id: *const c_char) -> *const clap_plugin {
     let id = unsafe { CStr::from_ptr(id) };
-    let (desc, synth) = if id == c"org.soundcraft.test.gain" {
-        (&GAIN_DESC as *const _, false)
+    let (desc, synth, sidegate) = if id == c"org.soundcraft.test.gain" {
+        (&GAIN_DESC as *const _, false, false)
     } else if id == c"org.soundcraft.test.synth" {
-        (&SYNTH_DESC as *const _, true)
+        (&SYNTH_DESC as *const _, true, false)
+    } else if id == c"org.soundcraft.test.sidegate" {
+        (&SIDEGATE_DESC as *const _, false, true)
     } else {
         return std::ptr::null();
     };
@@ -528,6 +573,7 @@ unsafe extern "C" fn factory_create(_f: *const clap_plugin_factory, host: *const
         },
         host,
         synth,
+        sidegate,
         gain: 1.0,
         mode: 0.0,
         level: 0.0,

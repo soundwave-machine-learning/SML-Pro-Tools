@@ -220,7 +220,12 @@ impl AudioState {
         while let Ok(c) = self.rx.try_recv() {
             match c {
                 Cmd::Input(r) => self.input = Some(r),
-                Cmd::Recording(r) => self.recording = r,
+                Cmd::Recording(r) => {
+                    self.recording = r;
+                    // A crashed sandboxed processor is never silently resumed into a take.
+                    #[cfg(not(target_arch = "wasm32"))]
+                    soundcraft_mix::sandbox::set_auto_restart(!r);
+                }
                 Cmd::ClickUntil(at) => {
                     self.mix.click_until = at;
                     self.countoff_armed = true;

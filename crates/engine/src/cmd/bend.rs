@@ -92,6 +92,40 @@ fn warp_set(e: &mut Engine, p: &Value) -> Result<Value> {
     Ok(json!({"clip": id.0, "rev": rev, "anchors": anchors.len(), "rendered_len": warped_len(&anchors, src_len), "pending": true}))
 }
 
+/// After a reopen (R30): a warped clip whose rendered (derived) source did not load but whose
+/// original material did is queued for a fresh render from its anchors. Returns one message per
+/// clip; the clip keeps the missing source until the render arrives through `clip.warp_poll`.
+pub(crate) fn rerender_missing_warps(e: &mut Engine) -> Vec<String> {
+    let sr = e.session().sample_rate.as_f64() as f32;
+    let mut jobs = Vec::new();
+    {
+        let s = e.session();
+        for t in &s.tracks {
+            for c in t.clips() {
+                let ClipContent::Audio { source, .. } = c.content else { continue };
+                if c.warp.is_empty() || s.pool.get(source).is_some() {
+                    continue;
+                }
+                let Some((src_id, offset, src_len)) = original(s, c.id) else { continue };
+                let Some(orig) = s.pool.get(src_id).cloned() else { continue };
+                jobs.push((
+                    c.id,
+                    c.name.clone(),
+                    Job { clip: c.id, rev: c.warp_rev, source: orig, offset, src_len, anchors: c.warp.clone(), sample_rate: sr },
+                ));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for (id, name, job) in jobs {
+        match e.warp.submit(job) {
+            Ok(()) => out.push(format!("Bend: re-rendering `{name}` (clip {}) from its original material", id.0)),
+            Err(m) => out.push(format!("Bend: `{name}` (clip {}) needs a re-render but the queue refused it: {m}", id.0)),
+        }
+    }
+    out
+}
+
 fn warp_clear(e: &mut Engine, p: &Value) -> Result<Value> {
     let cmd = "clip.warp_clear";
     let id = target(e, cmd, p)?;
@@ -206,6 +240,53 @@ mod tests {
             assert!(std::time::Instant::now() < deadline, "render did not finish");
             std::thread::sleep(std::time::Duration::from_millis(5));
         }
+    }
+
+    /// R30: the derived (rendered) media of a warped clip is saved with the session; when it is
+    /// missing on reopen, the clip is re-rendered from its original material and anchors.
+    #[test]
+    fn warped_clip_is_rerendered_when_its_derived_media_is_missing_on_reopen() {
+        // The original is a registered source (as a recorded or imported file is), so the save
+        // writes it and the reopen can rebuild the derived render from it.
+        let mut s = Session::default();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Vox"));
+        let tone: Vec<f32> = (0..48_000).map(|i| (2.0 * std::f32::consts::PI * 220.0 * i as f32 / 48_000.0).sin() * 0.5).collect();
+        let src = crate::io::add_source(
+            &mut s,
+            "lead",
+            AudioBuffer { sample_rate: 48_000, channels: vec![tone] },
+            None,
+            soundcraft_audio_io::FileFormat::Wav,
+        );
+        let id = s.new_clip_id();
+        s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "lead", src, 0, 0, 48_000));
+        s.edit.selected_clips = vec![id];
+        s.edit.selected_tracks = vec![t];
+        let mut e = Engine::new(s);
+        let anchors = json!([[12_000, 18_000], [36_000, 36_000]]);
+        e.execute("clip.warp_set", &json!({"clip": id.0, "anchors": anchors})).unwrap();
+        let r = wait_applied(&mut e);
+        let len = r["applied"][0]["length"].as_i64().unwrap();
+        let dir = std::env::temp_dir().join(format!("sml-bend-reopen-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("s.scraft").to_string_lossy().into_owned();
+        crate::io::save_session(&mut e, &path).unwrap();
+        let derived =
+            std::fs::read_dir(dir.join("Audio Files")).unwrap().flatten().find(|f| f.file_name().to_string_lossy().contains("Bend")).unwrap();
+        std::fs::remove_file(derived.path()).unwrap();
+        let mut e2 = Engine::default();
+        let missing = crate::io::open_session(&mut e2, &path).unwrap();
+        assert_eq!(missing.len(), 1, "{missing:?}");
+        assert!(e2.messages.iter().any(|m| m.contains("re-rendering")), "{:?}", e2.messages);
+        assert!(e2.warp.is_busy());
+        let r = wait_applied(&mut e2);
+        assert_eq!(r["applied"][0]["length"].as_i64(), Some(len));
+        let (_, c) = e2.session().find_clip(id).unwrap();
+        let ClipContent::Audio { source, .. } = c.content else { panic!() };
+        assert!(e2.session().pool.get(source).is_some(), "the clip plays again");
+        assert_eq!(c.warp.len(), 2, "anchors kept");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// T-T3: the edit map is honoured exactly, the original stays, undo restores anchors and

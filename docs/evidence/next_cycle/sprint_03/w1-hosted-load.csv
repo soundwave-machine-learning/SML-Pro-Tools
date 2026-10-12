@@ -1,0 +1,2 @@
+workload,chain,block_frames,blocks,render_p50_us,render_p95_us,render_p99_us,render_max_us,budget_us,blocks_over_budget,prepare_ms,state_captures,capture_p50_ms,capture_max_ms,autosave_snapshots,sandbox_faults,provenance
+W1 (16 tracks / 2000 clips),CLAP fixture gain on 16 tracks (2 of them sandboxed),256,3750,276.9,465.8,1322.5,8398.5,5333.3,8,5.0,10,0.18,0.27,9,0,headless debug build in container P: no device callback no GUI; native W1/W2 pending

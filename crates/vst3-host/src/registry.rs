@@ -94,6 +94,11 @@ pub fn rescan() -> Vec<Vst3Descriptor> {
     ensure_scanned(&mut r).clone()
 }
 
+/// Extra directories added with [`add_search_dir`] (so a worker process can see the same plugins).
+pub fn extra_search_dirs() -> Vec<PathBuf> {
+    registry().lock().unwrap_or_else(PoisonError::into_inner).extra_dirs.clone()
+}
+
 pub fn add_search_dir(dir: &Path) -> usize {
     let mut r = registry().lock().unwrap_or_else(PoisonError::into_inner);
     if !r.extra_dirs.iter().any(|d| d == dir) {
@@ -242,6 +247,14 @@ pub fn instantiate_plugin(id: &str) -> Result<Vst3Plugin, Vst3Error> {
     let mut p = Vst3Plugin::new(inst, info);
     p.prepare(48_000.0, 1024, 2);
     Ok(p)
+}
+
+/// The capability record of `vst3:<class id>` (R31): instantiates the plugin once (main
+/// thread, never the audio thread) and reads what it exposes to this host.
+pub fn capabilities(id: &str) -> Result<soundcraft_dsp::HostCapabilities, Vst3Error> {
+    let desc = scan().into_iter().find(|d| d.id == id).ok_or_else(|| Vst3Error::NotFound(id.to_string()))?;
+    let p = instantiate_plugin(id)?;
+    Ok(p.capabilities(&desc))
 }
 
 pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {

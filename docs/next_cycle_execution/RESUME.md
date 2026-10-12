@@ -22,9 +22,15 @@ after `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (661 tests). Report:
 `docs/sprint_reports/NEXT_SPRINT_02_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_02/`.
 Native gaps stay TARGET_PENDING in REQUIREMENT_STATUS.csv.
 
-## Sprint 3 state (2026-10-12)
-Design decided in `docs/next_cycle_execution/SPRINT_03_DESIGN.md` (capability matrix command,
-sidechain model + fixture, offline-render guards, opt-in sandboxed instance mode from E03, Bend
-hardening, W1 headless load). Work in the dossier's order; evidence root
-`docs/evidence/next_cycle/sprint_03/`; milestone commit `feat: harden SML Studio plugin hosting
-and integration`. If resuming mid-sprint: `CARGO_INCREMENTAL=0 cargo xtask ci` first.
+## Sprint 3 state (2026-10-12) — CLOSED (PARTIAL, portable)
+Committed as `feat: harden SML Studio plugin hosting and integration` (SHA in STATE.md) after
+`CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (673 tests). Report
+`docs/sprint_reports/NEXT_SPRINT_03_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_03/`.
+
+## Sprint 4 state (2026-10-12)
+Design decided in `docs/next_cycle_execution/SPRINT_04_DESIGN.md`; drafts of the assistant
+service, assistant/mastering commands, E07 meter cases, E08 scenario and UI windows were
+prepared in the agent scratchpad and are being integrated. Evidence root
+`docs/evidence/next_cycle/sprint_04/` (eval set `assistant-eval.json` already there). Milestone
+commit `feat: complete assisted SML Studio mastering workflow`. If resuming mid-sprint:
+`CARGO_INCREMENTAL=0 cargo xtask ci` first.

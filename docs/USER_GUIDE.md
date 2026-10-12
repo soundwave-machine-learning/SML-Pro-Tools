@@ -274,17 +274,44 @@ slots, routing, trims and automation are not part of snapshots.
 - **Post-fader inserts**: right-click an insert › *Post-fader* (stopped) to run it after the fader.
 
 ## 10. Plugins: what to expect
-- SML Recording ships **no bundled effects or instruments**. Use your installed VST3 (or CLAP;
-  AU on macOS) plugins. Plugins are scanned in the background at startup (never while recording);
-  menus show progress and offer Cancel / Scan now.
-- Plugins run **inside the SML Recording process**. A crashing plugin can take the application
-  down; there is no sandbox. Your recordings are protected by the on-disk capture journal (the
-  take is recovered up to its last durable checkpoint), but save often when trying new plugins.
-- Old sessions that used the removed built-in processors open with those inserts shown as
-  **missing**: their settings are kept, audio passes through them unchanged, and exports ask you to
-  acknowledge that their sound is not included.
-- Not yet validated with your own plugins (EQ, dynamics, pitch correction): see
-  `TARGET_MACHINE_GAUNTLET.md` §5.
+
+- **Formats.** CLAP and VST3 are hosted in-process; Audio Units on macOS. Nothing is bundled:
+  the plugin list is whatever the isolated scanner found (§1b). `engine.plugin_capabilities`
+  shows, per installed plugin, what this host actually read from a live instance: audio
+  ports/buses, sidechain inputs, note input, parameter count and units, editor availability on
+  this platform, state support, declared latency and tail. That record proves the interface
+  as hosted here, never the plugin's sound.
+- **Sidechain.** An insert can take a bus as its external sidechain (`mix.insert_sidechain
+  {track, slot, bus}`; send the key signal to that bus). On aux and master strips the detector
+  is sample-accurate; on audio/instrument tracks it hears the bus one audio block late (the bus
+  is summed in the same pass) — `mix.latency_report` lists every sidechain with its lag. CLAP
+  plugins get the bus on their first aux input port; VST3 aux buses are not activated yet
+  (recorded in the capability matrix as "not routed").
+- **Bypass keeps timing.** Bypassing an insert keeps its latency as a plain delay, so the mix
+  stays aligned (the same rule as the dedicated slots).
+- **Versions.** The plugin version at insert time is saved with the session;
+  `session.plugin_versions` reports `same`, `changed`, `unrecorded` or `missing` per slot.
+- **Exports.** `file.bounce_mix` / `file.bounce_stems` refuse when a plugin is missing *or
+  failed to load* (the export would not be the mix you hear) unless you pass
+  `acknowledge_missing: true`. `tail: seconds | "auto"` renders past the range end so reverbs
+  and delays are not cut (`auto` = the longest tail any processor declares).
+- **Sandboxed mode (opt-in).** Insert `sandbox:<plugin id>` instead of `<plugin id>` to run
+  that plugin in a worker process. It adds exactly one audio block of latency (compensated),
+  has no native editor (generic parameters only), and contains crashes and hangs: the slot
+  goes silent for the current block, the fault is listed by `engine.host_faults`, and the
+  worker is restarted with its last captured state — except while recording, when it stays
+  silent and flagged (a crashed processor is never resumed into a take unnoticed). In-process
+  plugins have no such containment. In an offline bounce a sandboxed instance waits for its
+  worker (up to 3 s per block) instead of substituting silence, so an export is never a
+  degraded result; a worker that stays silent faults the export. Measured in
+  `docs/evidence/next_cycle/sprint_03/`.
+- **Editors.** CLAP editors open as floating windows; VST3 editors are hosted on macOS only
+  (other platforms report "unsupported"). Sandboxed instances have no editor.
+- **Not hosted.** VST3 64-bit processing and host-created IMessage; CLAP tail extension (tail
+  reported as 0); AU capabilities are not probed. The seven SML plugins (Channel EQ,
+  Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align) are separate projects:
+  until an artifact is supplied they are AWAITING_EXTERNAL_PLUGIN in the matrix, and the Vocal
+  Editor's integration mechanism (insert vs clip-linked) is undetermined.
 
 ## 11. Not supported in this build
 ASIO (WASAPI/ALSA/CoreAudio via the default hosts only), aggregate-device clock correction, ARA /

@@ -1,0 +1,27 @@
+# utc: 2026-10-12T04:57:14Z commit: 0baa780+worktree; P (linux x86_64 container)
+test capability_matrix_reads_the_clap_fixture_from_a_live_instance ... ok
+test clap_insert_renders_through_the_mix ... ok
+test clap_state_is_captured_stored_and_restored_before_the_first_block ... ok
+test clap_provider_in_tape_slot_round_trips_state_and_renders ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.68s
+
+     Running tests/fixture_e2e.rs (target/debug/deps/fixture_e2e-4062dddaea20c488)
+
+running 9 tests
+test info_exposes_visible_params_with_plain_ranges ... ok
+test installed_plugins_smoke ... ok
+test capability_record_of_the_fixture ... ok
+test scan_lists_both_audio_modules_but_not_the_controller_class ... ok
+test editor_view_is_probed_and_edits_come_back_as_plain_values ... ok
+test gain_processes_audio_and_follows_params ... ok
+test state_saves_component_and_controller_and_restores_them ... ok
+test synth_plays_notes_at_their_offsets ... ok
+test many_instances_create_and_drop_cleanly ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.28s
+
+test cmd::host::tests::capability_matrix_always_names_the_seven_targets_as_awaiting ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 156 filtered out; finished in 0.00s
+

@@ -1,6 +1,7 @@
 # Execution state — next cycle (revision 2.2)
 
-Updated: 2026-10-12T03:10Z. Branch `fable/recording-core`. Base checkpoint
+Updated: 2026-10-12T06:30Z. Branch `fable/recording-core`. Base checkpoint
+`396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 `396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 
 | Gate / sprint | State | Evidence |
@@ -9,11 +10,12 @@ Updated: 2026-10-12T03:10Z. Branch `fable/recording-core`. Base checkpoint
 | Next Sprint 1 | PARTIAL — commit `7bffb39` (CI exit 0, 631 tests); B02 control and E03 probe measured and decided; R05 log redaction + reliability audit document not done | `docs/sprint_reports/NEXT_SPRINT_01_REPORT.md` |
 | G1 (capture, persistence/recovery, command invariants) | portable PASS (B01 guard, E02 fault injection, envelope tests, capture/clock reruns); native parts pending | ledgers |
 | Next Sprint 2 | PARTIAL — all nine contract items implemented portably with tests (tools, Bend, Listen, profiles, themes, layouts, E04 caching + portable timing, remote, monitor, help); CI exit 0 (661 tests); milestone commit `feat: complete SML Studio editing mixing and remote workflow` (`79c419f`); gaps named in the report | `docs/sprint_reports/NEXT_SPRINT_02_REPORT.md` |
-| G2 (host/parameter/render interfaces) | portable: warp render service, listen mask, envelope clients (remote) in place; plugin-parameter Paint binding and the sandboxed instance mode are Sprint 3 | ledgers |
-| Next Sprint 3 | STARTED — design dossier `docs/next_cycle_execution/SPRINT_03_DESIGN.md`; task 1 (capability matrix) next | — |
+| G2 (host/parameter/render interfaces) | portable PASS: warp render service, listen mask, envelope clients, capability matrix, sidechain and render report interfaces | ledgers |
+| G3 (generic host/parameter/state/PDC/render) | portable PASS on deterministic fixtures and the CLAP/VST3 test plugins; real native plugins pending | `docs/evidence/next_cycle/sprint_03/` |
+| Next Sprint 3 | PARTIAL — capability matrix, sidechain, PDC fixtures + bypass compensation, offline tail/export guard, versions, sandboxed mode (E03 follow-up), Bend reopen re-render, W1 hosted control; CI exit 0 (673 tests); milestone commit `feat: harden SML Studio plugin hosting and integration` (SHA below); seven SML plugins AWAITING_EXTERNAL_PLUGIN; native pending | `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md` |
 | Next Sprint 4 | NOT STARTED | — |
 
-Current module: Sprint 3 task 1 (host capability matrix command + CSV), per SPRINT_03_DESIGN.md.
+Current module: Sprint 4 (assisted studio) per SPRINT_04_DESIGN.md — assistant service first.
 
 Target-pending ledger: H1–H4, CL-T6/7, N07 physical, B03 physical keypad, power-loss (E02),
 real plugins through the isolated scanner, ASIO (B06), V14 owner review, listening, phone M,

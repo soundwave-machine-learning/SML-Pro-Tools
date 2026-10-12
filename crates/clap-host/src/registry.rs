@@ -5,7 +5,7 @@ use crate::plugin::ClapPlugin;
 use crate::scan as paths;
 use crate::{ClapDescriptor, ClapError, parse_id};
 use clap_sys::ext::params::{CLAP_PARAM_IS_ENUM, CLAP_PARAM_IS_HIDDEN, CLAP_PARAM_IS_READONLY, CLAP_PARAM_IS_STEPPED};
-use soundcraft_dsp::{ParamInfo, Plugin, PluginInfo, Taper, Unit};
+use soundcraft_dsp::{HostCapabilities, ParamInfo, Plugin, PluginInfo, Taper, Unit};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock, PoisonError};
@@ -88,6 +88,11 @@ pub fn rescan() -> Vec<ClapDescriptor> {
     r.scanned = None;
     r.failed.clear();
     ensure_scanned(&mut r).clone()
+}
+
+/// Extra directories added with [`add_search_dir`] (so a worker process can see the same plugins).
+pub fn extra_search_dirs() -> Vec<PathBuf> {
+    registry().lock().unwrap_or_else(PoisonError::into_inner).extra_dirs.clone()
 }
 
 pub fn add_search_dir(dir: &Path) -> usize {
@@ -196,10 +201,22 @@ fn instantiate_raw(id: &str) -> Result<(Instance, &'static PluginInfo), ClapErro
 }
 
 pub fn instantiate(id: &str) -> Result<Box<dyn Plugin>, ClapError> {
+    Ok(Box::new(instantiate_plugin(id)?))
+}
+
+pub fn instantiate_plugin(id: &str) -> Result<ClapPlugin, ClapError> {
     let (inst, info) = instantiate_raw(id)?;
     let mut p = ClapPlugin::new(inst, info);
     p.prepare(48_000.0, 1024, 2);
-    Ok(Box::new(p))
+    Ok(p)
+}
+
+/// The capability record of `clap:<id>` (R31): instantiates the plugin once (main thread,
+/// never the audio thread) and reads what it exposes to this host.
+pub fn capabilities(id: &str) -> Result<HostCapabilities, ClapError> {
+    let desc = scan().into_iter().find(|d| d.id == id).ok_or_else(|| ClapError::NotFound(id.to_string()))?;
+    let p = instantiate_plugin(id)?;
+    Ok(p.capabilities(&desc))
 }
 
 pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {

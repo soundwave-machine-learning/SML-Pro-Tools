@@ -1012,6 +1012,12 @@ impl Instance {
         self.gui.available().then(|| Arc::clone(&self.gui))
     }
 
+    /// The plugin implements `clap.state` (save and load).
+    pub fn has_state(&self) -> bool {
+        // SAFETY: null or the plugin's static extension vtable, valid while the instance lives.
+        unsafe { self.state_ext.as_ref() }.is_some_and(|s| s.save.is_some() && s.load.is_some())
+    }
+
     /// `clap_plugin_state.save` into memory (`None` without the extension or on failure).
     pub fn save_state(&self) -> Option<Vec<u8>> {
         // SAFETY: the extension pointer, when non-null, points to a static vtable in the plugin.

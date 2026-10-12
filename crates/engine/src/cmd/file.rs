@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 crate::io::import_video_bytes(e, &path, bytes, at)
             }
         ),
-        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo}", always, bounce),
+        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, acknowledge_missing?: false} — refuses when a plugin is missing or failed to load unless acknowledged", always, bounce),
         cmd!(noundo "file.bounce_stems", "Bounce Stems...", [], None, "{dir, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, fold_down?: stereo}", has_tracks, |e, p| {
             let dir = str_param(p, "dir").ok_or_else(|| bad("file.bounce_stems", "`dir` required"))?.to_string();
             missing_plugin_guard(e, "file.bounce_stems", p)?;
@@ -94,7 +94,8 @@ pub fn specs() -> Vec<CommandSpec> {
                 _ => soundcraft_audio_io::BitDepth::Int24,
             };
             let fold = fold_down_param(p, "file.bounce_stems")?;
-            let files = crate::io::bounce_stems_with(e, &dir, r, &soundcraft_audio_io::EncodeOptions { format, bit_depth, dither: true, bwf: None }, fold)?;
+            let guard = bounce_guard(e, "file.bounce_stems", p)?;
+            let files = crate::io::bounce_stems_checked(e, &dir, r, &soundcraft_audio_io::EncodeOptions { format, bit_depth, dither: true, bwf: None }, fold, &guard)?;
             Ok(json!({"files": files}))
         }),
         cmd!(noundo "file.export_midi", "MIDI...", ["File", "Export"], None, "{path, tracks?}", always, |e, p| {
@@ -244,6 +245,23 @@ fn fold_down_param(p: &Value, id: &str) -> Result<bool> {
     }
 }
 
+/// `tail?: seconds | "auto"` and `acknowledge_missing?: bool` for exports (R31): the tail keeps
+/// ringing processors; a failed plugin load never silently yields a substituted master.
+fn bounce_guard(e: &Engine, cmd: &str, p: &Value) -> Result<crate::io::BounceGuard> {
+    let tail = match p.get("tail") {
+        None | Some(Value::Null) => soundcraft_mix::Tail::None,
+        Some(Value::String(t)) if t.eq_ignore_ascii_case("auto") => soundcraft_mix::Tail::Auto,
+        Some(v) => {
+            let secs = v
+                .as_f64()
+                .filter(|x| x.is_finite() && (0.0..=600.0).contains(x))
+                .ok_or_else(|| bad(cmd, "`tail` must be seconds (0..600) or \"auto\""))?;
+            soundcraft_mix::Tail::Samples(e.session().sample_rate.samples(secs).max(0) as usize)
+        }
+    };
+    Ok(crate::io::BounceGuard { tail, accept_substituted: p.get("acknowledge_missing").and_then(Value::as_bool) == Some(true) })
+}
+
 fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
     let path = str_param(p, "path").ok_or_else(|| bad("file.bounce_mix", "`path` required"))?.to_string();
     missing_plugin_guard(e, "file.bounce_mix", p)?;
@@ -262,7 +280,8 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
     let opts = soundcraft_audio_io::EncodeOptions { format, bit_depth, dither: bool_or(p, "dither", true), bwf: None };
     let normalize = bool_or(p, "normalize", false);
     let fold = fold_down_param(p, "file.bounce_mix")?;
-    let (bytes, stats) = crate::io::bounce_bytes_with(e, r, &opts, normalize, fold)?;
+    let guard = bounce_guard(e, "file.bounce_mix", p)?;
+    let (bytes, stats) = crate::io::bounce_bytes_checked(e, r, &opts, normalize, fold, &guard)?;
     std::fs::write(&path, &bytes).map_err(|err| EngineError::Io(format!("{path}: {err}")))?;
     Ok(
         json!({"path": path, "bytes": bytes.len(), "seconds": e.session().sample_rate.seconds(r.len()), "peak_db": stats.0, "lufs": stats.1, "true_peak_db": stats.2}),

@@ -25,10 +25,27 @@ pub fn specs() -> Vec<CommandSpec> {
     )]
 }
 
+/// The installed version of a hosted plugin from the scan cache (`None` for unknown ids).
+pub fn installed_version(id: &str) -> Option<String> {
+    let id = soundcraft_mix::hosted_id(id);
+    if id.starts_with(soundcraft_clap_host::ID_PREFIX) {
+        return soundcraft_clap_host::scan().into_iter().find(|d| d.id == id).map(|d| d.version);
+    }
+    if id.starts_with(soundcraft_vst3_host::ID_PREFIX) {
+        return soundcraft_vst3_host::scan().into_iter().find(|d| d.id == id).map(|d| d.version);
+    }
+    if id.starts_with(soundcraft_au_host::ID_PREFIX) {
+        return soundcraft_au_host::scan().into_iter().find(|d| d.id == id).map(|d| d.version);
+    }
+    None
+}
+
 /// A built-in plugin's description, else a hosted CLAP (`clap:<id>`), VST3 (`vst3:<class id>`) or
 /// Audio Units (`au:<type>:<subtype>:<manufacturer>`) plugin's.
 pub fn plugin_info(id: &str) -> Option<&'static PluginInfo> {
     // Removed upstream built-ins are not insertable (SML Recording ships no bundled effects).
+    // A `sandbox:` id describes the same plugin (hosted out of process).
+    let id = soundcraft_mix::hosted_id(id);
     soundcraft_clap_host::plugin_info(id).or_else(|| soundcraft_vst3_host::plugin_info(id)).or_else(|| soundcraft_au_host::plugin_info(id))
 }
 

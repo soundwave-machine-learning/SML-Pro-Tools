@@ -37,6 +37,9 @@ pub struct Vst3Plugin {
     notes: Vec<NoteEvent>,
     inputs: BusBuffers,
     outputs: BusBuffers,
+    /// Negotiated channel count per bus (main first), for the capability record.
+    bus_inputs: Vec<u32>,
+    bus_outputs: Vec<u32>,
     has_input: bool,
     has_output: bool,
     event_input: bool,
@@ -79,6 +82,8 @@ impl Vst3Plugin {
             notes: Vec::with_capacity(EVENT_CAP),
             inputs: BusBuffers::new(&[], 0),
             outputs: BusBuffers::new(&[], 0),
+            bus_inputs: Vec::new(),
+            bus_outputs: Vec::new(),
             has_input: false,
             has_output: false,
             event_input: false,
@@ -133,6 +138,46 @@ impl Vst3Plugin {
         self.inst.editor().ok_or_else(|| "this plugin has no edit controller".to_string())?.probe()
     }
 
+    /// What this instance exposes to the host (R31), under the fixed probe conditions used by
+    /// [`crate::instantiate`]. Probes the editor view (created and released); main thread.
+    pub fn capabilities(&self, desc: &crate::Vst3Descriptor) -> soundcraft_dsp::HostCapabilities {
+        let aux = self.bus_inputs.len().saturating_sub(1);
+        let mut units: Vec<String> = self.info.params.iter().map(|p| format!("{:?}", p.unit)).collect();
+        units.sort();
+        units.dedup();
+        let editor = match self.editor_size() {
+            Ok((w, h)) => format!("available ({w}x{h})"),
+            Err(e) => e,
+        };
+        soundcraft_dsp::HostCapabilities {
+            id: desc.id.clone(),
+            format: "VST3",
+            name: desc.name.clone(),
+            vendor: desc.vendor.clone(),
+            version: desc.version.clone(),
+            path: desc.path.display().to_string(),
+            is_instrument: desc.is_instrument,
+            audio_inputs: self.bus_inputs.clone(),
+            audio_outputs: self.bus_outputs.clone(),
+            aux_inputs: aux,
+            sidechain: if aux == 0 { "none declared" } else { "declared; this host keeps aux buses inactive (not routed)" },
+            note_input: self.event_input,
+            params: self.info.params.len(),
+            param_units: units,
+            editor,
+            state: true,
+            latency_samples: self.latency,
+            tail_samples: self.tail,
+            probed_at: "48 kHz, 1024-frame blocks, stereo",
+            host_notes: vec![
+                "aux buses are kept inactive",
+                "32-bit processing only",
+                "IMessage/IAttributeList are not created by the host",
+                "editor windows are hosted on macOS only",
+            ],
+        }
+    }
+
     /// Re-reads every parameter value from the controller (after a state load) and drops
     /// changes still queued from before it.
     fn refresh_values(&mut self) {
@@ -175,6 +220,8 @@ impl Plugin for Vst3Plugin {
                 self.has_input = layout.inputs.first().is_some_and(|&c| c > 0);
                 self.has_output = layout.outputs.first().is_some_and(|&c| c > 0);
                 self.event_input = layout.event_input;
+                self.bus_inputs = layout.inputs.clone();
+                self.bus_outputs = layout.outputs.clone();
                 self.max_block = mb;
                 self.latency = self.inst.latency() as usize;
                 self.tail = self.inst.tail() as usize;

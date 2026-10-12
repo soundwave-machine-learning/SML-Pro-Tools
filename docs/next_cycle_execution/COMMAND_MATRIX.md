@@ -67,3 +67,19 @@ New command ids this sprint: `edit.split_at`, `edit.erase_clips`, `edit.mute_cli
 `window.record/master/remote/help/theme_editor`, `remote.start/stop/pair/revoke/status`,
 `monitor.volume/dim/mono/cue`, `ui.theme_import/export/reset/token`,
 `ui.shortcut_profile/shortcut_set/shortcuts_reset/shortcuts_export/shortcuts_import/shortcuts_conflicts` (UI layer).
+
+## Sprint 3 additions (discovered/created 2026-10-12)
+
+| Purpose | Exact command | Source | Notes |
+|---|---|---|---|
+| Host capability matrix (R31) | `SML_HOST_MATRIX_CSV=<csv> cargo test -p soundcraft-engine --test clap_e2e -p soundcraft-vst3-host --test fixture_e2e` | this cycle | live-instance records of the CLAP and VST3 fixtures + the seven external targets → `host-capability-matrix.csv` |
+| Sidechain, PDC fixtures, bypass compensation, offline tail (R24/R25/R29/R31) | `cargo test -p soundcraft-mix --lib -- sidechain insert_pdc offline_render_tail compensation` | this cycle | 0/1/63/128/1024-sample fixtures parallel/nested/bypassed; aux exact vs one-block lag on tracks |
+| CLAP sidechain port end to end; export guard; versions (R31) | `cargo test -p soundcraft-engine --test clap_e2e` | this cycle | fixture `sidegate` plugin; refused substituted master; recorded versions |
+| Sandboxed hosting E03 follow-up (R31) | `SML_SANDBOX_CSV=<csv> cargo test -p soundcraft-engine --test sandbox` | this cycle | harness-less; the test binary is its own worker; parity, crash, hang, restart, state |
+| Bend re-render after reopen (R30) | `cargo test -p soundcraft-engine --lib -- bend::` | this cycle | derived media missing → re-render from the original |
+| W1 hosted chain under autosave + state capture (task 9, portable control) | `SML_W1_HOSTED_CSV=<csv> cargo test -p soundcraft-engine --test w1_hosted_load` | this cycle | per-block render time vs budget, debug build; native pending |
+
+New command ids this sprint: `engine.plugin_capabilities`, `engine.host_faults`, `session.plugin_versions`,
+`mix.insert_sidechain` (engine); `file.bounce_mix`/`file.bounce_stems` gained `tail` and the
+failed-plugin refusal; plugin ids accept the `sandbox:` prefix; worker entry points
+`soundcraft --plugin-worker <id> [dirs…]` / `soundcraft-cli plugin-worker <id> [dirs…]`.

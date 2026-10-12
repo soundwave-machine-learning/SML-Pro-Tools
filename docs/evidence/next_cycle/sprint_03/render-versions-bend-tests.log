@@ -1,0 +1,45 @@
+# utc: 2026-10-12T05:16:25Z P
+test capability_matrix_reads_the_clap_fixture_from_a_live_instance ... ok
+test clap_insert_renders_through_the_mix ... ok
+test clap_state_is_captured_stored_and_restored_before_the_first_block ... ok
+test clap_sidechain_port_is_fed_from_the_insert_sidechain_bus ... ok
+test plugin_versions_are_recorded_and_compared ... ok
+test clap_provider_in_tape_slot_round_trips_state_and_renders ... ok
+test export_refuses_a_substituted_master_unless_acknowledged ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+error: environment variable `CARGO_TARGET_TMPDIR` not defined at compile time
+   --> crates/engine/src/cmd/bend.rs:250:40
+    |
+250 |         let dir = std::path::Path::new(env!("CARGO_TARGET_TMPDIR")).join(format!("bend-reopen-{}", std::process::id()));
+    |                                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: `CARGO_TARGET_TMPDIR` may not be available for the current Cargo target
+--
+error: could not compile `soundcraft-engine` (lib test) due to 1 previous error
+test sml_graph_tests::offline_render_tail_is_explicit_and_auto ... ok
+test sml_graph_tests::sidechain_bus_feeds_insert_exactly_on_aux_and_one_block_late_on_tracks ... ok
+test sml_graph_tests::insert_pdc_fixtures_parallel_nested_and_bypassed ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 44 filtered out; finished in 0.01s
+
+test cmd::host::tests::capability_matrix_always_names_the_seven_targets_as_awaiting ... ok
+test cmd::bend::tests::bend_edit_map_render_undo_and_stale_results ... ok
+test cmd::bend::tests::warped_clip_is_rerendered_when_its_derived_media_is_missing_on_reopen ... FAILED
+
+failures:
+
+---- cmd::bend::tests::warped_clip_is_rerendered_when_its_derived_media_is_missing_on_reopen stdout ----
+
+thread 'cmd::bend::tests::warped_clip_is_rerendered_when_its_derived_media_is_missing_on_reopen' (3991) panicked at crates/engine/src/cmd/bend.rs:247:80:
+called `Result::unwrap()` on an `Err` value: BadParams("clip.warp_set", "anchor `src` must be an integer sample")
+stack backtrace:
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/panicking.rs:80:14
+--
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 155 filtered out; finished in 0.18s
+
+error: test failed, to rerun pass `-p soundcraft-engine --lib`

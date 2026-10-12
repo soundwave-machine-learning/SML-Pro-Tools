@@ -10,6 +10,7 @@ mod audio_midi;
 mod audiosuite;
 pub mod audition;
 mod bend;
+pub(crate) use bend::rerender_missing_warps;
 mod bus;
 mod clap;
 mod clip;
@@ -21,6 +22,7 @@ mod event_more;
 mod file;
 mod health;
 mod help;
+pub mod host;
 mod instrument;
 mod midi;
 mod mix;
@@ -142,6 +144,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(audition::specs());
         v.extend(bend::specs());
         v.extend(help::specs());
+        v.extend(host::specs());
         v
     })
 }
