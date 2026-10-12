@@ -21,13 +21,13 @@ Environment P only. Started 2026-10-12T06:00Z from commit `aac507d`.
 | 5 Mastering workspace | `session.mastering` (program, reference, note); Master layout with the real chain (Master inserts, applied once), reference A/B and level match (audition only), offline standard meters incl. loudness range, correlation, mono; E07 analytic Tech 3341/3342 + BS.1770-4 cases pass within the documents' tolerances | `e07-meters.csv`, `e07-meters.log` |
 | 6 Export | format/depth/dither-on-request/rate (SRC)/tail/metadata/report; refuses existing files, missing or failed plugins unless acknowledged; report JSON with settings, revision, plugins, measured levels and decoded-file verification; reference/monitor/speech excluded | `e08-scenario.json` (export + reopen step), engine file tests |
 | 7 E08 | portable scenario PASS (recover → record lead/double with autosave during capture → split/nudge/strip silence → vocal bus → remote envelope + duplicate → assistant explain/operate/undo + unavailable speech → reference excluded → export + report + reopen); durations, native recording runs, soak and crash rates PENDING | `e08-scenario.json`, `e08-scenario.log` |
-| 8 Manual, references, migration, performance, package, matrix | USER_GUIDE §10a/10b, `COMMAND_REFERENCE.md` (generated), `MIGRATION_AND_RECOVERY.md`, `PERFORMANCE_REPORT.md`, `FINAL_REQUIREMENT_MATRIX.md`; local package: __PKG__ | docs |
+| 8 Manual, references, migration, performance, package, matrix | USER_GUIDE §10a/10b, `COMMAND_REFERENCE.md` (generated), `MIGRATION_AND_RECOVERY.md`, `PERFORMANCE_REPORT.md`, `FINAL_REQUIREMENT_MATRIX.md`; local package: Linux tarball built from the release profile and smoke-tested in a clean scratch folder (CLI, worker entry, headless assistant/mastering/export/reopen); GUI window and clean-machine install NOT RUN (no display, no target) | docs |
 
 ## Requirement statuses
 See `docs/next_cycle_execution/REQUIREMENT_STATUS.csv` / `FINAL_REQUIREMENT_MATRIX.md`:
 R32 PARTIAL (generation BLOCKED), R33 PARTIAL (speech BLOCKED, phone test pending), R34 PARTIAL
 (portable PASS, listening/independent vectors pending), R35 PARTIAL (scenario PASS, durations
-PENDING), R36 PARTIAL (docs done; __PKG_STATUS__), R38 PARTIAL (four prompts executed, native
+PENDING), R36 PARTIAL (docs done; Linux tarball built and CLI-smoked; desktop/clean-machine install pending), R38 PARTIAL (four prompts executed, native
 gates pending).
 
 ## Measurements
@@ -64,7 +64,7 @@ with their logs in the evidence folder: `assistant-eval.log`, `e07-meters.log`,
 - Phone voice, PWA, secure origin: no mobile device (M); the Ask box is typed HTTP.
 - Mastering: independent meter vectors (official files) not downloaded; analytic cases only;
   listening review of the reference/level-match workflow pending (L).
-- Package: __PKG_GAP__
+- Package: the tarball's GUI was not launched (no display) and no clean-machine installation/reopen was performed; the Windows build host (B06) is still absent — `package-smoke.md`.
 - Owner workflow/taste review: not performed (no owner access).
 - A remote pairing-expiry test was observed flaky once under full-CI load (50 ms TTL); widened
   to 400 ms; it is a test-timing issue, not a product change.

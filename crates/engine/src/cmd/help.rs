@@ -26,7 +26,18 @@ pub const LIMITS: &[(&str, &str)] = &[
     ("transport.record", "takes are placed from backend capture timestamps; loop record and punch use the documented scheduler"),
     ("file.bounce", "no compressed export formats; monitor controls never reach a bounce"),
     ("mix.monitor_mode", "hardware monitoring means the interface mixes the input; the app cannot verify the interface's own mix"),
-    ("plugin.", "hosted plugins run in-process; crash containment at runtime is not provided (E03); scanning is isolated"),
+    (
+        "plugin.",
+        "hosted plugins run in-process by default (no crash containment); the opt-in `sandbox:<id>` mode runs a plugin out of process with one block of added latency and no native editor (E03); scanning is isolated",
+    ),
+    (
+        "assistant.",
+        "rule-based and grounded: no language model, speech recognition or synthesis is configured (E06); plans run only as validated commands at the current revision",
+    ),
+    (
+        "mastering.",
+        "meters follow BS.1770-4 / R128 / Tech 3342 and are checked against analytic test signals (E07), not certified; the reference is monitor-only",
+    ),
     ("session.", "autosave keeps rolling validated generations; power-loss guarantees are unverified (E02)"),
 ];
 

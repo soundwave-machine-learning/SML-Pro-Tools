@@ -1,0 +1,2 @@
+94b66f8fbe1b02d06c3024d96fcf3cf4bfac1e1218d22bd812385dceb7946f1b  dist/release/soundcraft-0.5.0-linux-x86_64.tar.gz
+16917184
