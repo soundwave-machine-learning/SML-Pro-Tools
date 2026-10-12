@@ -106,6 +106,84 @@ positions and the accumulation state.
 
 Pitch correction uses your own VST3 pitch plugin (not yet validated with a named plugin).
 
+## 3a. Audio editing tools (Arrow, Range, Split, Eraser, Paint, Mute, Bend, Listen)
+The Edit toolbar's AUDIO TOOLS group holds the eight tools in that order (labelled buttons; keys
+1–8 under the Studio One-style shortcut profile). Every tool runs a shared command, so the same
+edit is available from search, the CLI and the remote, and one gesture is one undo step.
+- **Arrow**: select and move clips; the clip edges trim, the top corners drag fades, the gain
+  handle rides clip gain. With **Link** on, the upper half of a tall track selects a time range
+  instead (compact tracks keep Range on its own button). **Alt** assigns an alternate tool that
+  applies while Ctrl (Cmd on macOS) is held with Arrow active; releasing the key or losing focus
+  drops it.
+- **Range**: drag a time selection across one or more tracks.
+- **Split**: a preview line and time readout follow the pointer; click splits the clip under it
+  (the whole clip selection when the clicked clip is part of it). A click on a boundary makes
+  no zero-length piece.
+- **Eraser**: click or sweep to remove clip instances; media files are never touched. Shuffle
+  mode ripples, every other mode does not. Escape during a sweep cancels it.
+- **Paint**: draws the chosen shape (Freehand, Line, Parabola, Square, Triangle, Saw, Sine,
+  Transform; cycles for the periodic ones) into the shown automation lane, or into the clip-gain
+  envelope of the clip under the pointer when the track shows its waveform. Mixer automation and
+  clip gain are separate data; Paint never writes one when you aim at the other. Transform
+  drags a box and opens numeric time/value shift and scale controls.
+- **Mute**: click or sweep to mute/unmute clips (clip mute, not channel mute). A sweep takes
+  its target state from the first clip and touches each clip once.
+- **Bend**: click inside an audio clip to add a warp anchor, drag the anchor to move that moment
+  in time; Alt-click removes it. The clip keeps playing its last render until the new
+  pitch-preserving render (in-house WSOLA, off the UI and audio threads) is ready; "rendering…"
+  and any error show on the clip. Limits: anchors at least 64 samples apart, each segment
+  stretched by 0.25–4×, segments are joined without a crossfade (an anchor inside a sustained
+  note can click), stereo channels share one map. **Remove Warp** (Clip menu) restores the
+  original material; the original file is never modified.
+- **Listen**: press and hold to audition the track from the pointer; release, Escape or focus
+  loss stops it and restores the cursor (unless another command moved it meanwhile). Listen is
+  refused while the transport runs or records, never stops a take, changes no mute/solo/arm
+  flag, writes no automation and is never saved. Explicit mutes still win.
+
+## 3b. Shortcut profiles
+Window › Keyboard Shortcuts: choose **Pro Tools style** (the registry's chords, F1–F10 modes
+and tools, Enter marker, single-key Commands focus), **Studio One style** (1–8 tools, D
+duplicate, E/W zoom, N snap, Alt+arrows nudge, M/S/R track states…) or **Custom** (a base
+profile plus your overrides). The switch is explicit and reversible; conflicting maps are never
+merged. Click a chord cell, press the new chord to reassign (this moves you to Custom); Unbind,
+Reset, Import… and Export… (JSON) are in the window; the conflict inspector lists duplicate
+chords, chords the OS reserves (shown with the alternate) and chords this build cannot deliver
+(keypad location and the Windows key — a toolkit limitation; the Nudge panel and search always
+work). Search (Window › Search) and Command Help show the binding of the active profile. The
+Studio One chords are best-known defaults: the vendor manual was not reachable from the build
+environment, so they are listed as "unverified" until checked on your machine.
+
+## 3c. Themes and layouts
+Appearance (Window › UI Customization) offers Dark, Light, High contrast, System and Custom.
+Themes are data: a JSON file with colour tokens, a base and a typography scale; the Theme Editor
+previews live, Import…/Export… move files, Reset returns to Dark. A theme must keep text
+readable (3:1 contrast on every surface) and record/solo/mute/clip states distinguishable, or it
+is refused with the reason; a broken saved theme never stops launch (you get Dark and a notice).
+Record, clip and overload states are also shapes/labels, not colour alone. The menu bar's
+Record · Edit · Mix · Master switch the four layouts of one application; Record docks the
+recording essentials beside the timeline, Master is a navigation shell until Sprint 4 adds
+mastering (it says so on screen). Switching layouts changes nothing in the session.
+
+## 3d. SML Remote (phone browser)
+Window › SML Remote: choose the interface (127.0.0.1 = this computer only; 0.0.0.0:port = your
+LAN), Start, then Open pairing: type the address into the phone's browser and enter the 6-digit
+code within two minutes. The phone gets transport, pre-roll/count-in, markers, loop, track
+select/arm/monitor/fader/pan/mute/solo, take rating, monitor dim/mono/volume and meters. The
+desktop stays authoritative: a receipt means "accepted", not "happened at this sample". A
+reconnect reloads the state and can never replay an old Record; disconnecting the phone leaves a
+recording running; two phones cannot overwrite each other's stale edits (the later one is told
+to refresh). Revoke any phone from the window. Limits: plain HTTP only — no installable app,
+no microphone, no encryption; no QR image (type the address). Nothing is exposed beyond the
+interface you bind, and the service never starts unless you start it (or tick "Start with the
+app").
+
+## 3e. Monitor volume, dim, mono and headphones
+Window › Recording (and the Record layout) has Monitor volume, Dim (−20 dB) and Mono. They act on
+the speaker output only, after the mix, and never reach a bounce or export. "Headphones" appears
+only when I/O Setup has a dedicated cue path; without one it is shown unavailable — the Main
+fader is never relabelled as headphones. Hardware (direct) monitoring is labelled separately
+from software monitoring.
+
 ## 4. Buses and FX returns
 - **Create Bus from Selection** (Mix toolbar, or command search): select Lead, Double L, Double R
   → Create Bus from Selection → name it "Vocal Bus". One step creates the bus channel, routes the
@@ -211,5 +289,9 @@ slots, routing, trims and automation are not part of snapshots.
 ## 11. Not supported in this build
 ASIO (WASAPI/ALSA/CoreAudio via the default hosts only), aggregate-device clock correction, ARA /
 note-level pitch editing, native analog summing/tape models (deferred), VCAs beyond the existing
-basic VCA tracks, monitor-only dim/mono/cue systems, detailed tape-machine UI, keypad-vs-main-row
-key distinction and Win-key nudge chords (toolkit limitation).
+basic VCA tracks, a separate cue/headphone mix (a cue path is detected but not mixed), detailed
+tape-machine UI, keypad-vs-main-row key distinction and Win-key nudge chords (toolkit
+limitation), HTTPS/PWA/microphone for the phone remote, QR pairing images, runtime crash
+containment of hosted plugins (scanning is isolated; see E03), Bend crossfades at anchors.
+Window › Help › Command Help lists every command this build has with its limits; a tool that is
+not listed does not exist here.

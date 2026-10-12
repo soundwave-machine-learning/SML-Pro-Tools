@@ -8,6 +8,8 @@ use std::sync::OnceLock;
 
 mod audio_midi;
 mod audiosuite;
+pub mod audition;
+mod bend;
 mod bus;
 mod clap;
 mod clip;
@@ -18,6 +20,7 @@ mod event;
 mod event_more;
 mod file;
 mod health;
+mod help;
 mod instrument;
 mod midi;
 mod mix;
@@ -31,6 +34,7 @@ mod setup_more;
 mod slots;
 mod snapshot;
 mod surround;
+mod tools;
 mod track;
 mod track_more;
 mod transport;
@@ -134,6 +138,10 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(snapshot::specs());
         v.extend(slots::specs());
         v.extend(paint::specs());
+        v.extend(tools::specs());
+        v.extend(audition::specs());
+        v.extend(bend::specs());
+        v.extend(help::specs());
         v
     })
 }

@@ -16,6 +16,7 @@ pub mod envelope;
 pub mod inspect;
 pub mod io;
 pub mod score;
+pub mod warp;
 
 use serde_json::{Value, json};
 use soundcraft_model::{Clip, Session, TrackId};
@@ -119,6 +120,8 @@ pub struct Engine {
     dedup: envelope::Dedup,
     /// Messages for the UI status line / agents.
     pub messages: Vec<String>,
+    /// Bend render service (T08): off-thread pitch-preserving renders, polled by the host.
+    pub warp: warp::Renderer,
 }
 
 impl Default for Engine {
@@ -144,6 +147,7 @@ impl Engine {
             dirty: false,
             merge_key: None,
             dedup: envelope::Dedup::default(),
+            warp: warp::Renderer::default(),
             messages: Vec::new(),
         }
     }
@@ -160,6 +164,13 @@ impl Engine {
     pub fn session_mut(&mut self) -> &mut Session {
         self.revision = self.revision.wrapping_add(1);
         self.dirty = true;
+        Arc::make_mut(&mut self.doc)
+    }
+
+    /// Mutate realtime-only state (audition masks): the revision bumps so hosts resync, but the
+    /// document is not marked dirty — nothing serializable changed.
+    pub fn session_mut_transient(&mut self) -> &mut Session {
+        self.revision = self.revision.wrapping_add(1);
         Arc::make_mut(&mut self.doc)
     }
 
@@ -252,6 +263,11 @@ impl Engine {
                 return Err(EngineError::Disabled(id.to_string(), reason));
             }
         }
+        // T09: a transport start or record first terminates a Listen audition (restoring the
+        // cursor while still owned), then runs normally.
+        if self.doc.listen.active() && matches!(id, "transport.play" | "transport.record" | "transport.toggle" | "transport.play_selection") {
+            cmd::audition::terminate(self);
+        }
         let before = Arc::clone(&self.doc);
         let rev = self.revision;
         let dirty = self.dirty;
@@ -269,6 +285,10 @@ impl Engine {
         };
         match result {
             Ok(v) => {
+                // Later user commands win over the audition's cursor restore (T09).
+                if self.doc.listen.active() && self.doc.listen.cursor_owned && !id.starts_with("audition.") && !Arc::ptr_eq(&before, &self.doc) {
+                    Arc::make_mut(&mut self.doc).listen.cursor_owned = false;
+                }
                 if spec.undoable && !Arc::ptr_eq(&before, &self.doc) {
                     self.push_undo(spec.label, before);
                 }

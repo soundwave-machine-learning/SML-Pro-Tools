@@ -23,6 +23,164 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     io_setup(app, ctx);
     shortcuts_window(app, ctx);
     clip_effects(app, ctx);
+    #[cfg(not(target_arch = "wasm32"))]
+    remote_window(app, ctx);
+    help_window(app, ctx);
+}
+
+/// Window › Command Help (R22): build-versioned, searchable knowledge over the real registry
+/// (engine `help.search`) plus the UI-layer commands, each with the active profile's binding,
+/// status, risk and the build's stated limits.
+fn help_window(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_help;
+    let t = Tokens::current();
+    let mac = ctx.os().is_mac();
+    win(ctx, &mut open, "Command Help", vec2(720.0, 520.0), |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Search");
+            ui.add(egui::TextEdit::singleline(&mut app.ui.help_query).desired_width(300.0).hint_text("what do you want to do?"));
+            ui.label(
+                egui::RichText::new(format!("build {} · profile {}", env!("CARGO_PKG_VERSION"), app.ui.shortcut_profile.label()))
+                    .small()
+                    .color(t.text_dim),
+            );
+        });
+        let q = app.ui.help_query.trim().to_string();
+        let r =
+            app.engine.execute("help.search", &json!({"query": q, "limit": 60})).unwrap_or_else(|e| json!({"results": [], "error": e.to_string()}));
+        let mut rows: Vec<serde_json::Value> = r["results"].as_array().cloned().unwrap_or_default();
+        // UI-layer commands (windows, themes, shortcuts, remote, monitor) are part of the answer too.
+        let ql = q.to_lowercase();
+        for (id, label, path, _) in crate::menus::UI_COMMANDS {
+            if ql.is_empty() || id.contains(&ql) || label.to_lowercase().contains(&ql) || path.to_lowercase().contains(&ql) {
+                rows.push(json!({"id": id, "label": label, "menu": path.split(" > ").collect::<Vec<_>>(), "status": "implemented", "risk": "ui", "undoable": false, "params": "", "limits": []}));
+            }
+        }
+        ui.label(
+            egui::RichText::new(format!("{} matches — commands this build has; a tool that is not listed does not exist here.", rows.len()))
+                .small()
+                .color(t.text_dim),
+        );
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            for row in rows.iter().take(80) {
+                let id = row["id"].as_str().unwrap_or("");
+                let chord = app.shortcut_for(id, None).map(|c| crate::shortcuts::shortcut_label(&c, mac)).unwrap_or_default();
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        ui.label(egui::RichText::new(row["label"].as_str().unwrap_or("")).strong());
+                        ui.label(egui::RichText::new(id).font(mono(10.5)).color(t.text_dim));
+                        if !chord.is_empty() {
+                            ui.label(egui::RichText::new(chord).font(mono(10.5)));
+                        }
+                        let status = row["status"].as_str().unwrap_or("");
+                        if status.starts_with("DISABLED") {
+                            ui.label(egui::RichText::new(status).color(t.rec));
+                        }
+                        if let Some(reason) = row["disabled_reason"].as_str() {
+                            ui.label(egui::RichText::new(format!("now: {reason}")).small().color(t.text_dim));
+                        }
+                    });
+                    let menu =
+                        row["menu"].as_array().map(|m| m.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(" › ")).unwrap_or_default();
+                    if !menu.is_empty() {
+                        ui.label(egui::RichText::new(menu).small());
+                    }
+                    let params = row["params"].as_str().unwrap_or("");
+                    if !params.is_empty() {
+                        ui.label(egui::RichText::new(params).font(mono(10.0)).color(t.text_dim));
+                    }
+                    ui.label(
+                        egui::RichText::new(format!(
+                            "risk {} · {}",
+                            row["risk"].as_str().unwrap_or("?"),
+                            if row["undoable"] == true { "undoable" } else { "no undo entry" }
+                        ))
+                        .small(),
+                    );
+                    for l in row["limits"].as_array().into_iter().flatten().filter_map(|l| l.as_str()) {
+                        ui.label(egui::RichText::new(format!("limit: {l}")).small().color(t.solo));
+                    }
+                });
+            }
+        });
+    });
+    app.ui.show_help = open;
+}
+
+/// Window › SML Remote (R21): opt-in start/stop on an explicit interface, pairing code with its
+/// countdown, paired clients with revocation, the redacted event log and the stated limits.
+#[cfg(not(target_arch = "wasm32"))]
+fn remote_window(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_remote;
+    let t = Tokens::current();
+    win(ctx, &mut open, "SML Remote", vec2(520.0, 460.0), |ui| {
+        let running = app.remote.is_some();
+        ui.horizontal(|ui| {
+            ui.label("Bind");
+            ui.add_enabled(!running, egui::TextEdit::singleline(&mut app.ui.remote_bind).desired_width(160.0))
+                .on_hover_text("host:port — 127.0.0.1:0 = this computer only; 0.0.0.0:8787 = every interface (your LAN)");
+            if !running {
+                if ui.button("Start").clicked() {
+                    let _ = app.run("remote.start", json!({}));
+                }
+            } else if ui.button("Stop").clicked() {
+                let _ = app.run("remote.stop", json!({}));
+            }
+            ui.checkbox(&mut app.ui.remote_autostart, "Start with the app");
+        });
+        if let Some(s) = app.remote.clone() {
+            ui.label(egui::RichText::new(format!("Running at {} (plain HTTP)", s.url())).color(t.accent));
+            if s.local_addr().ip().is_unspecified() {
+                ui.label(egui::RichText::new("Bound to every interface: on the phone, use this computer's LAN address with the same port.").small());
+            }
+            ui.horizontal(|ui| {
+                if ui.button("Open pairing (2 min)").clicked() {
+                    let _ = app.run("remote.pair", json!({}));
+                }
+                match (&app.remote_code, s.pairing_remaining()) {
+                    (Some(code), Some(left)) => {
+                        ui.label(egui::RichText::new(code).font(mono(26.0)).color(t.counter_text));
+                        ui.label(format!("{left} s left"));
+                        ctx.request_repaint_after(std::time::Duration::from_millis(500));
+                    }
+                    _ => {
+                        ui.label(egui::RichText::new("no pairing open").small().color(t.text_dim));
+                    }
+                }
+            });
+            ui.separator();
+            ui.label(egui::RichText::new("Paired phones").strong());
+            let clients = s.tokens();
+            if clients.is_empty() {
+                ui.label(egui::RichText::new("none").small().color(t.text_dim));
+            }
+            for c in clients {
+                ui.horizontal(|ui| {
+                    ui.label(format!("{} ({})", c.name, c.id));
+                    if ui.small_button("Revoke").clicked() {
+                        let _ = app.run("remote.revoke", json!({"id": c.id}));
+                    }
+                });
+            }
+            ui.separator();
+            egui::CollapsingHeader::new("Events").show(ui, |ui| {
+                for e in s.events().iter().rev().take(20) {
+                    ui.label(egui::RichText::new(e).font(mono(10.5)));
+                }
+            });
+        } else {
+            ui.label(
+                egui::RichText::new("Stopped. Starting binds the chosen interface; phones then pair with a one-time code.").small().color(t.text_dim),
+            );
+        }
+        ui.separator();
+        ui.label(
+            egui::RichText::new("Limits of this build: plain HTTP (no HTTPS, so no installable PWA, no microphone, no encryption — a phone's LAN-IP origin is not localhost); no QR image (type the address and code); receipts confirm acceptance, not sample-accurate execution; a reconnect refreshes the state and can never replay an old Record; disconnecting a phone leaves recording running.")
+                .small()
+                .color(t.text_dim),
+        );
+    });
+    app.ui.show_remote = open;
 }
 
 fn audio_health(app: &mut SoundApp, ctx: &egui::Context) {
@@ -672,16 +830,101 @@ pub fn io_setup(app: &mut SoundApp, ctx: &egui::Context) {
 }
 
 /// Setup › Keyboard Shortcuts.
+/// Keyboard Shortcuts (R13): profile selection, search, reassignment by capture, unbind,
+/// reset, import/export and the conflict inspector. Every row shows the active binding.
 pub fn shortcuts_window(app: &mut SoundApp, ctx: &egui::Context) {
+    use crate::shortcut_profiles::{ConflictKind, Profile};
     let mut open = app.ui.show_shortcuts;
     let mac = ctx.os().is_mac();
-    win(ctx, &mut open, "Keyboard Shortcuts", vec2(520.0, 480.0), |ui| {
+    let t = Tokens::current();
+    win(ctx, &mut open, "Keyboard Shortcuts", vec2(640.0, 560.0), |ui| {
+        ui.horizontal(|ui| {
+            ui.label("Profile");
+            let cur = app.ui.shortcut_profile;
+            egui::ComboBox::from_id_salt("shortcut_profile").selected_text(cur.label()).show_ui(ui, |ui| {
+                for p in Profile::ALL {
+                    if ui.selectable_label(cur == p, p.label()).clicked() && p != cur {
+                        let _ = app.run("ui.shortcut_profile", json!({"profile": p.id()}));
+                    }
+                }
+            });
+            if app.ui.shortcut_profile == Profile::Custom {
+                ui.label("based on");
+                let base = app.ui.shortcut_base;
+                egui::ComboBox::from_id_salt("shortcut_base").selected_text(base.label()).show_ui(ui, |ui| {
+                    for p in [Profile::ProTools, Profile::StudioOne] {
+                        if ui.selectable_label(base == p, p.label()).clicked() && p != base {
+                            let _ = app.run("ui.shortcut_profile", json!({"base": p.id()}));
+                        }
+                    }
+                });
+            }
+            if ui.button("Reset").on_hover_text("Drop every Custom override").clicked() {
+                let _ = app.run("ui.shortcuts_reset", json!({}));
+            }
+            if ui.button("Import…").clicked() {
+                let _ = app.run("ui.shortcuts_import", json!({}));
+            }
+            if ui.button("Export…").clicked() {
+                let _ = app.run("ui.shortcuts_export", json!({}));
+            }
+        });
+        ui.label(
+            egui::RichText::new("Pro Tools-style chords come from the command registry; Studio One-style chords are best-known defaults pending verification against the manual (see the shortcut inventory). A reassignment switches to the Custom profile; the built-in tables are never edited.")
+                .small()
+                .color(t.text_dim),
+        );
+        ui.horizontal(|ui| {
+            ui.label("Search");
+            ui.add(egui::TextEdit::singleline(&mut app.shortcut_query).desired_width(220.0));
+            if let Some(k) = &app.shortcut_capture {
+                ui.label(egui::RichText::new(format!("Press the new chord for {k} (Escape cancels)")).color(t.accent));
+            }
+        });
+        let table = app.shortcut_table();
+        let conflicts = crate::shortcut_profiles::conflicts(&table);
+        if !conflicts.is_empty() {
+            egui::CollapsingHeader::new(format!("Conflicts ({})", conflicts.len())).default_open(true).show(ui, |ui| {
+                for c in &conflicts {
+                    let kind = match c.kind {
+                        ConflictKind::Duplicate => "duplicate",
+                        ConflictKind::OsReserved => "OS-reserved",
+                        ConflictKind::Undeliverable => "not deliverable",
+                    };
+                    ui.label(format!("{} — {kind}: {} — {}", crate::shortcuts::shortcut_label(&c.chord, mac), c.commands.join(", "), c.note));
+                }
+            });
+        }
+        let q = app.shortcut_query.to_lowercase();
         egui::ScrollArea::vertical().show(ui, |ui| {
-            egui::Grid::new("sc").num_columns(3).striped(true).show(ui, |ui| {
-                for c in soundcraft_engine::command_specs().iter().filter(|c| c.shortcut.is_some()) {
-                    ui.label(egui::RichText::new(crate::shortcuts::shortcut_label(c.shortcut.unwrap_or(""), mac)).font(mono(11.0)));
-                    ui.label(c.label);
-                    ui.label(egui::RichText::new(c.menu.join(" › ")).small());
+            egui::Grid::new("sc").num_columns(4).striped(true).show(ui, |ui| {
+                for e in table
+                    .iter()
+                    .filter(|e| q.is_empty() || e.label.to_lowercase().contains(&q) || e.command.contains(&q) || e.chord.to_lowercase().contains(&q))
+                {
+                    let shown = crate::shortcuts::shortcut_label(&e.chord, mac);
+                    let capture = app.shortcut_capture.as_deref() == Some(e.key().as_str());
+                    let label = if capture {
+                        "…".to_string()
+                    } else if shown.is_empty() {
+                        "(macOS only)".to_string()
+                    } else {
+                        shown
+                    };
+                    if ui
+                        .add(egui::Button::new(egui::RichText::new(label).font(mono(11.0))).min_size(vec2(120.0, 18.0)))
+                        .on_hover_text("Click, then press the new chord")
+                        .clicked()
+                    {
+                        app.shortcut_capture = Some(e.key());
+                    }
+                    ui.label(&e.label);
+                    ui.label(
+                        egui::RichText::new(format!("{}{}", e.command, if e.verified { "" } else { " · unverified" })).small().color(t.text_dim),
+                    );
+                    if ui.small_button("Unbind").clicked() {
+                        let _ = app.run("ui.shortcut_set", json!({"key": e.key(), "chord": ""}));
+                    }
                     ui.end_row();
                 }
             });

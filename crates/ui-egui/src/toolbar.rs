@@ -32,6 +32,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
             edit_modes(app, ui);
             zoom_group(app, ui);
             tools(app, ui);
+            audio_tools(app, ui);
             counters(app, ui);
             grid_nudge(app, ui);
             nudge_panel(app, ui);
@@ -170,6 +171,70 @@ fn tools(app: &mut SoundApp, ui: &mut Ui) {
                 if crate::widgets::text_toggle(ui, vec2(36.0, 18.0), "a-z", focus, t.accent, "Commands Keyboard Focus (single-key editing)").clicked()
                 {
                     let _ = app.run("options.keyboard_focus", json!({}));
+                }
+            });
+        });
+    });
+}
+
+/// The eight audio-editing tools (EDIT_TOOLBAR_SPEC T01) in reference order, with the Link
+/// Arrow/Range toggle, the alternate-tool assignment and the Paint shape (T06, T10). Labelled
+/// text buttons: no icon-only dependency.
+fn audio_tools(app: &mut SoundApp, ui: &mut Ui) {
+    let t = Tokens::current();
+    let (cur, link, alt, shape, cycles) = {
+        let e = &app.engine.session().edit;
+        (e.tool, e.tool_link, e.alt_tool, e.paint_shape.clone(), e.paint_cycles)
+    };
+    group(ui, 8.0 * 44.0 + 12.0, 52.0, |ui, _| {
+        ui.vertical(|ui| {
+            ui.spacing_mut().item_spacing = vec2(2.0, 3.0);
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 2.0;
+                for tool in Tool::AUDIO {
+                    let tip = format!("{} ({}) — {}", tool.label(), tool.number_key().map(|k| k.to_string()).unwrap_or_default(), tool.description());
+                    let on = cur == tool;
+                    if crate::widgets::text_toggle(ui, vec2(42.0, 22.0), tool.label(), on, t.accent, &tip).clicked() {
+                        let _ = app.run("edit.tool", json!({"tool": tool.id()}));
+                    }
+                }
+            });
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 4.0;
+                if icon_button(ui, vec2(42.0, 18.0), "link", link, "Link Arrow/Range: the upper half of a tall track selects a range").clicked() {
+                    let _ = app.run("edit.tool_link", json!({}));
+                }
+                ui.label(egui::RichText::new("Alt:").font(regular(10.0)).color(t.text_dim));
+                let alt_label = alt.map_or("None", Tool::label);
+                egui::ComboBox::from_id_salt("alt_tool")
+                    .selected_text(alt_label)
+                    .width(64.0)
+                    .show_ui(ui, |ui| {
+                        if ui.selectable_label(alt.is_none(), "None").clicked() {
+                            let _ = app.run("edit.alt_tool", json!({"tool": null}));
+                        }
+                        for tool in Tool::AUDIO.into_iter().filter(|x| *x != Tool::Arrow) {
+                            if ui.selectable_label(alt == Some(tool), tool.label()).clicked() {
+                                let _ = app.run("edit.alt_tool", json!({"tool": tool.id()}));
+                            }
+                        }
+                    })
+                    .response
+                    .on_hover_text("Alternate tool while Ctrl (Cmd on macOS) is held with Arrow active");
+                ui.label(egui::RichText::new("Paint:").font(regular(10.0)).color(t.text_dim));
+                egui::ComboBox::from_id_salt("paint_shape").selected_text(&shape).width(78.0).show_ui(ui, |ui| {
+                    for sh in ["freehand", "line", "parabola", "square", "triangle", "saw", "sine", "transform"] {
+                        if ui.selectable_label(shape == sh, sh).clicked() {
+                            let _ = app.run("edit.paint_shape", json!({"shape": sh}));
+                        }
+                    }
+                });
+                if matches!(shape.as_str(), "square" | "triangle" | "saw" | "sine") {
+                    let mut c = cycles;
+                    let r = ui.add(egui::DragValue::new(&mut c).speed(0.1).range(0.1..=1000.0).suffix(" cyc"));
+                    if r.changed() && (c - cycles).abs() > 1e-9 {
+                        let _ = app.run("edit.paint_shape", json!({"shape": shape, "cycles": c}));
+                    }
                 }
             });
         });

@@ -18,7 +18,7 @@ mod source;
 mod track;
 
 pub use automation::{AutoParam, AutomationLane, AutomationMode, AutomationPoint};
-pub use clip::{Clip, ClipContent, Fade, FadeShape};
+pub use clip::{Clip, ClipContent, Fade, FadeShape, WARP_MAX_RATIO, WARP_MIN_RATIO, WARP_MIN_SPACING, WarpAnchor, validate_warp, warped_len};
 pub use ids::{BusId, ClipId, GroupId, MarkerId, SourceId, TrackId};
 pub use markers::{Group, MarkerKind, MemoryLocation};
 pub use mixer::{
@@ -27,8 +27,8 @@ pub use mixer::{
 pub use nudge::{NUDGE_PRESETS, NudgeAnchor, NudgePanel, NudgeTarget, NudgeUnit};
 pub use session::{BitDepthSetting, EditMode, EditState, SESSION_EXTENSION, Session, SessionError, Tool, TrackView, ZoomState};
 pub use slots::{
-    AuditionBypass, ChannelSlots, DedicatedSlot, GRAPH_VERSION, MixProfile, MixSnapshot, ProfileKind, SlotKind, SnapshotChannel, StereoPanMode,
-    TapePosition,
+    AuditionBypass, ChannelSlots, DedicatedSlot, GRAPH_VERSION, ListenMask, ListenState, MixProfile, MixSnapshot, ProfileKind, SlotKind,
+    SnapshotChannel, StereoPanMode, TapePosition,
 };
 pub use source::{Source, SourceAudio, SourcePool, VideoSource};
 pub use track::{Playlist, TRACK_COLORS, Track, TrackHeight, TrackKind};

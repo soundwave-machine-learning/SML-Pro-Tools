@@ -638,6 +638,9 @@ pub struct MixEngine {
     /// Temporary audition bypass (SL05). Set by the realtime host only; offline renders and
     /// exports always use the saved normal state.
     pub audition: AuditionBypass,
+    /// Listen-tool route mask (T09). Set by the realtime host only; offline renders and
+    /// exports keep the default (inactive) so an audition can never reach a bounce.
+    pub listen: soundcraft_model::ListenMask,
     /// Realtime host: honour temporary Tracking deactivations (never set for offline renders).
     pub realtime_overrides: bool,
     /// Total compensation latency changed while recording (CL04 capture-integrity event).
@@ -792,6 +795,7 @@ impl MixEngine {
             adopt: HashMap::new(),
             retired: Vec::new(),
             audition: AuditionBypass::default(),
+            listen: soundcraft_model::ListenMask::default(),
             realtime_overrides: false,
             latency_event: false,
             rec_latency: None,
@@ -1207,6 +1211,7 @@ impl MixEngine {
             monitor_only: self.monitor_only,
             recording: self.recording,
             audition: self.audition,
+            listen: self.listen,
             tracking: self.realtime_overrides,
         };
         let strip_fn = |(i, st): &mut (usize, Strip)| {
@@ -1285,6 +1290,7 @@ impl MixEngine {
                 monitor_only: self.monitor_only,
                 recording: self.recording,
                 audition: self.audition,
+                listen: self.listen,
                 tracking: self.realtime_overrides,
             };
             process_strip(s, t, &mut st, &self.busses, &live_in, pos, frames, any_solo);
@@ -1495,6 +1501,8 @@ struct LiveInput<'a> {
     recording: bool,
     /// Temporary audition bypass (realtime only; offline renders/exports pass the default).
     audition: AuditionBypass,
+    /// Listen-tool mask (realtime only).
+    listen: soundcraft_model::ListenMask,
     /// Honour the session's temporary Tracking deactivations (realtime host only).
     tracking: bool,
 }
@@ -1705,11 +1713,19 @@ fn process_strip(
     }
     strip.gr = gr;
     let auto_mute = t.mixer.automation_mode.reads() && t.lane(&AutoParam::Mute).is_some_and(|l| l.value_at(pos, 0.0) >= 0.5);
-    let soloed_out = if s.mix_profile.graph_version >= 2 {
+    let mut soloed_out = if s.mix_profile.graph_version >= 2 {
         any_solo && !solo_admits(s, t)
     } else {
         any_solo && !t.mixer.solo && !t.mixer.solo_safe && !receives_solo(s, t)
     };
+    // Listen audition (T09): a source track outside the mask is excluded like a solo would
+    // exclude it (buses and returns the audited tracks feed stay open; explicit mutes still win).
+    if live.listen.active
+        && matches!(t.kind, TrackKind::Audio | TrackKind::Instrument | TrackKind::Midi)
+        && !live.listen.contains(s.track_index(t.id).unwrap_or(usize::MAX))
+    {
+        soloed_out = true;
+    }
     strip.soloed_out = soloed_out;
     strip.mute_only = t.mixer.mute || auto_mute;
     strip.muted = t.mixer.mute || auto_mute || soloed_out;
@@ -3835,6 +3851,44 @@ mod sml_graph_tests {
         tr.mixer.sends[0] = Some(snd);
         let out = render(&s);
         assert!((out[0][N - 1] - 0.7).abs() < 1e-6 && (out[1][N - 1] + 0.1).abs() < 1e-6, "{:?}", (out[0][N - 1], out[1][N - 1]));
+    }
+
+    /// T09 / T-T4: the Listen mask silences every source outside it, keeps the buses and returns
+    /// the audited source feeds open, lets an explicit mute win, and never reaches an offline
+    /// render (the mask lives on the realtime engine, not in the document).
+    #[test]
+    fn listen_mask_gates_sources_only_on_the_realtime_engine() {
+        let mut s = Session::default();
+        let a = track(&mut s, ChannelFormat::Mono, vec![vec![0.5; N]], 1);
+        let u = track(&mut s, ChannelFormat::Mono, vec![vec![0.25; N]], 2);
+        let (_, b) = bus(&mut s, "Vox");
+        for t in [a, u] {
+            let tr = s.track_mut(t).unwrap();
+            tr.mixer.pan = vec![-1.0];
+            tr.mixer.output = Route::Bus(b);
+        }
+        s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+        let ia = s.track_index(a).unwrap();
+        let mut eng = MixEngine::new(48_000.0, 256);
+        eng.parallel_strips = false;
+        let mut out = vec![vec![0.0f32; 256]; 2];
+        eng.render(&s, 0, 256, &mut out);
+        assert!((out[0][100] - 0.75).abs() < 1e-6, "both sources through the bus: {}", out[0][100]);
+        let mut mask = soundcraft_model::ListenMask::default();
+        mask.set(ia);
+        mask.active = true;
+        eng.listen = mask;
+        eng.render(&s, 256, 256, &mut out);
+        assert!((out[0][100] - 0.5).abs() < 1e-6, "only the audited source, its bus open: {}", out[0][100]);
+        s.track_mut(a).unwrap().mixer.mute = true;
+        eng.render(&s, 512, 256, &mut out);
+        assert!(out[0][100].abs() < 1e-6, "an explicit mute still wins: {}", out[0][100]);
+        s.track_mut(a).unwrap().mixer.mute = false;
+        // The document carries no mask: an offline render of the same session hears everything.
+        assert!((render(&s)[0][100] - 0.75).abs() < 1e-6);
+        eng.listen = soundcraft_model::ListenMask::default();
+        eng.render(&s, 768, 256, &mut out);
+        assert!((out[0][100] - 0.75).abs() < 1e-6, "inactive mask: everything again");
     }
 
     /// B policy (v2): channel mute keeps pre-fader sends, gates post-fader sends; solo of one

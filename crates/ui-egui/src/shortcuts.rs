@@ -1,7 +1,7 @@
 //! Keyboard shortcuts. Most come from the command registry's `shortcut` strings; a few
 //! context-sensitive keys (Space, Enter, F-keys, nudge, Tab) are handled here.
 
-use crate::{MainWindow, SoundApp};
+use crate::SoundApp;
 use egui::{Key, Modifiers};
 use serde_json::json;
 
@@ -42,7 +42,7 @@ pub fn parse(s: &str) -> Option<(Modifiers, Key)> {
 }
 
 /// Whether the held modifiers `got` fire a shortcut that asks for `want`.
-fn mods_match(want: Modifiers, got: Modifiers, mac: bool) -> bool {
+pub(crate) fn mods_match(want: Modifiers, got: Modifiers, mac: bool) -> bool {
     // Off macOS egui reports Ctrl as both `ctrl` and `command`: Ctrl is the shortcut's Cmd, and a shortcut's
     // Ctrl (the Mac Control key) has no key of its own there, so Ctrl+X is Cut, not Cmd+Ctrl+X.
     let ctrl = if mac { want.ctrl == got.ctrl } else { !want.ctrl };
@@ -70,17 +70,28 @@ pub fn handle(app: &mut SoundApp, ctx: &egui::Context) {
     // Cmd and Ctrl are separate keys only on macOS (asked at runtime so the web build in a Mac browser agrees).
     let mac = ctx.os() == egui::os::OperatingSystem::Mac;
     for (key, mods) in events {
-        if fixed(app, key, mods, mac) {
+        // Reassignment capture (Keyboard Shortcuts window): the next chord is the new binding.
+        if let Some(target) = app.shortcut_capture.take() {
+            if key != Key::Escape && !matches!(key, Key::Tab) {
+                let chord = crate::shortcut_profiles::chord_of(key, mods, mac);
+                let _ = app.run("ui.shortcut_set", json!({"key": target, "chord": chord}));
+            }
             continue;
         }
-        let hit =
-            soundcraft_engine::command_specs().iter().find(|c| c.shortcut.and_then(parse).is_some_and(|(m, k)| k == key && mods_match(m, mods, mac)));
-        if let Some(c) = hit {
-            let id = c.id;
-            if crate::menus::invoke_shortcut_dialog(app, id) {
+        // The active profile's table first (R13); context keys after it.
+        let hit = crate::shortcut_profiles::lookup(app.active_shortcuts(), key, mods, mac).map(|r| (r.command.clone(), r.params.clone()));
+        if let Some((id, params)) = hit {
+            if params.is_null() && crate::menus::invoke_shortcut_dialog(app, &id) {
                 continue;
             }
-            let _ = app.run(id, json!({}));
+            let p = if params.is_null() { json!({}) } else { params };
+            if let Err(e) = app.run(&id, p) {
+                app.ui.status = e;
+            }
+            continue;
+        }
+        if fixed(app, key, mods, mac) {
+            continue;
         }
     }
 }
@@ -88,6 +99,9 @@ pub fn handle(app: &mut SoundApp, ctx: &egui::Context) {
 /// Keys with context-dependent meaning. Returns true when handled.
 fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
     let plain = !m.command && !m.alt && !m.ctrl && !m.shift;
+    // Pro Tools-style context keys (F-keys, Enter marker, single-key commands focus) belong to
+    // that profile only; the Studio One profile binds its own and never mixes (D10).
+    let pt = app.pro_tools_keys();
     match key {
         Key::Space if !m.command && !m.alt => {
             let id = if m.shift { "transport.half_speed" } else { "transport.toggle" };
@@ -106,11 +120,11 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
             let _ = app.run("window.toggle_mix_edit", json!({}));
             true
         }
-        Key::Enter if plain => {
+        Key::Enter if plain && pt => {
             let _ = app.run("markers.add", json!({}));
             true
         }
-        Key::F1 | Key::F2 | Key::F3 | Key::F4 if plain => {
+        Key::F1 | Key::F2 | Key::F3 | Key::F4 if plain && pt => {
             let mode = match key {
                 Key::F1 => "shuffle",
                 Key::F2 => "slip",
@@ -120,7 +134,7 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
             let _ = app.run("edit.mode", json!({"mode": mode}));
             true
         }
-        Key::F5 | Key::F6 | Key::F7 | Key::F8 | Key::F9 | Key::F10 if plain => {
+        Key::F5 | Key::F6 | Key::F7 | Key::F8 | Key::F9 | Key::F10 if plain && pt => {
             let tool = match key {
                 Key::F5 => "zoom",
                 Key::F6 => "trim",
@@ -132,7 +146,7 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
             let _ = app.run("edit.tool", json!({"tool": tool}));
             true
         }
-        Key::Plus | Key::Minus | Key::Comma | Key::Period if app.ui.window == MainWindow::Edit => {
+        Key::Plus | Key::Minus | Key::Comma | Key::Period if app.ui.window.is_edit() => {
             // Dedicated Nudge (NUDGE_SPEC preset). Text fields and dialogs never get here
             // (`handle` returns early). egui cannot tell keypad from main-row +/- (recorded gap).
             use crate::nudge_keys::{Focus, Mods, NudgeAction, NudgeKey, binding};
@@ -178,20 +192,20 @@ fn fixed(app: &mut SoundApp, key: Key, m: Modifiers, mac: bool) -> bool {
             }
             true
         }
-        Key::ArrowUp | Key::ArrowDown if m.ctrl && !m.shift => {
+        Key::ArrowUp | Key::ArrowDown if pt && m.ctrl && !m.shift => {
             let id = if key == Key::ArrowUp { "edit.extend_selection_up" } else { "edit.extend_selection_down" };
             let _ = app.run(id, json!({}));
             true
         }
         // Ctrl+Shift+Up/Down nudge clip gain off macOS too (the registry's Ctrl is the Mac Control key).
-        Key::ArrowUp | Key::ArrowDown if !mac && m.ctrl && m.shift && !m.alt => {
+        Key::ArrowUp | Key::ArrowDown if pt && !mac && m.ctrl && m.shift && !m.alt => {
             let id = if key == Key::ArrowUp { "clip.gain_nudge_up" } else { "clip.gain_nudge_down" };
             let _ = app.run(id, json!({}));
             true
         }
         // Commands Keyboard Focus: single-key editing (Edit window only).
-        k if plain && app.ui.window == MainWindow::Edit && app.engine.session().edit.keyboard_focus == "commands" && commands_focus(app, k) => true,
-        Key::R | Key::T if plain => {
+        k if pt && plain && app.ui.window.is_edit() && app.engine.session().edit.keyboard_focus == "commands" && commands_focus(app, k) => true,
+        Key::R | Key::T if pt && plain => {
             // Zoom out / in on the timeline (Commands Focus style).
             let id = if key == Key::T { "view.zoom_in" } else { "view.zoom_out" };
             let _ = app.run(id, json!({}));

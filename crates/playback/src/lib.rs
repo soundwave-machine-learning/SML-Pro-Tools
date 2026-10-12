@@ -92,6 +92,11 @@ struct Shared {
     output_lost: std::sync::atomic::AtomicU8,
     /// Latest (presentation instant, session sample presented then) while playing (CL04).
     play_anchor: Mutex<Option<(cpal::StreamInstant, Samples)>>,
+    /// Monitor-only controls (R37): applied to the device output after fold-down, never to a
+    /// render or bounce. Volume in milli-dB (0 = unity), dim (−20 dB) and mono sum.
+    monitor_db_milli: std::sync::atomic::AtomicI32,
+    monitor_dim: AtomicBool,
+    monitor_mono: AtomicBool,
 }
 
 impl Shared {
@@ -106,6 +111,9 @@ impl Shared {
             last_callback_frames: AtomicU32::new(0),
             latency_alarm: AtomicBool::new(false),
             output_lost: std::sync::atomic::AtomicU8::new(0),
+            monitor_db_milli: std::sync::atomic::AtomicI32::new(0),
+            monitor_dim: AtomicBool::new(false),
+            monitor_mono: AtomicBool::new(false),
             play_anchor: Mutex::new(None),
         }
     }
@@ -242,6 +250,7 @@ impl AudioState {
                     self.fold = fold_gains(&s);
                     // Temporary audition overrides are realtime-only (offline exports ignore them).
                     self.mix.audition = s.audition;
+                    self.mix.listen = s.listen.mask;
                     let old = std::mem::replace(&mut self.session, s);
                     let _ = self.garbage.send(Garbage { plugins: Vec::new(), _session: Some(old), graph: None, engine: None });
                 }
@@ -384,6 +393,8 @@ impl AudioState {
         }
         let speed = f64::from(self.shared.speed.load(Ordering::Relaxed)) / 1000.0;
         let step = self.session.sample_rate.as_f64() / self.device_rate.max(1.0) * speed.clamp(0.1, 4.0);
+        let mon_gain = monitor_gain(self.shared.monitor_db_milli.load(Ordering::Relaxed), self.shared.monitor_dim.load(Ordering::Relaxed));
+        let mon_mono = self.shared.monitor_mono.load(Ordering::Relaxed);
         // Same rate, normal speed: render exactly what this callback still needs, so no audio is
         // queued past the callback (CL02); otherwise fixed blocks feed the interpolating reader.
         let exact = step == 1.0;
@@ -431,9 +442,32 @@ impl AudioState {
                     *o = if c < nch.max(1) && sounding { sample(c).clamp(-1.0, 1.0) } else { 0.0 };
                 }
             }
+            apply_monitor(frame, mon_gain, mon_mono);
             self.read += step;
         }
     }
+}
+
+/// Monitor-only stage (R37): a gain (volume × dim) and an optional mono sum of the first two
+/// channels, on the device output only. Pure, so it is unit-tested and provably never part of
+/// an offline render (which does not go through `fill`).
+pub fn apply_monitor(frame: &mut [f32], gain: f32, mono: bool) {
+    if mono && frame.len() >= 2 {
+        let m = (frame[0] + frame[1]) * 0.5;
+        frame[0] = m;
+        frame[1] = m;
+    }
+    if (gain - 1.0).abs() > 1e-9 {
+        for x in frame.iter_mut() {
+            *x = (*x * gain).clamp(-1.0, 1.0);
+        }
+    }
+}
+
+/// Linear monitor gain from the shared controls.
+fn monitor_gain(db_milli: i32, dim: bool) -> f32 {
+    let db = (db_milli as f32 / 1000.0).clamp(-90.0, 0.0) + if dim { -20.0 } else { 0.0 };
+    if db <= -90.0 { 0.0 } else { 10f32.powf(db / 20.0) }
 }
 
 /// UI-thread bookkeeping of the third-party instances the audio thread holds.
@@ -780,6 +814,14 @@ impl Player {
         let _ = self.tx.send(Cmd::Locate(at));
     }
 
+    /// Monitor-only volume/dim/mono (R37): the speaker path, never a bounce.
+    pub fn set_monitor(&self, volume_db: f32, dim: bool, mono: bool) {
+        let v = if volume_db.is_finite() { (volume_db.clamp(-90.0, 0.0) * 1000.0) as i32 } else { 0 };
+        self.shared.monitor_db_milli.store(v, Ordering::Relaxed);
+        self.shared.monitor_dim.store(dim, Ordering::Relaxed);
+        self.shared.monitor_mono.store(mono, Ordering::Relaxed);
+    }
+
     pub fn set_speed(&self, speed: f32) {
         let v = if speed.is_finite() { (speed.clamp(0.1, 4.0) * 1000.0) as u32 } else { 1000 };
         self.shared.speed.store(v, Ordering::Relaxed);
@@ -919,6 +961,27 @@ fn open_device(want_rate: u32, want_ch: u16) -> Result<(cpal::Device, cpal::Stre
         }
     };
     Ok((device, config, name))
+}
+
+#[cfg(test)]
+mod monitor_tests {
+    use super::{apply_monitor, monitor_gain};
+
+    /// R37: volume, dim and mono act on the output frame only; unity leaves samples untouched.
+    #[test]
+    fn monitor_stage_math() {
+        let mut f = [0.5f32, -0.25, 0.1];
+        apply_monitor(&mut f, 1.0, false);
+        assert_eq!(f, [0.5, -0.25, 0.1], "unity is bit-exact");
+        apply_monitor(&mut f, monitor_gain(-6_000, false), false);
+        assert!((f[0] - 0.5 * 0.501_187).abs() < 1e-4);
+        let mut g = [0.8f32, -0.4];
+        apply_monitor(&mut g, 1.0, true);
+        assert_eq!(g, [0.2, 0.2], "mono sums the first two channels");
+        assert!((monitor_gain(0, true) - 0.1).abs() < 1e-6, "dim is −20 dB");
+        assert_eq!(monitor_gain(-90_000, false), 0.0);
+        assert_eq!(monitor_gain(5_000, false), 1.0, "never above unity");
+    }
 }
 
 #[cfg(test)]

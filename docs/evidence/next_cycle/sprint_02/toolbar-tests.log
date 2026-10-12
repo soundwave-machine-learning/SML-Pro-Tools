@@ -1,0 +1,18 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.17s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-ddbff99f9f6617e2)
+
+running 11 tests
+test cmd::paint::tests::shapes_match_their_declared_curves_and_keep_outside_points ... ok
+test cmd::paint::tests::freehand_and_transform ... ok
+test cmd::audition::tests::listen_transaction_masks_restores_and_never_persists ... ok
+test cmd::tools::tests::eraser_sweep_is_one_undo_and_keeps_media ... ok
+test cmd::tools::tests::gain_draw_stays_in_its_domain ... ok
+test cmd::tools::tests::mute_sweep_uses_an_explicit_state ... ok
+test cmd::tools::tests::split_at_pointer_is_exact_and_atomic ... ok
+test cmd::tools::tests::tool_settings_round_trip ... ok
+test warp::tests::render_honours_the_map_and_keeps_pitch ... ok
+test cmd::bend::tests::bend_edit_map_render_undo_and_stale_results ... ok
+test warp::tests::admission_is_bounded_and_results_carry_revisions ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 145 filtered out; finished in 0.05s
+

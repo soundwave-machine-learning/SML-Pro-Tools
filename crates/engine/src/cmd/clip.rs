@@ -232,6 +232,8 @@ fn remove_warp(e: &mut Engine, p: &Value) -> Result<Value> {
         let orig = (s.edit.values.get(&key("src")).copied(), s.edit.values.get(&key("off")).copied(), s.edit.values.get(&key("len")).copied());
         if let Some(c) = s.find_clip_mut(*id) {
             c.stretch = 1.0;
+            c.warp.clear();
+            c.warp_rev += 1;
             if let (Some(src), Some(off), Some(len)) = orig {
                 c.content = soundcraft_model::ClipContent::Audio { source: soundcraft_model::SourceId(src as u64), offset: off as i64 };
                 c.length = (len as i64).max(1);

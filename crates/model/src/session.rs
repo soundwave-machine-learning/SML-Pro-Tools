@@ -76,10 +76,37 @@ pub enum Tool {
     Scrubber,
     Pencil,
     Smart,
+    /// Audio-editing tool family (EDIT_TOOLBAR_SPEC T01–T09), in reference inventory order.
+    Arrow,
+    Range,
+    Split,
+    Eraser,
+    Paint,
+    Mute,
+    Bend,
+    Listen,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 7] = [Tool::Zoom, Tool::Trim, Tool::Selector, Tool::Grabber, Tool::Scrubber, Tool::Pencil, Tool::Smart];
+    pub const ALL: [Tool; 15] = [
+        Tool::Zoom,
+        Tool::Trim,
+        Tool::Selector,
+        Tool::Grabber,
+        Tool::Scrubber,
+        Tool::Pencil,
+        Tool::Smart,
+        Tool::Arrow,
+        Tool::Range,
+        Tool::Split,
+        Tool::Eraser,
+        Tool::Paint,
+        Tool::Mute,
+        Tool::Bend,
+        Tool::Listen,
+    ];
+    /// The eight audio-editing tools (T01), in the reference inventory order.
+    pub const AUDIO: [Tool; 8] = [Tool::Arrow, Tool::Range, Tool::Split, Tool::Eraser, Tool::Paint, Tool::Mute, Tool::Bend, Tool::Listen];
     pub fn id(self) -> &'static str {
         match self {
             Tool::Zoom => "zoom",
@@ -89,6 +116,14 @@ impl Tool {
             Tool::Scrubber => "scrubber",
             Tool::Pencil => "pencil",
             Tool::Smart => "smart",
+            Tool::Arrow => "arrow",
+            Tool::Range => "range",
+            Tool::Split => "split",
+            Tool::Eraser => "eraser",
+            Tool::Paint => "paint",
+            Tool::Mute => "mute",
+            Tool::Bend => "bend",
+            Tool::Listen => "listen",
         }
     }
     pub fn label(self) -> &'static str {
@@ -100,6 +135,42 @@ impl Tool {
             Tool::Scrubber => "Scrubber",
             Tool::Pencil => "Pencil",
             Tool::Smart => "Smart Tool",
+            Tool::Arrow => "Arrow",
+            Tool::Range => "Range",
+            Tool::Split => "Split",
+            Tool::Eraser => "Eraser",
+            Tool::Paint => "Paint",
+            Tool::Mute => "Mute",
+            Tool::Bend => "Bend",
+            Tool::Listen => "Listen",
+        }
+    }
+    /// Whether this is one of the eight audio-editing tools.
+    pub fn is_audio_tool(self) -> bool {
+        Tool::AUDIO.contains(&self)
+    }
+    /// Top-row number of the Studio One-style preset (1–8), for the audio tools only.
+    pub fn number_key(self) -> Option<u8> {
+        Tool::AUDIO.iter().position(|t| *t == self).map(|i| i as u8 + 1)
+    }
+    /// What the tool does with the pointer, for help and tooltips.
+    pub fn description(self) -> &'static str {
+        match self {
+            Tool::Zoom => "Drag a box to zoom; click zooms in, Alt-click out",
+            Tool::Trim => "Drag a clip edge",
+            Tool::Selector => "Drag a time range",
+            Tool::Grabber => "Click to select a clip, drag to move it",
+            Tool::Scrubber => "Drag to scrub",
+            Tool::Pencil => "Draw automation points",
+            Tool::Smart => "Selector above, Grabber below, Trim at the edges, fades in the corners",
+            Tool::Arrow => "Select and move clips; edges trim, corners fade, the gain handle rides clip gain (Link: upper half = Range)",
+            Tool::Range => "Drag a time range on one or more tracks",
+            Tool::Split => "Click to split the clip under the pointer (selected clips when it is one of them) at the shown time",
+            Tool::Eraser => "Click or sweep to remove clip instances (media is kept); one undo per sweep",
+            Tool::Paint => "Draw the chosen shape into the shown automation lane or the clip-gain envelope",
+            Tool::Mute => "Click or sweep to mute/unmute clips (clip mute, not channel mute)",
+            Tool::Bend => "Click to add a warp anchor, drag it to move audio in time (pitch preserved); Alt-click removes it",
+            Tool::Listen => "Press and hold to audition the track from the pointer; release, Escape or focus loss stops",
         }
     }
     pub fn from_id(s: &str) -> Option<Tool> {
@@ -115,6 +186,7 @@ impl Tool {
             Tool::Scrubber => Some("F9"),
             Tool::Pencil => Some("F10"),
             Tool::Smart => None,
+            _ => None,
         }
     }
 }
@@ -207,6 +279,25 @@ pub struct EditState {
     /// Dedicated Nudge panel (value/unit/target and exact accumulation anchor).
     #[serde(default)]
     pub nudge_panel: crate::NudgePanel,
+    /// Link Arrow/Range (T10): with Arrow selected the upper half of a tall track selects ranges.
+    #[serde(default = "yes")]
+    pub tool_link: bool,
+    /// Alternate tool reached by holding the alternate modifier while Arrow is active (T10).
+    #[serde(default)]
+    pub alt_tool: Option<Tool>,
+    /// Paint shape id (`automation.draw` shapes) and cycle count for the periodic shapes.
+    #[serde(default = "freehand")]
+    pub paint_shape: String,
+    #[serde(default = "one_f64")]
+    pub paint_cycles: f64,
+}
+
+fn freehand() -> String {
+    "freehand".into()
+}
+
+fn one_f64() -> f64 {
+    1.0
 }
 
 impl EditState {
@@ -276,6 +367,10 @@ impl Default for EditState {
                 .collect(),
             values: std::collections::BTreeMap::new(),
             nudge_panel: crate::NudgePanel::default(),
+            tool_link: true,
+            alt_tool: None,
+            paint_shape: "freehand".into(),
+            paint_cycles: 1.0,
         }
     }
 }
@@ -319,6 +414,9 @@ pub struct Session {
     /// Temporary audition bypass (never saved; exports ignore it).
     #[serde(skip)]
     pub audition: crate::AuditionBypass,
+    /// Listen-tool audition transaction (T09): never saved, never exported.
+    #[serde(skip)]
+    pub listen: crate::ListenState,
     /// CL03 temporary Tracking deactivations: (track, insert slot or dedicated-slot index).
     /// Realtime only; never saved; exports use the normal graph.
     #[serde(skip)]
@@ -361,6 +459,7 @@ impl Session {
             mix_profile: crate::MixProfile { graph_version: crate::GRAPH_VERSION, ..crate::MixProfile::default() },
             mix_snapshots: std::collections::BTreeMap::new(),
             audition: crate::AuditionBypass::default(),
+            listen: crate::ListenState::default(),
             tracking_off: std::collections::BTreeSet::new(),
             pool: SourcePool::default(),
         };

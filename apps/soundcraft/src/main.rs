@@ -53,13 +53,13 @@ impl eframe::App for App {
         // title carries them; elsewhere the egui menu bar already does.
         let title = if self.0.native_menu_bar {
             format!(
-                "{}{} — SoundCraft — {}",
+                "{}{} — SML Studio — {}",
                 self.0.engine.session().name,
                 if self.0.engine.is_dirty() { " *" } else { "" },
-                if self.0.ui.window == soundcraft_ui_egui::MainWindow::Edit { "Edit" } else { "Mix" }
+                self.0.ui.window.label()
             )
         } else {
-            format!("{} — SoundCraft", self.0.engine.session().name)
+            format!("{} — SML Studio", self.0.engine.session().name)
         };
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(title));
     }
@@ -241,7 +241,7 @@ fn main() -> eframe::Result {
     let engine = if demo { soundcraft_engine::demo::demo_engine() } else { Engine::default() };
     let mut options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("SML Recording")
+            .with_title("SML Studio")
             .with_inner_size([1600.0, 1000.0])
             .with_min_inner_size([960.0, 600.0])
             .with_drag_and_drop(true)
@@ -261,6 +261,13 @@ fn main() -> eframe::Result {
             let player = if no_audio { None } else { Some(soundcraft_playback::Player::new(Arc::new(engine.session().clone()))) };
             let mut app = SoundApp::new(engine, player, services());
             app.autosave_dir = prefs_path().and_then(|p| p.parent().map(|d| d.join("Autosave")));
+            // SML Remote starts only when the user opted in (Window › SML Remote).
+            if app.ui.remote_autostart {
+                match app.remote_start(None) {
+                    Ok(v) => log::info!("SML Remote started: {}", v["url"]),
+                    Err(e) => log::warn!("SML Remote not started: {e}"),
+                }
+            }
             let unclean = app.mark_running();
             if safe {
                 app.ui.status = "SAFE OPEN: hosted plugins are disabled for this run (their slots pass audio through and keep their state); restart without --safe to load them.".into();

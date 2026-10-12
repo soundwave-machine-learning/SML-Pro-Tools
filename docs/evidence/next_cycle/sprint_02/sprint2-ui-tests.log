@@ -1,0 +1,98 @@
+# utc: 2026-10-12T01:42:54Z commit: 3f7e50f+worktree
+test control::tests::base64_known ... ok
+test credits::tests::alphabetical_ignores_at_and_case ... ok
+test credits::tests::delta_and_dates ... ok
+test credits::tests::formatting ... ok
+test credits::tests::names_fall_back_to_the_username ... ok
+test dialogs::tests::tempo_change_dialog_runs_a_real_command_at_its_position ... ok
+test edit_window::smart_tool_tests::smart_tool_zones ... ok
+test edit_window::tests::follow_jumps_to_offscreen_playhead_while_playing ... ok
+test edit_window::tests::follow_leaves_onscreen_playhead_alone ... ok
+test edit_window::tests::follow_never_scrolls_when_stopped_nor_in_free_modes ... ok
+test edit_window::tests::hold_clears_when_playhead_returns_or_transport_stops ... ok
+test edit_window::tests::outside_view_move_pauses_the_follow ... ok
+test edit_window::tests::own_follow_jump_is_not_mistaken_for_a_takeover ... ok
+test menus::tests::mix_view_aliases_are_allocated_once ... ok
+test menus::tests::programmatic_dialog_commands_stay_closed_and_the_menu_opens_them ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_every_target_has_a_distinct_command ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_focus_blocks_edits ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_laptop_mapping_needs_explicit_focus ... ok
+test nudge_keys::nudge_keys_tests::nudge_keys_modifier_matrix ... ok
+test ops_windows::tests::stretch_uses_start_over_end_and_scale_uses_end_over_start ... ok
+test palette::tests::scoring_prefers_substrings ... ok
+test plugin_scan::tests::scan_can_be_cancelled_between_formats ... ok
+test plugin_scan::tests::scan_runs_in_background_and_is_not_started_while_recording ... ok
+test score_editor::tests::diatonic_steps ... ok
+test shortcut_profiles::tests::inspector_reports_duplicates_os_and_undeliverable_chords ... ok
+test shortcut_profiles::tests::inventory_ledger_matches_the_tables ... ok
+test shortcut_profiles::tests::profiles_are_distinct_and_every_row_has_a_handler ... ok
+test shortcuts::label_tests::cmd_becomes_ctrl_off_mac ... ok
+test shortcuts::label_tests::unchanged_on_mac ... ok
+test shortcuts::tab_tests::tab_walks_clip_edges_of_selected_tracks_only ... ok
+test shortcuts::tests::cmd_and_ctrl_stay_apart_on_macos ... ok
+test shortcuts::tests::ctrl_is_cmd_off_macos ... ok
+test tests::automation_first_pass_after_start_is_due_without_overflow ... ok
+test tests::automation_write_fires_after_loop_wrap ... ok
+test tests::automation_write_throttles_to_step ... ok
+test dialogs::tests::file_commands_get_path_prompts_with_sensible_names ... ok
+ALSA lib confmisc.c:855:(parse_card) cannot find card '0'
+ALSA lib conf.c:5208:(_snd_config_evaluate) function snd_func_card_inum returned error: No such file or directory
+--
+test tests::failed_input_switch_keeps_the_current_input_and_request ... ok
+test tests::new_session_cancels_play_queued_before_the_next_frame ... ok
+test tests::new_session_stops_playback_and_the_old_clock ... ok
+test tests::session_reset_does_not_apply_old_stop_edits_to_the_new_session ... ok
+test theme::tests::application_frames_follow_system_appearance_and_preserve_manual_palettes ... ok
+test theme::tests::dark_is_the_default ... ok
+test theme::tests::modes_round_trip_through_prefs ... ok
+test theme::tests::theme_command_sets_and_reports_the_mode ... ok
+test theme::tests::themes_are_validated_data_with_fallback ... ok
+test visual_mixer::tests::coordinate_mappings_round_trip_and_never_clamp_stored_values ... ok
+test visual_mixer::tests::group_drag_deltas ... ok
+test visual_mixer::tests::route_badge_names_destination_and_active_sends ... ok
+test visual_mixer::tests::stereo_drag_keeps_span_and_narrows_at_edges ... ok
+test tests::autosave_worker_commits_generations_and_marks_unclean_exit ... ok
+test widgets::selector_visual_regressions::actual_mixer_keeps_every_active_automation_mode_legible ... ok
+test widgets::selector_visual_regressions::capture_actual_mixer_visual_fixtures ... ok
+test widgets::selector_visual_regressions::compact_mixer_selectors_keep_labels_on_one_visible_line ... ok
+test widgets::selector_visual_regressions::capture_selector_visual_fixtures ... ok
+test widgets::tests::clip_gain_taper_spans_minus_144_to_plus_36_and_round_trips ... ok
+test windows::audio_health_tests::window_command_renders_report_and_close_clears_snapshot ... ok
+
+test result: ok. 56 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.02s
+
+     Running tests/audio_tools.rs (target/debug/deps/audio_tools-57d719119332ba2f)
+--
+test bend_anchors_are_added_moved_removed_and_rendered ... ok
+test link_and_alternate_zones ... ok
+test eight_tools_are_visible_and_dispatch_real_commands ... ok
+test listen_runs_while_held_and_cleans_up_on_release_or_escape ... ok
+test paint_targets_the_shown_lane_or_the_clip_gain_envelope ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+     Running tests/menu_timing.rs (target/debug/deps/menu_timing-7ca4ef07c0a20723)
+--
+test menu_and_search_timings_at_w1 ... FAILED
+
+failures:
+--
+---- menu_and_search_timings_at_w1 stdout ----
+
+thread 'menu_and_search_timings_at_w1' (28194) panicked at crates/ui-egui/tests/menu_timing.rs:53:19:
+Found two or more nodes matching the query: 
+By {
+--
+   5: menu_timing::menu_and_search_timings_at_w1
+             at ./tests/menu_timing.rs:53:19
+   6: menu_timing::menu_and_search_timings_at_w1::{closure#0}
+             at ./tests/menu_timing.rs:37:35
+   7: <menu_timing::menu_and_search_timings_at_w1::{closure#0} as core::ops::function::FnOnce<()>>::call_once
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/core/src/ops/function.rs:250:5
+   8: <fn() -> core::result::Result<(), alloc::string::String> as core::ops::function::FnOnce<()>>::call_once
+--
+    menu_and_search_timings_at_w1
+
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.37s
+
+error: test failed, to rerun pass `-p soundcraft-ui-egui --test menu_timing`

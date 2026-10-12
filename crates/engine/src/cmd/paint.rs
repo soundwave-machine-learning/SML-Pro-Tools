@@ -61,6 +61,18 @@ impl Shape {
         })
     }
     pub const ALL: [&'static str; 8] = ["freehand", "line", "parabola", "square", "triangle", "saw", "sine", "transform"];
+    pub fn id(self) -> &'static str {
+        match self {
+            Shape::Freehand => "freehand",
+            Shape::Line => "line",
+            Shape::Parabola => "parabola",
+            Shape::Square => "square",
+            Shape::Triangle => "triangle",
+            Shape::Saw => "saw",
+            Shape::Sine => "sine",
+            Shape::Transform => "transform",
+        }
+    }
 }
 
 /// Parameters of one shape (values in the parameter's own units).

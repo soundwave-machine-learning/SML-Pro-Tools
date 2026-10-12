@@ -1,0 +1,17 @@
+[package]
+name = "soundcraft-remote"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+description = "SML Remote: opt-in, paired, authenticated LAN control service (HTTP over std::net; no TLS crate in the tree)"
+
+[dependencies]
+soundcraft-engine.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+log.workspace = true
+rand = "0.9"
+
+[lints]
+workspace = true

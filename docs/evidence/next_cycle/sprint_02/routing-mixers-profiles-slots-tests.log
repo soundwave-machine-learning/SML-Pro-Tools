@@ -1,0 +1,52 @@
+   Compiling soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Finished `test` profile [optimized + debuginfo] target(s) in 5.85s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_mix-c630eb73d41e9c80)
+
+running 44 tests
+test safe_open_tests::safe_open_disables_hosted_plugins_only ... ok
+test scan_isolated::tests::worker_main_rejects_non_bundles ... ok
+test audio_thread_tests::only_a_marked_thread_is_the_audio_thread ... ok
+test sml_graph_tests::announced_session_changes_resync_the_graph ... ok
+test sml_graph_tests::monitoring_never_substitutes_another_input_channel ... ok
+test sml_graph_tests::listen_mask_gates_sources_only_on_the_realtime_engine ... ok
+test sml_graph_tests::sml_graph_clt4_compensation_through_slots ... ok
+test sml_graph_tests::sml_graph_mt2_logic_profile_pan ... ok
+test sml_graph_tests::sml_graph_mute_solo_policy ... ok
+test sml_graph_tests::sml_graph_slot_io_meters_report_slot_input_and_output ... ok
+test sml_graph_tests::sml_graph_mt1_f64_bus_sum ... ok
+test sml_graph_tests::sml_graph_slt1_empty_slots_and_views_are_identity ... ok
+test sml_graph_tests::sml_graph_slt4_missing_provider_and_audition_isolation ... ok
+test sml_graph_tests::sml_graph_slt2_slot_order_is_sl02 ... ok
+test sml_graph_tests::sml_graph_vmt3_width_in_graph ... ok
+test sml_post_insert_tests::latency_change_while_recording_raises_an_event ... ok
+test sml_graph_tests::sml_graph_slt7_independent_and_follow_send_pan ... ok
+test sml_post_insert_tests::sml_graph_post_inserts_follow_the_fader ... ok
+test tests::click_only_during_record_follows_recording ... ok
+test tests::click_placement_is_exact_across_tempo_changes_and_irregular_blocks ... ok
+test audio_thread_tests::strips_rendered_for_the_audio_thread_count_as_the_audio_thread_and_only_then ... ok
+test sml_post_insert_tests::serial_and_parallel_strips_render_identically ... ok
+test tests::clip_effects_gain_and_trim_automation_apply ... ok
+test tests::delay_compensation_aligns_latent_tracks ... ok
+test tests::empty_session_is_silent ... ok
+test tests::external_instances_are_adopted_retired_and_captured ... ok
+test tests::fader_mute_and_solo ... ok
+test tests::fades_and_clip_gain_apply ... ok
+test tests::hard_pans ... ok
+test tests::input_monitoring_replaces_clips ... ok
+test tests::inserts_process_and_survive_unknown_plugins ... ok
+test tests::mono_center_pan_is_minus_3db ... ok
+test tests::mono_track_on_surround_main_pans ... ok
+test tests::sends_feed_aux_via_bus ... ok
+test tests::stopped_monitoring_does_not_click ... ok
+test tests::stored_state_comes_first_then_session_params ... ok
+test tests::click_sounds_on_every_beat_only_in_playback ... ok
+test tests::surround_to_stereo_folds_down_itu ... ok
+test tests::surround_busses_and_master_fader ... ok
+test tests::countoff_clicks_only_before_the_record_point ... ok
+test tests::surround_upmix_and_downmix_between_layouts ... ok
+test tests::surround_track_passes_through_bit_exact ... ok
+test tests::volume_automation_ramps ... ok
+test scan_isolated::tests::isolated_scan_contains_faults_and_caches ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+

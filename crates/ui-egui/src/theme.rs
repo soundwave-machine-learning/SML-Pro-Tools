@@ -1,10 +1,30 @@
 //! Design tokens. Colours were chosen by eye to give a dark, studio-style look; they are ours.
 
 use egui::{Color32, FontFamily, FontId};
+use std::sync::RwLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// Whether the Light palette is active. Dark is the default (the incumbent is dark-only).
 static LIGHT_THEME: AtomicBool = AtomicBool::new(false);
+
+/// The active palette (R20: themes are validated data). Written by the UI thread when the
+/// theme changes; every painter reads a copy per frame.
+static CURRENT: RwLock<Tokens> = RwLock::new(Tokens::DARK);
+
+/// Colours as `[r, g, b, a]` in theme files.
+mod rgba {
+    use egui::Color32;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    pub fn serialize<S: Serializer>(c: &Color32, s: S) -> Result<S::Ok, S::Error> {
+        c.to_srgba_unmultiplied().serialize(s)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Color32, D::Error> {
+        let [r, g, b, a] = <[u8; 4]>::deserialize(d)?;
+        Ok(Color32::from_rgba_unmultiplied(r, g, b, a))
+    }
+}
 
 /// Unit tests that change the process-wide palette must own it until their assertions finish.
 #[cfg(test)]
@@ -21,16 +41,23 @@ pub enum ThemeMode {
     Light,
     #[default]
     Dark,
+    /// Built-in high-contrast palette (black surfaces, white text, saturated states).
+    #[serde(rename = "high_contrast")]
+    HighContrast,
+    /// The user's validated theme file (`UiState.theme_custom`); Dark when none is loaded.
+    Custom,
 }
 
 impl ThemeMode {
-    pub const ALL: [Self; 3] = [Self::Dark, Self::Light, Self::System];
+    pub const ALL: [Self; 5] = [Self::Dark, Self::Light, Self::HighContrast, Self::System, Self::Custom];
 
     pub const fn label(self) -> &'static str {
         match self {
             Self::System => "System",
             Self::Light => "Light",
             Self::Dark => "Dark",
+            Self::HighContrast => "High contrast",
+            Self::Custom => "Custom",
         }
     }
 
@@ -40,6 +67,8 @@ impl ThemeMode {
             Self::System => "system",
             Self::Light => "light",
             Self::Dark => "dark",
+            Self::HighContrast => "high_contrast",
+            Self::Custom => "custom",
         }
     }
 
@@ -48,113 +77,194 @@ impl ThemeMode {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct Tokens {
+    #[serde(with = "rgba")]
     pub window_bg: Color32,
+    #[serde(with = "rgba")]
     pub panel_bg: Color32,
+    #[serde(with = "rgba")]
     pub panel_bg2: Color32,
+    #[serde(with = "rgba")]
     pub toolbar_bg: Color32,
+    #[serde(with = "rgba")]
     pub toolbar_group: Color32,
+    #[serde(with = "rgba")]
     pub border: Color32,
+    #[serde(with = "rgba")]
     pub border_light: Color32,
+    #[serde(with = "rgba")]
     pub text: Color32,
+    #[serde(with = "rgba")]
     pub text_dim: Color32,
+    #[serde(with = "rgba")]
     pub text_dark: Color32,
+    #[serde(with = "rgba")]
     pub header_text: Color32,
+    #[serde(with = "rgba")]
     pub counter_bg: Color32,
+    #[serde(with = "rgba")]
     pub counter_text: Color32,
+    #[serde(with = "rgba")]
     pub counter_label: Color32,
+    #[serde(with = "rgba")]
     pub accent: Color32,
+    #[serde(with = "rgba")]
     pub accent_dark: Color32,
+    #[serde(with = "rgba")]
     pub mode_on: Color32,
+    #[serde(with = "rgba")]
     pub mode_on_text: Color32,
+    #[serde(with = "rgba")]
     pub mode_off_text: Color32,
+    #[serde(with = "rgba")]
     pub button: Color32,
+    #[serde(with = "rgba")]
     pub button_hi: Color32,
+    #[serde(with = "rgba")]
     pub button_border: Color32,
+    #[serde(with = "rgba")]
     pub name_field: Color32,
+    #[serde(with = "rgba")]
     pub name_field_sel: Color32,
+    #[serde(with = "rgba")]
     pub ruler_bg: Color32,
+    #[serde(with = "rgba")]
     pub ruler_label_bg: Color32,
+    #[serde(with = "rgba")]
     pub ruler_text: Color32,
+    #[serde(with = "rgba")]
     pub ruler_tick: Color32,
+    #[serde(with = "rgba")]
     pub tempo_ruler: Color32,
+    #[serde(with = "rgba")]
     pub meter_ruler: Color32,
+    #[serde(with = "rgba")]
     pub marker_ruler: Color32,
+    #[serde(with = "rgba")]
     pub playlist_bg: Color32,
+    #[serde(with = "rgba")]
     pub playlist_alt: Color32,
+    #[serde(with = "rgba")]
     pub grid_line: Color32,
+    #[serde(with = "rgba")]
     pub bar_line: Color32,
+    #[serde(with = "rgba")]
     pub selection: Color32,
+    #[serde(with = "rgba")]
     pub playhead: Color32,
+    #[serde(with = "rgba")]
     pub insertion: Color32,
+    #[serde(with = "rgba")]
     pub solo: Color32,
+    #[serde(with = "rgba")]
     pub mute: Color32,
+    #[serde(with = "rgba")]
     pub rec: Color32,
+    #[serde(with = "rgba")]
     pub input: Color32,
+    #[serde(with = "rgba")]
     pub auto_read: Color32,
+    #[serde(with = "rgba")]
     pub auto_write: Color32,
+    #[serde(with = "rgba")]
     pub auto_touch: Color32,
+    #[serde(with = "rgba")]
     pub auto_latch: Color32,
+    #[serde(with = "rgba")]
     pub meter_green: Color32,
+    #[serde(with = "rgba")]
     pub meter_yellow: Color32,
+    #[serde(with = "rgba")]
     pub meter_red: Color32,
+    #[serde(with = "rgba")]
     pub fader_track: Color32,
+    #[serde(with = "rgba")]
     pub strip_bg: Color32,
+    #[serde(with = "rgba")]
     pub strip_section: Color32,
+    #[serde(with = "rgba")]
     pub slot_bg: Color32,
+    #[serde(with = "rgba")]
     pub automation_line: Color32,
     /// Menu bar background.
+    #[serde(with = "rgba")]
     pub menu_bar: Color32,
     /// Outline of toolbar groups.
+    #[serde(with = "rgba")]
     pub group_border: Color32,
     /// Edit-mode cell, not selected.
+    #[serde(with = "rgba")]
     pub mode_off: Color32,
     /// Counter-panel toggle (Grid, Count Off), off.
+    #[serde(with = "rgba")]
     pub counter_off: Color32,
     /// Outline of the counter panels.
+    #[serde(with = "rgba")]
     pub counter_border: Color32,
     /// Divider inside the counter panels.
+    #[serde(with = "rgba")]
     pub counter_rule: Color32,
     /// Smart-tool bracket, off.
+    #[serde(with = "rgba")]
     pub tool_bracket_off: Color32,
     /// Selected row in the Tracks, Groups and Clips lists.
+    #[serde(with = "rgba")]
     pub row_selected: Color32,
     /// Track-visible dot in the Tracks list.
+    #[serde(with = "rgba")]
     pub visible_dot: Color32,
     /// Big Counter background.
+    #[serde(with = "rgba")]
     pub big_counter_bg: Color32,
     /// Edit-window track header, selected.
+    #[serde(with = "rgba")]
     pub header_selected: Color32,
     /// Mix-window strip, selected.
+    #[serde(with = "rgba")]
     pub strip_selected: Color32,
     /// Marker names on the marker ruler.
+    #[serde(with = "rgba")]
     pub marker_text: Color32,
     /// Alternate-playlist lanes.
+    #[serde(with = "rgba")]
     pub playlist_lane: Color32,
     /// Universe overview background.
+    #[serde(with = "rgba")]
     pub universe_bg: Color32,
     /// Universe visible-area outline.
+    #[serde(with = "rgba")]
     pub universe_view: Color32,
     /// Meter background.
+    #[serde(with = "rgba")]
     pub meter_bg: Color32,
     /// Meter clip indicator, not clipped.
+    #[serde(with = "rgba")]
     pub meter_clip_off: Color32,
     /// Pan knob body.
+    #[serde(with = "rgba")]
     pub knob_bg: Color32,
     /// Pan knob outline.
+    #[serde(with = "rgba")]
     pub knob_ring: Color32,
     /// Pan knob pointer.
+    #[serde(with = "rgba")]
     pub knob_pointer: Color32,
     /// Mix insert slot holding a plugin.
+    #[serde(with = "rgba")]
     pub insert_on: Color32,
     /// Mix insert slot, bypassed.
+    #[serde(with = "rgba")]
     pub insert_bypass: Color32,
     /// Mix send slot in use.
+    #[serde(with = "rgba")]
     pub send_on: Color32,
     /// Mix insert/send slot outline.
+    #[serde(with = "rgba")]
     pub slot_border: Color32,
     /// Mix-window section captions (INSERTS A-E, I/O…).
+    #[serde(with = "rgba")]
     pub section_label: Color32,
 }
 
@@ -325,8 +435,303 @@ impl Tokens {
         section_label: Color32::from_rgb(95, 98, 106),
     };
 
+    /// The active palette.
     pub fn current() -> Tokens {
-        if is_light() { Self::LIGHT } else { Self::DARK }
+        *CURRENT.read().unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Built-in high-contrast starting theme: black surfaces, white text, saturated state
+    /// colours, thick borders. Dark-based (egui dark visuals).
+    pub const HIGH_CONTRAST: Tokens = Tokens {
+        window_bg: Color32::BLACK,
+        panel_bg: Color32::BLACK,
+        panel_bg2: Color32::from_rgb(16, 16, 16),
+        toolbar_bg: Color32::BLACK,
+        toolbar_group: Color32::from_rgb(12, 12, 12),
+        border: Color32::WHITE,
+        border_light: Color32::from_rgb(200, 200, 200),
+        text: Color32::WHITE,
+        text_dim: Color32::from_rgb(220, 220, 220),
+        text_dark: Color32::BLACK,
+        header_text: Color32::WHITE,
+        counter_bg: Color32::BLACK,
+        counter_text: Color32::from_rgb(0, 255, 120),
+        counter_label: Color32::WHITE,
+        accent: Color32::from_rgb(255, 220, 0),
+        accent_dark: Color32::from_rgb(200, 170, 0),
+        mode_on: Color32::from_rgb(0, 255, 120),
+        mode_on_text: Color32::BLACK,
+        mode_off_text: Color32::from_rgb(0, 255, 120),
+        button: Color32::from_rgb(28, 28, 28),
+        button_hi: Color32::from_rgb(64, 64, 64),
+        button_border: Color32::WHITE,
+        name_field: Color32::WHITE,
+        name_field_sel: Color32::from_rgb(255, 255, 160),
+        ruler_bg: Color32::BLACK,
+        ruler_label_bg: Color32::BLACK,
+        ruler_text: Color32::WHITE,
+        ruler_tick: Color32::from_rgb(200, 200, 200),
+        tempo_ruler: Color32::from_rgb(0, 160, 90),
+        meter_ruler: Color32::from_rgb(0, 120, 200),
+        marker_ruler: Color32::from_rgb(20, 20, 20),
+        playlist_bg: Color32::BLACK,
+        playlist_alt: Color32::from_rgb(14, 14, 14),
+        grid_line: Color32::from_rgb(90, 90, 90),
+        bar_line: Color32::from_rgb(160, 160, 160),
+        selection: Color32::from_rgba_premultiplied(90, 120, 200, 140),
+        playhead: Color32::from_rgb(255, 60, 60),
+        insertion: Color32::WHITE,
+        solo: Color32::from_rgb(255, 230, 0),
+        mute: Color32::from_rgb(255, 140, 0),
+        rec: Color32::from_rgb(255, 40, 40),
+        input: Color32::from_rgb(0, 220, 90),
+        auto_read: Color32::from_rgb(0, 230, 110),
+        auto_write: Color32::from_rgb(255, 60, 50),
+        auto_touch: Color32::from_rgb(255, 190, 0),
+        auto_latch: Color32::from_rgb(0, 190, 255),
+        meter_green: Color32::from_rgb(0, 230, 90),
+        meter_yellow: Color32::from_rgb(255, 230, 0),
+        meter_red: Color32::from_rgb(255, 40, 40),
+        fader_track: Color32::from_rgb(60, 60, 60),
+        strip_bg: Color32::BLACK,
+        strip_section: Color32::from_rgb(14, 14, 14),
+        slot_bg: Color32::from_rgb(10, 10, 10),
+        automation_line: Color32::from_rgb(0, 255, 160),
+        menu_bar: Color32::BLACK,
+        group_border: Color32::WHITE,
+        mode_off: Color32::from_rgb(20, 20, 20),
+        counter_off: Color32::from_rgb(20, 20, 20),
+        counter_border: Color32::WHITE,
+        counter_rule: Color32::from_rgb(120, 120, 120),
+        tool_bracket_off: Color32::from_rgb(120, 120, 120),
+        row_selected: Color32::from_rgb(60, 60, 0),
+        visible_dot: Color32::from_rgb(0, 255, 120),
+        big_counter_bg: Color32::BLACK,
+        header_selected: Color32::from_rgb(50, 50, 0),
+        strip_selected: Color32::from_rgb(50, 50, 0),
+        marker_text: Color32::WHITE,
+        playlist_lane: Color32::from_rgb(10, 10, 10),
+        universe_bg: Color32::BLACK,
+        universe_view: Color32::from_rgb(255, 220, 0),
+        meter_bg: Color32::BLACK,
+        meter_clip_off: Color32::from_rgb(40, 40, 40),
+        knob_bg: Color32::from_rgb(20, 20, 20),
+        knob_ring: Color32::WHITE,
+        knob_pointer: Color32::from_rgb(255, 220, 0),
+        insert_on: Color32::from_rgb(0, 120, 200),
+        insert_bypass: Color32::from_rgb(90, 90, 90),
+        send_on: Color32::from_rgb(0, 150, 90),
+        slot_border: Color32::WHITE,
+        section_label: Color32::WHITE,
+    };
+
+    /// Every token by name, for the theme editor.
+    pub fn fields_mut(&mut self) -> Vec<(&'static str, &mut Color32)> {
+        vec![
+            ("window_bg", &mut self.window_bg),
+            ("panel_bg", &mut self.panel_bg),
+            ("panel_bg2", &mut self.panel_bg2),
+            ("toolbar_bg", &mut self.toolbar_bg),
+            ("toolbar_group", &mut self.toolbar_group),
+            ("border", &mut self.border),
+            ("border_light", &mut self.border_light),
+            ("text", &mut self.text),
+            ("text_dim", &mut self.text_dim),
+            ("text_dark", &mut self.text_dark),
+            ("header_text", &mut self.header_text),
+            ("counter_bg", &mut self.counter_bg),
+            ("counter_text", &mut self.counter_text),
+            ("counter_label", &mut self.counter_label),
+            ("accent", &mut self.accent),
+            ("accent_dark", &mut self.accent_dark),
+            ("mode_on", &mut self.mode_on),
+            ("mode_on_text", &mut self.mode_on_text),
+            ("mode_off_text", &mut self.mode_off_text),
+            ("button", &mut self.button),
+            ("button_hi", &mut self.button_hi),
+            ("button_border", &mut self.button_border),
+            ("name_field", &mut self.name_field),
+            ("name_field_sel", &mut self.name_field_sel),
+            ("ruler_bg", &mut self.ruler_bg),
+            ("ruler_label_bg", &mut self.ruler_label_bg),
+            ("ruler_text", &mut self.ruler_text),
+            ("ruler_tick", &mut self.ruler_tick),
+            ("tempo_ruler", &mut self.tempo_ruler),
+            ("meter_ruler", &mut self.meter_ruler),
+            ("marker_ruler", &mut self.marker_ruler),
+            ("playlist_bg", &mut self.playlist_bg),
+            ("playlist_alt", &mut self.playlist_alt),
+            ("grid_line", &mut self.grid_line),
+            ("bar_line", &mut self.bar_line),
+            ("selection", &mut self.selection),
+            ("playhead", &mut self.playhead),
+            ("insertion", &mut self.insertion),
+            ("solo", &mut self.solo),
+            ("mute", &mut self.mute),
+            ("rec", &mut self.rec),
+            ("input", &mut self.input),
+            ("auto_read", &mut self.auto_read),
+            ("auto_write", &mut self.auto_write),
+            ("auto_touch", &mut self.auto_touch),
+            ("auto_latch", &mut self.auto_latch),
+            ("meter_green", &mut self.meter_green),
+            ("meter_yellow", &mut self.meter_yellow),
+            ("meter_red", &mut self.meter_red),
+            ("fader_track", &mut self.fader_track),
+            ("strip_bg", &mut self.strip_bg),
+            ("strip_section", &mut self.strip_section),
+            ("slot_bg", &mut self.slot_bg),
+            ("automation_line", &mut self.automation_line),
+            ("menu_bar", &mut self.menu_bar),
+            ("group_border", &mut self.group_border),
+            ("mode_off", &mut self.mode_off),
+            ("counter_off", &mut self.counter_off),
+            ("counter_border", &mut self.counter_border),
+            ("counter_rule", &mut self.counter_rule),
+            ("tool_bracket_off", &mut self.tool_bracket_off),
+            ("row_selected", &mut self.row_selected),
+            ("visible_dot", &mut self.visible_dot),
+            ("big_counter_bg", &mut self.big_counter_bg),
+            ("header_selected", &mut self.header_selected),
+            ("strip_selected", &mut self.strip_selected),
+            ("marker_text", &mut self.marker_text),
+            ("playlist_lane", &mut self.playlist_lane),
+            ("universe_bg", &mut self.universe_bg),
+            ("universe_view", &mut self.universe_view),
+            ("meter_bg", &mut self.meter_bg),
+            ("meter_clip_off", &mut self.meter_clip_off),
+            ("knob_bg", &mut self.knob_bg),
+            ("knob_ring", &mut self.knob_ring),
+            ("knob_pointer", &mut self.knob_pointer),
+            ("insert_on", &mut self.insert_on),
+            ("insert_bypass", &mut self.insert_bypass),
+            ("send_on", &mut self.send_on),
+            ("slot_border", &mut self.slot_border),
+            ("section_label", &mut self.section_label),
+        ]
+    }
+}
+
+impl Default for Tokens {
+    fn default() -> Self {
+        Tokens::DARK
+    }
+}
+
+/// A theme file (R20): validated data only — semantic colour tokens, a base (dark/light
+/// visuals), a typography scale within bounds. No scripts, no resources, nothing that touches
+/// plugin editors.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct ThemeData {
+    pub format: String,
+    #[serde(default)]
+    pub name: String,
+    /// `dark`, `light` or `high_contrast`: which built-in the tokens extend.
+    #[serde(default)]
+    pub base: ThemeMode,
+    pub tokens: Tokens,
+    #[serde(default = "one")]
+    pub typography_scale: f32,
+}
+
+fn one() -> f32 {
+    1.0
+}
+
+pub const THEME_FORMAT: &str = "sml-theme-1";
+pub const TYPOGRAPHY_SCALE: (f32, f32) = (0.8, 1.5);
+/// Minimum text-to-surface contrast ratio a theme must keep (WCAG large-text level).
+pub const MIN_CONTRAST: f32 = 3.0;
+
+fn luminance(c: Color32) -> f32 {
+    let ch = |v: u8| {
+        let x = f32::from(v) / 255.0;
+        if x <= 0.039_28 { x / 12.92 } else { ((x + 0.055) / 1.055).powf(2.4) }
+    };
+    let [r, g, b, _] = c.to_srgba_unmultiplied();
+    0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b)
+}
+
+/// WCAG contrast ratio.
+pub fn contrast(a: Color32, b: Color32) -> f32 {
+    let (la, lb) = (luminance(a), luminance(b));
+    let (hi, lo) = if la > lb { (la, lb) } else { (lb, la) };
+    (hi + 0.05) / (lo + 0.05)
+}
+
+/// Validate a theme: known format, a built-in base, typography within bounds, readable text on
+/// every surface, state colours distinct from their resting surface. The first failure is the
+/// reason shown to the user; an invalid theme is never applied.
+pub fn validate(d: &ThemeData) -> Result<(), String> {
+    if d.format != THEME_FORMAT {
+        return Err(format!("unsupported theme format `{}` (expected {THEME_FORMAT})", d.format));
+    }
+    if matches!(d.base, ThemeMode::Custom | ThemeMode::System) {
+        return Err("`base` must be dark, light or high_contrast".into());
+    }
+    if !d.typography_scale.is_finite() || d.typography_scale < TYPOGRAPHY_SCALE.0 || d.typography_scale > TYPOGRAPHY_SCALE.1 {
+        return Err(format!("typography_scale {} is outside {}..{}", d.typography_scale, TYPOGRAPHY_SCALE.0, TYPOGRAPHY_SCALE.1));
+    }
+    let t = &d.tokens;
+    for (what, fg, bg) in [
+        ("text on panels", t.text, t.panel_bg),
+        ("text on the window", t.text, t.window_bg),
+        ("counter digits", t.counter_text, t.counter_bg),
+        ("ruler text", t.ruler_text, t.ruler_bg),
+        ("button text", t.text, t.button),
+        ("selected-mode text", t.mode_on_text, t.mode_on),
+    ] {
+        let c = contrast(fg, bg);
+        if c < MIN_CONTRAST {
+            return Err(format!("{what}: contrast {c:.2}:1 is below {MIN_CONTRAST}:1"));
+        }
+    }
+    for (what, state, rest) in
+        [("record", t.rec, t.button), ("solo", t.solo, t.button), ("mute", t.mute, t.button), ("meter clip", t.meter_red, t.meter_clip_off)]
+    {
+        if contrast(state, rest) < 1.5 {
+            return Err(format!("{what} state is not distinguishable from its resting colour"));
+        }
+    }
+    Ok(())
+}
+
+/// Parse and validate a theme file.
+pub fn import(text: &str) -> Result<ThemeData, String> {
+    let d: ThemeData = serde_json::from_str(text).map_err(|e| format!("not a theme file: {e}"))?;
+    validate(&d)?;
+    Ok(d)
+}
+
+/// The current palette as a theme file (for export and as the editor's starting point).
+pub fn export(name: &str, base: ThemeMode, typography_scale: f32) -> ThemeData {
+    ThemeData { format: THEME_FORMAT.into(), name: name.into(), base, tokens: Tokens::current(), typography_scale }
+}
+
+/// Prefs loader for `theme_custom`: a broken or invalid saved theme becomes `None` (the app
+/// launches in Dark and says so) instead of failing the whole preferences file.
+pub fn lenient_custom<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Option<ThemeData>, D::Error> {
+    let v: Option<serde_json::Value> = serde::Deserialize::deserialize(d)?;
+    Ok(v.and_then(|v| serde_json::from_value::<ThemeData>(v).ok()).filter(|t| validate(t).is_ok()))
+}
+
+/// Resolve the mode to (light visuals?, palette). Custom without a valid theme falls back to Dark.
+pub fn resolve(ctx: &egui::Context, mode: ThemeMode, custom: Option<&ThemeData>) -> (bool, Tokens) {
+    match mode {
+        ThemeMode::Light => (true, Tokens::LIGHT),
+        ThemeMode::Dark => (false, Tokens::DARK),
+        ThemeMode::HighContrast => (false, Tokens::HIGH_CONTRAST),
+        ThemeMode::System => {
+            if ctx.system_theme() == Some(egui::Theme::Light) {
+                (true, Tokens::LIGHT)
+            } else {
+                (false, Tokens::DARK)
+            }
+        }
+        ThemeMode::Custom => match custom.filter(|t| validate(t).is_ok()) {
+            Some(t) => (t.base == ThemeMode::Light, t.tokens),
+            None => (false, Tokens::DARK),
+        },
     }
 }
 
@@ -339,7 +744,7 @@ pub fn is_light() -> bool {
 pub fn wants_light(ctx: &egui::Context, mode: ThemeMode) -> bool {
     match mode {
         ThemeMode::Light => true,
-        ThemeMode::Dark => false,
+        ThemeMode::Dark | ThemeMode::HighContrast | ThemeMode::Custom => false,
         ThemeMode::System => ctx.system_theme() == Some(egui::Theme::Light),
     }
 }
@@ -379,10 +784,16 @@ pub fn mono(size: f32) -> FontId {
     FontId::new(size, FontFamily::Monospace)
 }
 
-/// Make `light` (or dark) the active palette and apply its visuals. Call only when it changes.
+/// Make the built-in `light` (or dark) palette active and apply its visuals.
 pub fn apply(ctx: &egui::Context, light: bool) {
+    apply_tokens(ctx, light, if light { Tokens::LIGHT } else { Tokens::DARK });
+}
+
+/// Install `t` as the active palette with `light` (or dark) egui visuals. Call only when the
+/// palette changes.
+pub fn apply_tokens(ctx: &egui::Context, light: bool, t: Tokens) {
     LIGHT_THEME.store(light, Ordering::Relaxed);
-    let t = Tokens::current();
+    *CURRENT.write().unwrap_or_else(std::sync::PoisonError::into_inner) = t;
     let mut v = if light { egui::Visuals::light() } else { egui::Visuals::dark() };
     v.panel_fill = t.panel_bg;
     v.window_fill = t.panel_bg2;
@@ -414,6 +825,54 @@ mod tests {
     use super::*;
     use crate::{Services, SoundApp, UiState};
     use serde_json::json;
+
+    /// R20: built-ins validate; a theme file round-trips; invalid files (format, scale,
+    /// unreadable text, indistinguishable states, garbage) are rejected with a reason and never
+    /// applied; a broken saved theme falls back to Dark at launch.
+    #[test]
+    fn themes_are_validated_data_with_fallback() {
+        for (base, t) in [(ThemeMode::Dark, Tokens::DARK), (ThemeMode::Light, Tokens::LIGHT), (ThemeMode::HighContrast, Tokens::HIGH_CONTRAST)] {
+            validate(&ThemeData { format: THEME_FORMAT.into(), name: base.label().into(), base, tokens: t, typography_scale: 1.0 }).unwrap();
+        }
+        assert!(contrast(Tokens::HIGH_CONTRAST.text, Tokens::HIGH_CONTRAST.panel_bg) > 15.0);
+        let d = ThemeData { format: THEME_FORMAT.into(), name: "mine".into(), base: ThemeMode::Dark, tokens: Tokens::DARK, typography_scale: 1.2 };
+        let text = serde_json::to_string_pretty(&d).unwrap();
+        assert!(text.contains("\"window_bg\": [\n"), "colours are [r,g,b,a] arrays: {text}");
+        assert_eq!(import(&text).unwrap(), d);
+        let bad_format = text.replace(THEME_FORMAT, "sml-theme-9");
+        assert!(import(&bad_format).unwrap_err().contains("format"));
+        let bad_scale = text.replace("\"typography_scale\": 1.2", "\"typography_scale\": 3.0");
+        assert!(import(&bad_scale).unwrap_err().contains("typography_scale"));
+        let mut low = d.clone();
+        low.tokens.text = low.tokens.panel_bg;
+        let err = validate(&low).unwrap_err();
+        assert!(err.contains("contrast"), "{err}");
+        let mut same = d.clone();
+        same.tokens.rec = same.tokens.button;
+        assert!(validate(&same).unwrap_err().contains("record"));
+        assert!(import("{not json").is_err());
+        assert!(
+            import("{\"format\":\"sml-theme-1\",\"tokens\":{\"text\":[0,0,0,255]}}").is_err(),
+            "missing tokens default to Dark, black text on dark fails contrast"
+        );
+        // Partial token files are allowed: unspecified tokens come from Dark.
+        let partial = import("{\"format\":\"sml-theme-1\",\"tokens\":{\"accent\":[255,0,255,255]}}").unwrap();
+        assert_eq!(partial.tokens.accent, Color32::from_rgb(255, 0, 255));
+        assert_eq!(partial.tokens.text, Tokens::DARK.text);
+        // A broken saved theme never bricks launch: prefs load, the mode resolves to Dark.
+        let prefs: UiState =
+            serde_json::from_value(json!({"theme": "custom", "theme_custom": {"format": "sml-theme-1", "tokens": {"text": [0, 0, 0, 255]}}}))
+                .unwrap();
+        assert_eq!(prefs.theme, ThemeMode::Custom);
+        assert!(prefs.theme_custom.is_none());
+        let ctx = egui::Context::default();
+        assert_eq!(resolve(&ctx, ThemeMode::Custom, prefs.theme_custom.as_ref()), (false, Tokens::DARK));
+        assert_eq!(resolve(&ctx, ThemeMode::HighContrast, None), (false, Tokens::HIGH_CONTRAST));
+        assert_eq!(resolve(&ctx, ThemeMode::Custom, Some(&d)).1, Tokens::DARK);
+        let mut editable = Tokens::DARK;
+        assert_eq!(editable.fields_mut().len(), 80);
+        assert_eq!(ThemeMode::parse("high_contrast"), Some(ThemeMode::HighContrast));
+    }
 
     #[test]
     fn dark_is_the_default() {

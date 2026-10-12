@@ -373,3 +373,76 @@ fn vocal_e2e_final_bus_slot_export() {
     assert!(f.session().mix_snapshots.contains_key("A"));
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// Sprint 2 (next cycle) V-E2E extension: the lead/double vocal workflow through the shared
+/// tool commands — split at the breath, erase the breath piece, mute the double's ad-lib,
+/// ride a clip-gain envelope, bend the double's phrase onto the lead, Listen never saved —
+/// then save/reopen: exact source hashes, clip selection and render reproduce.
+#[test]
+fn vocal_tools_workflow_lead_and_double() {
+    let (mut e, lead, srcs) = three_takes();
+    let dbl = {
+        let s = e.session_mut();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, Some("Double"));
+        let pl = s.track_mut(t).unwrap().playlist_mut().unwrap();
+        pl.clips.push(Clip::audio(soundcraft_model::ClipId(2000), "double", srcs[1], 0, 0, LEN as i64));
+        t
+    };
+    let hashes: Vec<u64> = srcs.iter().map(|s| hash_source(&e, *s)).collect();
+    exec(&mut e, "edit.select", json!({"tracks": [lead.0, dbl.0], "start": 0}));
+    // Split the lead at the end of the breath and erase the breath piece (media kept).
+    exec(&mut e, "edit.split_at", json!({"at": 9_600, "clips": [1000]}));
+    let pieces: Vec<(i64, i64)> = e.session().track(lead).unwrap().clips().iter().map(|c| (c.start, c.length)).collect();
+    assert_eq!(pieces, vec![(0, 9_600), (9_600, LEN as i64 - 9_600)]);
+    let breath = e.session().track(lead).unwrap().clips()[0].id;
+    exec(&mut e, "edit.erase_clips", json!({"clips": [breath.0]}));
+    assert_eq!(e.session().track(lead).unwrap().clips().len(), 1);
+    let lead_clip = e.session().track(lead).unwrap().clips()[0].id;
+    // Mute the double, then unmute it with an explicit state (a sweep never toggles twice).
+    exec(&mut e, "edit.mute_clips", json!({"clips": [2000], "muted": true}));
+    let muted = render(&e, Range::new(12_000, 13_000));
+    exec(&mut e, "edit.mute_clips", json!({"clips": [2000], "muted": true}));
+    assert!(e.session().find_clip(soundcraft_model::ClipId(2000)).unwrap().1.muted);
+    exec(&mut e, "edit.mute_clips", json!({"clips": [2000], "muted": false}));
+    let both = render(&e, Range::new(12_000, 13_000));
+    assert!(both[500].abs() > muted[500].abs(), "the double is audible again");
+    // Ride the lead's clip gain: a line from −6 dB to 0 dB across the first phrase.
+    exec(&mut e, "clip.gain_draw", json!({"clip": lead_clip.0, "shape": "line", "start": 12_000, "end": 36_000, "from": -6.0, "to": 0.0}));
+    let env = e.session().find_clip(lead_clip).unwrap().1.gain_env.clone();
+    assert!(env.len() >= 2 && (env[0].1 + 6.0).abs() < 1e-6);
+    // Bend the double's first phrase 5 ms later (pitch preserved) and let the render land.
+    exec(&mut e, "clip.warp_set", json!({"clip": 2000, "anchors": [[12_000, 12_240], [36_000, 36_000]]}));
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
+    while e.warp.is_busy() && std::time::Instant::now() < deadline {
+        exec(&mut e, "clip.warp_poll", json!({}));
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let d = e.session().find_clip(soundcraft_model::ClipId(2000)).unwrap().1.clone();
+    assert_eq!(d.length, LEN as i64, "the last anchor keeps the length");
+    assert_ne!(d.source(), Some(srcs[1]), "plays a derived source");
+    // Listen leaves nothing behind.
+    exec(&mut e, "audition.start", json!({"tracks": [lead.0], "at": 12_000}));
+    exec(&mut e, "audition.stop", json!({}));
+    assert!(!e.session().listen.active());
+    // Originals untouched; save/reopen reproduces selection, envelope and render.
+    for (s, h) in srcs.iter().zip(&hashes) {
+        assert_eq!(hash_source(&e, *s), *h, "source {} unchanged", s.0);
+    }
+    exec(&mut e, "edit.select", json!({"clips": [lead_clip.0]}));
+    let out = render(&e, Range::new(0, LEN as i64));
+    let dir = std::env::temp_dir().join(format!("sml-vocal-tools-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("tools.scraft");
+    exec(&mut e, "session.save", json!({"path": path.to_string_lossy()}));
+    let mut f = Engine::default();
+    exec(&mut f, "session.open", json!({"path": path.to_string_lossy()}));
+    assert_eq!(f.session().edit.selected_clips, vec![lead_clip]);
+    assert_eq!(f.session().find_clip(lead_clip).unwrap().1.gain_env, env);
+    assert_eq!(f.session().find_clip(soundcraft_model::ClipId(2000)).unwrap().1.warp.len(), 2);
+    assert_eq!(render(&f, Range::new(0, LEN as i64)), out, "render reproduces after reopen");
+    for (s, h) in srcs.iter().zip(&hashes) {
+        assert_eq!(hash_source(&f, *s), *h);
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

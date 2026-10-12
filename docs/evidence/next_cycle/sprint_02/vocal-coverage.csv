@@ -1,0 +1,16 @@
+id,tool_family,status,evidence_command,notes
+V01,Selection and navigation,"VERIFIED (software, carried)",vocal_workflow vocal_v01; Range tool test,Range/Arrow gestures added this sprint
+V02,Basic editing,VERIFIED,vocal_workflow vocal_v02; edit.split_at/erase_clips tests,split/erase via tools
+V03,Editing modes,"VERIFIED (software, carried)",cmd::nudge n06; effective_tool zones,Slip default; Eraser ripples only in Shuffle
+V04,Fades,"VERIFIED (software, carried)",vocal_workflow vocal_v04,Arrow fade corners
+V05,Gain cleanup,VERIFIED,vocal_v05; clip.gain_draw tests; vocal_tools_workflow,editable clip-gain envelope via Paint (new)
+V06,Takes and comping,"VERIFIED (software, carried)",vocal_v06,comp lane UI unchanged (playlists)
+V07,Recording conveniences,"PASS (software, carried; physical H1 pending)",loop_record tests; countoff tests,pre-roll/count-in also on the phone remote
+V08,Precision timing,VERIFIED (software),"nudge/nudge-engine-tests.log (N01-N06, N08)",N07 physical keypad native
+V09,Strip silence,"VERIFIED (software, carried)",vocal_v09,preview = dialog values; no new preview UI (gap)
+V10,Grouped editing,"VERIFIED (software, carried)",cmd::nudge n05,locks reject tool edits atomically (new tests)
+V11,Time correction,VERIFIED (service level),"warp.rs render test (pitch 2 %, exact length); bend.rs","background render, no callback work; listening = native"
+V12,Pitch correction,BLOCKED (owner plugin),n/a,H2
+V13,Printing and handoff,"VERIFIED (software, carried)",cmd::slots v13 test,unchanged
+V14,Interaction,VERIFIED (software),"audio_tools, shortcut_profiles, help tests","toolbar tools, profiles, help window; native capture review pending"
+E2E,V-E2E Sprint 2 part + tools extension,VERIFIED (software),"vocal-edit-tests.log (vocal_e2e, vocal_tools_workflow_lead_and_double)",hashes unchanged; reopen reproduces

@@ -180,6 +180,54 @@ pub fn floating(app: &mut SoundApp, ctx: &egui::Context) {
 fn recording_panel(app: &mut SoundApp, ctx: &egui::Context) {
     let mut open = app.ui.show_recording;
     egui::Window::new("Recording").open(&mut open).default_pos(egui::pos2(260.0, 160.0)).default_width(320.0).resizable(false).show(ctx, |ui| {
+        recording_essentials(app, ui);
+    });
+    app.ui.show_recording = open;
+}
+
+/// Monitor-only controls (R37): volume, dim and mono on the speaker path; headphone control
+/// only when a dedicated cue path exists, otherwise shown unavailable (never the Main fader).
+pub(crate) fn monitor_controls(app: &mut SoundApp, ui: &mut egui::Ui) {
+    ui.label(egui::RichText::new("Monitor (speaker path only — never in a bounce)").small());
+    ui.horizontal(|ui| {
+        let mut db = app.ui.monitor.volume_db;
+        if ui.add(egui::Slider::new(&mut db, -60.0..=0.0).suffix(" dB").text("Volume")).changed() {
+            let _ = app.run("monitor.volume", json!({"db": db}));
+        }
+        if ui.selectable_label(app.ui.monitor.dim, "Dim −20").clicked() {
+            let _ = app.run("monitor.dim", json!({}));
+        }
+        if ui.selectable_label(app.ui.monitor.mono, "Mono").clicked() {
+            let _ = app.run("monitor.mono", json!({}));
+        }
+    });
+    match app.cue_path() {
+        Some(path) => {
+            ui.label(
+                egui::RichText::new(format!("Headphones: cue path “{path}” detected; its separate level is not implemented in this build.")).small(),
+            );
+        }
+        None => {
+            ui.add_enabled_ui(false, |ui| {
+                ui.button("Headphones: unavailable")
+                    .on_disabled_hover_text("No dedicated cue output path in I/O Setup. The Main fader is never relabelled as headphones.");
+            });
+        }
+    }
+    let hw = app.engine.session().edit.value("monitor.mode", 1.0) as i64 == 2;
+    ui.label(
+        egui::RichText::new(if hw {
+            "Direct hardware monitoring: the interface mixes the input; software monitoring is off."
+        } else {
+            "Software monitoring through the mixer (latency applies)."
+        })
+        .small(),
+    );
+}
+
+/// The Recording essentials (R08) shared by the Recording window and the Record layout.
+pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
+    {
         let input = app
             .recorder
             .as_ref()
@@ -258,8 +306,9 @@ fn recording_panel(app: &mut SoundApp, ctx: &egui::Context) {
         }
         ui.label(egui::RichText::new("Recording is always dry: clip, insert, slot and fader processing never reach the file.").small());
         ui.label(egui::RichText::new(app.autosave_summary()).small());
-    });
-    app.ui.show_recording = open;
+        ui.separator();
+        monitor_controls(app, ui);
+    }
 }
 
 fn transport_window(app: &mut SoundApp, ctx: &egui::Context) {
@@ -553,7 +602,7 @@ fn about(app: &mut SoundApp, ctx: &egui::Context) {
         return;
     }
     let tab_id = egui::Id::new("about_tab");
-    egui::Window::new("About SoundCraft").open(&mut open).default_size(vec2(640.0, 420.0)).collapsible(false).show(ctx, |ui| {
+    egui::Window::new("About SML Studio").open(&mut open).default_size(vec2(640.0, 420.0)).collapsible(false).show(ctx, |ui| {
         let mut tab = ui.data_mut(|d| d.get_temp::<u8>(tab_id)).unwrap_or(0);
         ui.horizontal(|ui| {
             for (i, l) in (0u8..).zip(["About", "Contributors", "Models"]) {
@@ -568,8 +617,11 @@ fn about(app: &mut SoundApp, ctx: &egui::Context) {
             1 => crate::credits::contributors_ui(ui),
             2 => crate::credits::models_ui(ui),
             _ => {
-                ui.label(egui::RichText::new("SoundCraft").font(bold(22.0)));
-                ui.label(format!("Version {}", env!("CARGO_PKG_VERSION")));
+                ui.label(egui::RichText::new("SML Studio").font(bold(22.0)));
+                ui.label(format!(
+                    "Version {} — SoundCraft engine (session format, command ids, automation ids and plugin state keys unchanged)",
+                    env!("CARGO_PKG_VERSION")
+                ));
                 ui.label("An open-source digital audio workstation from the ArtCraft team.");
                 ui.label("Dual-licensed MIT OR Apache-2.0. Made with Rust and egui.");
                 ui.hyperlink_to("getartcraft.com/apps/soundcraft", "https://getartcraft.com/apps/soundcraft");

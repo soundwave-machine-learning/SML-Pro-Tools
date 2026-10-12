@@ -2,10 +2,10 @@
 
 use crate::theme::{Tokens, bold, clip_colors, regular, rgb};
 use crate::widgets::{rec_toggle, selector_box, text_toggle};
-use crate::{Gesture, SoundApp, icons, toolbar};
+use crate::{Gesture, SoundApp, TransformBox, icons, toolbar};
 use egui::{Align2, Color32, CornerRadius, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Ui, pos2, vec2};
-use serde_json::json;
-use soundcraft_model::{AutoParam, Clip, ClipContent, ClipId, Session, Tool, Track, TrackHeight, TrackId, TrackKind};
+use serde_json::{Value, json};
+use soundcraft_model::{AutoParam, Clip, ClipContent, ClipId, Session, Tool, Track, TrackHeight, TrackId, TrackKind, WarpAnchor};
 use soundcraft_time::{GridValue, NoteValue, Range, Samples, TimeFormat, format_position};
 
 pub const HEADER_W: f32 = 236.0;
@@ -70,6 +70,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         egui::Panel::top("universe").exact_size(64.0).frame(egui::Frame::NONE.fill(Tokens::current().universe_bg)).show(ui, |ui| universe(app, ui));
     }
     crate::docking::show(app, ui, crate::MainWindow::Edit);
+    transform_window(app, ui.ctx());
 }
 
 /// Universe: the whole session in miniature; the box is the visible area (drag or click to move).
@@ -216,12 +217,14 @@ fn main_area_content(app: &mut SoundApp, ui: &mut Ui) {
     for id in ids {
         let Some(h) = app.engine.session().track(id).map(track_height) else { continue };
         let row = Rect::from_min_max(pos2(full.min.x, y), pos2(tl.max.x, y + h));
+        // Registered before the row draws: a gesture on this row (a clip move or a tool sweep)
+        // looks its own row up while dragging.
+        app.edit_layout.rows.push((id.0, [row.min.x, row.min.y, row.max.x, row.max.y]));
         if row.max.y >= clip_rect.min.y && row.min.y <= clip_rect.max.y {
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(row));
             child.set_clip_rect(clip_rect);
             track_row(app, &mut child, id, row, tl);
         }
-        app.edit_layout.rows.push((id.0, [row.min.x, row.min.y, row.max.x, row.max.y]));
         y += h + 1.0;
         content_h += h + 1.0;
     }
@@ -1233,6 +1236,44 @@ fn draw_clip(app: &SoundApp, painter: &egui::Painter, s: &Session, track: &Track
         painter.rect_filled(Rect::from_center_size(pos2(icon.center().x, icon.center().y + 2.0), vec2(icon.width(), 3.0)), 1.0, col);
         painter.text(pos2(icon.max.x + 3.0, icon.center().y), Align2::LEFT_CENTER, format!("{:+.1} dB", clip.gain_db), regular(9.5), col);
     }
+    // Bend anchors (T08): destination lines with source → destination readouts.
+    if !clip.warp.is_empty() && body_r.width() > 8.0 {
+        let col = Tokens::current().accent;
+        let pending = app.engine.warp.status(clip.id).is_some();
+        for a in &clip.warp {
+            let x = x_of(s, tl, clip.start + a.dst);
+            if x < body_r.min.x || x > body_r.max.x {
+                continue;
+            }
+            painter.line_segment([pos2(x, body_r.min.y), pos2(x, body_r.max.y)], Stroke::new(if pending { 1.0 } else { 1.5 }, col));
+            painter.add(Shape::convex_polygon(
+                vec![pos2(x - 4.0, body_r.min.y), pos2(x + 4.0, body_r.min.y), pos2(x, body_r.min.y + 6.0)],
+                col,
+                Stroke::NONE,
+            ));
+            if body_r.height() > 30.0 {
+                let ms = |v: i64| v as f64 * 1000.0 / s.sample_rate.as_f64();
+                painter.text(
+                    pos2(x + 3.0, body_r.max.y - 12.0),
+                    Align2::LEFT_TOP,
+                    format!("{:.1}→{:.1} ms", ms(a.src), ms(a.dst)),
+                    regular(9.0),
+                    col,
+                );
+            }
+        }
+        if pending {
+            painter.text(pos2(body_r.min.x + 4.0, body_r.min.y + 2.0), Align2::LEFT_TOP, "rendering…", regular(9.0), col);
+        } else if let Some(soundcraft_engine::warp::Status::Error { message, .. }) = app.engine.warp.status(clip.id) {
+            painter.text(
+                pos2(body_r.min.x + 4.0, body_r.min.y + 2.0),
+                Align2::LEFT_TOP,
+                format!("Bend error: {message}"),
+                regular(9.0),
+                Tokens::current().rec,
+            );
+        }
+    }
     // Fades.
     let fade_col = Color32::from_rgba_unmultiplied(255, 255, 255, 90);
     if clip.fade_in.len > 0 {
@@ -1439,21 +1480,59 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
     let at = sample_at(&s, tl, p.x).max(0);
     let hit = clip_at(track, at).cloned();
     let edges = hit.as_ref().map(|c| (x_of(&s, tl, c.start), x_of(&s, tl, c.end())));
-    // Effective tool under the Smart tool.
-    let eff = if tool == Tool::Smart { smart_tool_at(p, lane, edges) } else { tool };
+    // Effective tool under the Smart tool / Arrow (Link, alternate tool), frozen per gesture.
+    let alt_held = mods.ctrl || mods.command;
+    let eff = effective_tool(tool, s.edit.tool_link, s.edit.alt_tool, alt_held, p, lane, edges);
+    let anchor_near = |q: Pos2| -> Option<(ClipId, usize)> {
+        let c = hit.as_ref()?;
+        c.warp.iter().enumerate().find(|(_, a)| (x_of(&s, tl, c.start + a.dst) - q.x).abs() < 6.0).map(|(i, _)| (c.id, i))
+    };
     if resp.hovered() {
         let icon = match eff {
             Tool::Trim => egui::CursorIcon::ResizeHorizontal,
             Tool::Grabber => egui::CursorIcon::Grab,
-            Tool::Selector => egui::CursorIcon::Text,
+            Tool::Selector | Tool::Range => egui::CursorIcon::Text,
             Tool::Zoom => egui::CursorIcon::ZoomIn,
-            Tool::Pencil => egui::CursorIcon::Crosshair,
+            Tool::Pencil | Tool::Paint => egui::CursorIcon::Crosshair,
+            Tool::Split => egui::CursorIcon::VerticalText,
+            Tool::Eraser | Tool::Mute => egui::CursorIcon::PointingHand,
+            Tool::Bend => {
+                if anchor_near(p).is_some() {
+                    egui::CursorIcon::ResizeHorizontal
+                } else {
+                    egui::CursorIcon::Crosshair
+                }
+            }
+            Tool::Listen => egui::CursorIcon::Help,
             _ => egui::CursorIcon::Default,
         };
         ui.ctx().set_cursor_icon(icon);
+        if eff == Tool::Split
+            && let Some(c) = &hit
+        {
+            // T04: preview line and exact time readout at the (snapped) split position.
+            let sx = x_of(&s, tl, snap(&s, at));
+            if sx > x_of(&s, tl, c.start) && sx < x_of(&s, tl, c.end()) {
+                ui.painter().line_segment([pos2(sx, lane.min.y), pos2(sx, lane.max.y)], Stroke::new(1.0, Tokens::current().accent));
+                let txt = format_position(snap(&s, at), s.edit.main_counter, s.sample_rate, &s.tempo, s.frame_rate, s.timecode_start);
+                ui.painter().text(pos2(sx + 4.0, lane.min.y + 2.0), Align2::LEFT_TOP, txt, regular(9.5), Tokens::current().text);
+            }
+        }
     }
     let auto_view = AutoParam::parse(&track.view);
-    let fade_corner = if tool == Tool::Smart { edges.and_then(|e| smart_fade_corner(p, lane, e)) } else { None };
+    let fade_corner = if matches!(tool, Tool::Smart | Tool::Arrow) && matches!(eff, Tool::Grabber | Tool::Range | Tool::Trim | Tool::Selector) {
+        edges.and_then(|e| smart_fade_corner(p, lane, e))
+    } else {
+        None
+    };
+    // T09: Listen starts on the press (not after a drag threshold) and ends on release.
+    if eff == Tool::Listen && resp.is_pointer_button_down_on() && app.gesture.is_none() && !app.engine.session().listen.active() {
+        if let Err(e) = app.run("audition.start", json!({"tracks": [track.id.0], "at": at})) {
+            app.ui.status = e;
+        } else {
+            app.gesture = Some(Gesture::Listen { track: track.id });
+        }
+    }
     if fade_corner.is_some() && resp.hovered() {
         ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeNwSe);
     }
@@ -1481,9 +1560,31 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
         && let (Some(fade_in), Some(c)) = (fade_corner, hit.as_ref())
     {
         app.gesture = Some(Gesture::Fade { clip: c.id, track: track.id, fade_in, to: at });
-    } else if resp.drag_started() {
+    } else if resp.drag_started() && !matches!(app.gesture, Some(Gesture::Listen { .. })) {
+        let selection_or = |c: &Clip| if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
         app.gesture = match eff {
-            Tool::Selector | Tool::Smart => Some(Gesture::Select { track: track.id, anchor: snap(&s, at), tracks: vec![track.id] }),
+            // The range anchors where the button went down, not where the drag threshold was crossed.
+            Tool::Selector | Tool::Smart | Tool::Range => {
+                Some(Gesture::Select { track: track.id, anchor: snap(&s, sample_at(&s, tl, press.x).max(0)), tracks: vec![track.id] })
+            }
+            Tool::Eraser => hit.as_ref().map(|c| Gesture::Erase { clips: selection_or(c) }),
+            Tool::Mute => hit.as_ref().map(|c| Gesture::MuteSweep { target: !c.muted, clips: selection_or(c) }),
+            Tool::Paint => {
+                let clip = if auto_view.is_none() { hit.as_ref().map(|c| c.id) } else { None };
+                (auto_view.is_some() || clip.is_some()).then(|| Gesture::Paint {
+                    track: track.id,
+                    clip,
+                    auto: auto_view.as_ref().map(automation_id),
+                    start: at,
+                    start_v: lane_value(track, auto_view.as_ref(), lane, press.y),
+                    points: Vec::new(),
+                })
+            }
+            Tool::Bend => anchor_near(press).and_then(|(clip, index)| {
+                let c = hit.as_ref()?;
+                Some(Gesture::BendMove { clip, index, dst: c.warp.get(index)?.dst })
+            }),
+            Tool::Split | Tool::Listen | Tool::Arrow => None,
             Tool::Grabber => hit.as_ref().map(|c| {
                 let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
                 Gesture::MoveClips { clips, grab_at: at, delta: 0, from_track: track.id, to_track: track.id }
@@ -1565,6 +1666,27 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
                     }
                 }
             }
+            Some(Gesture::Erase { clips }) | Some(Gesture::MuteSweep { clips, .. }) => {
+                // Each clip once, on whichever track the pointer is over.
+                let under = to_track.and_then(|t2| s.track(t2)).and_then(|tr| clip_at(tr, at)).map(|c| c.id);
+                if let Some(id) = under
+                    && !clips.contains(&id)
+                {
+                    clips.push(id);
+                }
+            }
+            Some(Gesture::Paint { points, auto, clip, .. }) => {
+                let v = lane_value(track, auto.as_deref().and_then(AutoParam::parse).as_ref(), lane, p.y);
+                let inside = clip.is_none_or(|id| s.find_clip(id).is_some_and(|(_, c)| c.range().contains(at)));
+                if inside && points.last().is_none_or(|(a, _)| (at - a).abs() as f64 > s.edit.zoom.samples_per_px * 3.0) {
+                    points.push((at, v));
+                }
+            }
+            Some(Gesture::BendMove { clip, dst, .. }) => {
+                if let Some((_, c)) = s.find_clip(*clip) {
+                    *dst = (at - c.start).clamp(1, c.length - 1);
+                }
+            }
             _ => {}
         }
         // Live selection feedback.
@@ -1610,6 +1732,28 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
                     }
                 }
             }
+            Some(Gesture::Erase { clips }) => {
+                let _ = app.run("edit.erase_clips", json!({"clips": clips.iter().map(|c| c.0).collect::<Vec<_>>()}));
+            }
+            Some(Gesture::MuteSweep { target, clips }) => {
+                let _ = app.run("edit.mute_clips", json!({"clips": clips.iter().map(|c| c.0).collect::<Vec<_>>(), "muted": target}));
+            }
+            Some(Gesture::Paint { track: t, clip, auto, start, start_v, points }) => {
+                let end_v = lane_value(track, auto.as_deref().and_then(AutoParam::parse).as_ref(), lane, p.y);
+                commit_paint(app, t, clip, auto, start, start_v, at, end_v, points);
+            }
+            Some(Gesture::BendMove { clip, index, dst }) => {
+                if let Some((_, c)) = app.engine.session().find_clip(clip).map(|(t, c)| (t, c.clone())) {
+                    let mut anchors = c.warp.clone();
+                    if let Some(a) = anchors.get_mut(index) {
+                        a.dst = dst;
+                    }
+                    set_warp(app, clip, anchors);
+                }
+            }
+            Some(Gesture::Listen { .. }) => {
+                let _ = app.run("audition.stop", json!({}));
+            }
             Some(Gesture::ZoomBox { start }) => {
                 let a = sample_at(&s, tl, start.min(p.x));
                 let b = sample_at(&s, tl, start.max(p.x));
@@ -1634,6 +1778,44 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
             Tool::Zoom => {
                 let _ = app.run(if mods.alt { "view.zoom_out" } else { "view.zoom_in" }, json!({}));
             }
+            Tool::Split => {
+                if let Some(c) = &hit {
+                    let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
+                    let _ = app.run("edit.split_at", json!({"at": snap(&s, at), "clips": clips.iter().map(|c| c.0).collect::<Vec<_>>()}));
+                }
+            }
+            Tool::Eraser => {
+                if let Some(c) = &hit {
+                    let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
+                    let _ = app.run("edit.erase_clips", json!({"clips": clips.iter().map(|c| c.0).collect::<Vec<_>>()}));
+                }
+            }
+            Tool::Mute => {
+                if let Some(c) = &hit {
+                    let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
+                    let _ = app.run("edit.mute_clips", json!({"clips": clips.iter().map(|c| c.0).collect::<Vec<_>>(), "muted": !c.muted}));
+                }
+            }
+            Tool::Bend => {
+                if let Some(c) = &hit
+                    && c.is_audio()
+                {
+                    let mut anchors = c.warp.clone();
+                    if mods.alt {
+                        if let Some((_, i)) = anchor_near(p) {
+                            anchors.remove(i);
+                            set_warp(app, c.id, anchors);
+                        }
+                    } else if anchor_near(p).is_none() {
+                        let rel = (at - c.start).clamp(1, c.length - 1);
+                        let src = warp_src_of(&c.warp, rel);
+                        anchors.push(WarpAnchor { src, dst: rel });
+                        anchors.sort_by_key(|a| a.src);
+                        set_warp(app, c.id, anchors);
+                    }
+                }
+            }
+            Tool::Listen | Tool::Paint => {}
             Tool::Pencil => {
                 if let Some(param) = &auto_view {
                     let (lo, hi, _) = param.range();
@@ -1899,6 +2081,206 @@ mod tests {
     fn hold_clears_when_playhead_returns_or_transport_stops() {
         assert_eq!(follow_update(true, true, true, 9_000, 9_000, None, true, 96_000), (false, None));
         assert_eq!(follow_update(false, true, false, 9_000, 9_000, None, true, 96_000), (false, None));
+    }
+}
+
+/// T10: the tool a pointer gesture uses (frozen at pointer-down by the caller). Arrow: the
+/// alternate tool while its modifier is held; Trim within 6 px of a clip edge; with Link on and a
+/// tall enough track, Range in the upper half over a clip; otherwise object select/move
+/// (Grabber semantics). Range behaves as the Selector. Compact tracks (< 40 px) keep Range
+/// reachable from the toolbar instead of a hit zone.
+pub fn effective_tool(tool: Tool, link: bool, alt: Option<Tool>, alt_held: bool, p: egui::Pos2, lane: egui::Rect, edges: Option<(f32, f32)>) -> Tool {
+    const COMPACT: f32 = 40.0;
+    match tool {
+        Tool::Smart => smart_tool_at(p, lane, edges),
+        Tool::Arrow => {
+            if alt_held && let Some(a) = alt {
+                return effective_tool(a, false, None, false, p, lane, edges);
+            }
+            match edges {
+                Some((xs, xe)) if (p.x - xs).abs() < 6.0 || (p.x - xe).abs() < 6.0 => Tool::Trim,
+                Some(_) if link && lane.height() >= COMPACT && p.y < lane.center().y => Tool::Range,
+                Some(_) => Tool::Grabber,
+                None if link => Tool::Range,
+                None => Tool::Grabber,
+            }
+        }
+        t => t,
+    }
+}
+
+/// The value a pointer height means in a lane: the shown automation parameter's range, or clip
+/// gain in dB (−36..+36, the clip-gain line's scale) when no lane is shown.
+fn lane_value(track: &Track, auto: Option<&AutoParam>, lane: egui::Rect, y: f32) -> f64 {
+    let k = f64::from(((lane.max.y - 4.0 - y) / (lane.height() - 8.0)).clamp(0.0, 1.0));
+    match auto {
+        Some(param) => {
+            let (lo, hi, _) = param.range();
+            let (lo, hi) = if matches!(param, AutoParam::Volume | AutoParam::SendLevel(_)) {
+                (-60.0, 12.0)
+            } else if matches!(param, AutoParam::Plugin { .. }) {
+                plugin_range(track, param)
+            } else {
+                (lo, hi)
+            };
+            f64::from(lo) + f64::from(hi - lo) * k
+        }
+        None => -36.0 + 72.0 * k,
+    }
+}
+
+/// Source time (original material) that plays at destination `rel` under `anchors`: piecewise
+/// linear through (0,0) and the anchors, speed 1 after the last one.
+pub(crate) fn warp_src_of(anchors: &[WarpAnchor], rel: Samples) -> Samples {
+    let mut prev = WarpAnchor { src: 0, dst: 0 };
+    for a in anchors {
+        if rel <= a.dst {
+            let k = (rel - prev.dst) as f64 / (a.dst - prev.dst).max(1) as f64;
+            return prev.src + (k * (a.src - prev.src) as f64).round() as Samples;
+        }
+        prev = *a;
+    }
+    prev.src + (rel - prev.dst)
+}
+
+fn set_warp(app: &mut SoundApp, clip: ClipId, anchors: Vec<WarpAnchor>) {
+    let arr: Vec<[i64; 2]> = anchors.iter().map(|a| [a.src, a.dst]).collect();
+    if let Err(e) = app.run("clip.warp_set", json!({"clip": clip.0, "anchors": arr})) {
+        app.ui.status = e;
+    }
+}
+
+/// Commit a Paint gesture as one draw command (T06). Shapes other than freehand take their
+/// endpoints from the press and release heights; periodic shapes take the press height as the
+/// baseline and the drag height as the amplitude. Transform opens the numeric box instead.
+#[allow(clippy::too_many_arguments)]
+fn commit_paint(
+    app: &mut SoundApp,
+    track: TrackId,
+    clip: Option<ClipId>,
+    auto: Option<String>,
+    start: Samples,
+    start_v: f64,
+    end: Samples,
+    end_v: f64,
+    mut points: Vec<(Samples, f64)>,
+) {
+    let (shape, cycles) = {
+        let e = &app.engine.session().edit;
+        (e.paint_shape.clone(), e.paint_cycles)
+    };
+    let (a, b, from, to) = if start <= end { (start, end, start_v, end_v) } else { (end, start, end_v, start_v) };
+    if b <= a {
+        return;
+    }
+    if shape == "transform" {
+        app.transform =
+            Some(TransformBox { track, clip, auto, box_start: a, box_end: b, time_shift: 0.0, time_scale: 1.0, value_offset: 0.0, value_scale: 1.0 });
+        return;
+    }
+    let mut params = json!({"shape": shape, "start": a, "end": b});
+    match shape.as_str() {
+        "freehand" => {
+            points.sort_by_key(|(at, _)| *at);
+            if points.first().is_none_or(|(at, _)| *at != a) {
+                points.insert(0, (a, from));
+            }
+            if points.last().is_none_or(|(at, _)| *at != b) {
+                points.push((b, to));
+            }
+            params["points"] = json!(points.iter().map(|(at, v)| json!([at, v])).collect::<Vec<_>>());
+        }
+        "line" | "parabola" => {
+            params["from"] = json!(from);
+            params["to"] = json!(to);
+        }
+        _ => {
+            params["baseline"] = json!(start_v);
+            params["amplitude"] = json!((end_v - start_v).abs());
+            params["cycles"] = json!(cycles);
+        }
+    }
+    let r = match (auto, clip) {
+        (Some(param), _) => {
+            params["tracks"] = json!([track.0]);
+            params["param"] = json!(param);
+            app.run("automation.draw", params)
+        }
+        (None, Some(c)) => {
+            params["clip"] = json!(c.0);
+            app.run("clip.gain_draw", params)
+        }
+        (None, None) => return,
+    };
+    if let Err(e) = r {
+        app.ui.status = e;
+    }
+}
+
+/// Paint › Transform numeric controls (T06): shift/scale the points inside the dragged box.
+fn transform_window(app: &mut SoundApp, ctx: &egui::Context) {
+    let Some(mut tb) = app.transform.clone() else { return };
+    let mut open = true;
+    let mut apply = false;
+    let mut cancel = false;
+    egui::Window::new("Transform").collapsible(false).resizable(false).open(&mut open).show(ctx, |ui| {
+        let s = app.engine.session();
+        let fmt = |at: Samples| format_position(at, s.edit.main_counter, s.sample_rate, &s.tempo, s.frame_rate, s.timecode_start);
+        ui.label(format!(
+            "Target: {} · {} · {} – {}",
+            s.track(tb.track).map(|t| t.name.as_str()).unwrap_or("?"),
+            tb.auto.clone().unwrap_or_else(|| "clip gain".into()),
+            fmt(tb.box_start),
+            fmt(tb.box_end)
+        ));
+        egui::Grid::new("transform_grid").num_columns(2).show(ui, |ui| {
+            ui.label("Time shift (ms)");
+            let mut ms = tb.time_shift * 1000.0 / s.sample_rate.as_f64();
+            ui.add(egui::DragValue::new(&mut ms).speed(1.0));
+            tb.time_shift = ms * s.sample_rate.as_f64() / 1000.0;
+            ui.end_row();
+            ui.label("Time scale");
+            ui.add(egui::DragValue::new(&mut tb.time_scale).speed(0.01).range(0.01..=1000.0));
+            ui.end_row();
+            ui.label("Value offset");
+            ui.add(egui::DragValue::new(&mut tb.value_offset).speed(0.1));
+            ui.end_row();
+            ui.label("Value scale");
+            ui.add(egui::DragValue::new(&mut tb.value_scale).speed(0.01));
+            ui.end_row();
+        });
+        ui.horizontal(|ui| {
+            if ui.button("Apply").clicked() {
+                apply = true;
+            }
+            if ui.button("Cancel").clicked() {
+                cancel = true;
+            }
+        });
+    });
+    let open = open && !cancel;
+    if apply {
+        let mut params = json!({"shape": "transform", "box_start": tb.box_start, "box_end": tb.box_end, "time_shift": tb.time_shift.round(), "time_scale": tb.time_scale, "value_offset": tb.value_offset, "value_scale": tb.value_scale});
+        let r = match (&tb.auto, tb.clip) {
+            (Some(param), _) => {
+                params["tracks"] = json!([tb.track.0]);
+                params["param"] = json!(param);
+                app.run("automation.draw", params)
+            }
+            (None, Some(c)) => {
+                params["clip"] = json!(c.0);
+                app.run("clip.gain_draw", params)
+            }
+            (None, None) => Ok(Value::Null),
+        };
+        if let Err(e) = r {
+            app.ui.status = e;
+        }
+        app.transform = None;
+    } else if open {
+        app.transform = Some(tb);
+    } else {
+        app.transform = None;
     }
 }
 

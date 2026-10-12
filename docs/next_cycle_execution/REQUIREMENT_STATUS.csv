@@ -8,19 +8,19 @@ R06,1,"VST3 scans, editors/state/PDC, CLAP",UNVERIFIED,prior: plugin-compatibili
 R07,1,"Isolated scanning, quarantine, runtime sandbox experiment",PASS_PORTABLE,"scan_isolated tests (mix), plugin_scan (ui)",7bffb39,P,"scan isolation + cache + quarantine done; runtime sandbox experiment E03 run (ipc-probe.csv): containment feasible, blocking IPC not default; runtime part DEFERRED to Sprint 3 R31"
 R08,1,Remove bundled processors; legacy placeholders,PASS_PORTABLE,"baseline-ci.log (missing_plugin, no_bundled tests)",7bffb39,P,rerun; placeholders round-trip
 R09,1,Shared command/parameter/knowledge contracts,PASS_PORTABLE,envelope tests (engine),7bffb39,P,envelope/receipt/dedup/stale-revision + knowledge corpus; clients adopt in Sprints 2/4
-R10,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R11,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R12,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R13,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R14,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R15,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R16,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R17,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R18,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R19,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R20,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R21,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R22,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
+R10,2,"Takes, comping, punch/pre-roll, fades, gain, strip silence and vocal edits",PASS_PORTABLE,sprint_02/vocal-coverage.csv; vocal-edit-tests.log,worktree (Sprint 2 commit follows),P,prior rows rerun + lead/double workflow through the tool commands with save/reopen and unchanged hashes; native walkthrough pending
+R11,2,All eight Studio One audio mouse tools and eight Paint variants,PASS_PORTABLE,sprint_02/toolbar-coverage.csv; toolbar-tests.log; audio_tools UI test,worktree (Sprint 2 commit follows),P,"T01-T05,T07-T10,T-T1..T-T5 portable; T06 plugin-parameter lanes finish in Sprint 3; T-T6 native pending"
+R12,2,Separate Pro Tools-style Nudge section with exact sample arithmetic,PASS_PORTABLE,sprint_02/nudge/nudge-engine-tests.log,worktree (Sprint 2 commit follows),P,"N01-N06,N08 rerun (1000 x 1 ms round trip exact); N07 physical keypad + N09 native pending; B03 toolkit blocker"
+R13,2,Complete versioned Pro Tools and Studio One shortcut inventories and separate profiles,PARTIAL,sprint_02/shortcut-inventory.csv; shortcut_profiles tests,worktree (Sprint 2 commit follows),P,profiles/capture/import/export/conflicts PASS_PORTABLE; Studio One chords pending native verification (manuals unreachable: proxy 403); keypad chords unsupported (B03)
+R14,2,"Simple buses, sends, independent send pan and spill",PASS_PORTABLE,sprint_02/routing-mixers-profiles-slots-tests.log; bus-slot-commands-tests.log,worktree (Sprint 2 commit follows),P,prior-cycle suites rerun; B-T7 owner UX pending
+R15,2,Professional Console mixer and Visual mixer on one shared engine,PASS_PORTABLE,sprint_02/routing-mixers-profiles-slots-tests.log,worktree (Sprint 2 commit follows),P,VM rows rerun; native interaction pending
+R16,2,"Defined Logic-style clean profile, clean f64 summing and legacy compatibility",PASS_PORTABLE,sprint_02/routing-mixers-profiles-slots-tests.log,worktree (Sprint 2 commit follows),P,M-T rows rerun; native models deferred by owner
+R17,2,"Dedicated LUNA-style Summing/Tape slots, order, PDC and personal plugin providers",PASS_PORTABLE,sprint_02/routing-mixers-profiles-slots-tests.log,worktree (Sprint 2 commit follows),P,SL-T rows rerun; personal plugin AWAITING_EXTERNAL_PLUGIN
+R18,2,Record/Edit/Mix/Master UI layouts and compatible SML Studio branding,PASS_PORTABLE,studio_layouts UI test,worktree (Sprint 2 commit follows),P,four layouts of one app; identities unchanged; Master is a labelled navigation shell (R34 in Sprint 4)
+R19,2,FL Studio-inspired menu responsiveness measured under load,PARTIAL,sprint_02/menu-timing.csv,worktree (Sprint 2 commit follows),P,menu tree/search index cached; portable 100-rep cold/warm at W1 recorded; native W1/W2 + audio continuity pending
+R20,2,"Custom data-only skins, scaling and accessible fallback themes",PASS_PORTABLE,theme tests; theme_docking (1.0/1.5/2.0 incl. high contrast),worktree (Sprint 2 commit follows),P,"validated JSON themes, editor, import/export/reset, contrast rules, fallback; native scaling review pending"
+R21,2,Authenticated phone browser remote with native transport ownership,PARTIAL,sprint_02/remote-tests.log; studio_layouts phone test,worktree (Sprint 2 commit follows),P,pairing/revocation/Origin/allowlist/rate limit/queue/dedup/stale/record nonce/meters PASS_PORTABLE; HTTP only (no HTTPS/PWA/mic/QR); real phone test pending (M)
+R22,2,Versioned searchable knowledge base covering real tools and limitations,PASS_PORTABLE,help:: tests; Command Help window,worktree (Sprint 2 commit follows),P,help.search/help.limits; nonexistent tools return nothing; assistant integration Sprint 4
 R23,3,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R24,3,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R25,3,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
@@ -35,5 +35,5 @@ R33,4,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,
 R34,4,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R35,4,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R36,4,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
-R37,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
+R37,2,Monitor-only volume/dim/mono and real cue-route control where supported,PARTIAL,sprint_02/monitor-tests.log; studio_layouts monitor test,worktree (Sprint 2 commit follows),P,"device-output-only stage; cue reported unavailable without a path, detected but not mixed with one"
 R38,4,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started

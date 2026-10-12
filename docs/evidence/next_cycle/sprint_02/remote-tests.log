@@ -1,0 +1,17 @@
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+   Compiling soundcraft-remote v0.5.0 (/home/user/SML-Pro-Tools/crates/remote)
+    Finished `test` profile [optimized + debuginfo] target(s) in 21.74s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_remote-2fed585085ec3446)
+
+running 2 tests
+test tests::pairing_auth_origin_replay_and_two_clients ... ok
+test tests::rate_limit_queue_bound_meters_and_pairing_expiry ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.63s
+
+   Doc-tests soundcraft_remote
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

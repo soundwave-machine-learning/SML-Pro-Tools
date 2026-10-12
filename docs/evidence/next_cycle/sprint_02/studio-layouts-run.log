@@ -1,0 +1,6 @@
+test monitor_controls_live_outside_the_document ... ok
+test layouts_share_one_session_and_change_no_identity ... ok
+test phone_client_drives_the_host_through_the_queue ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.63s
+

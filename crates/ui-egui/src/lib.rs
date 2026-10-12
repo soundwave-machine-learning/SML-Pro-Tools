@@ -12,6 +12,7 @@ pub mod edit_window;
 pub mod extra_windows;
 pub mod fonts;
 pub mod icons;
+pub mod layouts;
 pub mod menus;
 pub mod midi_editor;
 pub mod mix_window;
@@ -21,6 +22,7 @@ pub mod palette;
 pub mod panels;
 pub mod plugin_scan;
 pub mod score_editor;
+pub mod shortcut_profiles;
 pub mod shortcuts;
 pub mod theme;
 pub mod toolbar;
@@ -45,6 +47,26 @@ pub use control::ControlRequest;
 pub enum MainWindow {
     Edit,
     Mix,
+    /// Edit with the Recording essentials docked (R18).
+    Record,
+    /// Navigation shell for the Sprint 4 mastering workflow (R18/R34).
+    Master,
+}
+
+impl MainWindow {
+    pub fn label(self) -> &'static str {
+        match self {
+            MainWindow::Edit => "Edit",
+            MainWindow::Mix => "Mix",
+            MainWindow::Record => "Record",
+            MainWindow::Master => "Master",
+        }
+    }
+
+    /// Layouts that show the Edit timeline and its toolbar.
+    pub fn is_edit(self) -> bool {
+        matches!(self, MainWindow::Edit | MainWindow::Record)
+    }
 }
 
 /// UI state (serde, so agents can read and set it).
@@ -65,6 +87,14 @@ pub struct UiState {
     /// Simple recording panel (R08).
     #[serde(default)]
     pub show_recording: bool,
+    /// Window › SML Remote (R21).
+    #[serde(default)]
+    pub show_remote: bool,
+    /// Window › Command Help (R22).
+    #[serde(default)]
+    pub show_help: bool,
+    #[serde(skip)]
+    pub help_query: String,
     pub show_audio_health: bool,
     pub show_about: bool,
     pub show_midi_editor: bool,
@@ -107,6 +137,26 @@ pub struct UiState {
     pub configurations: Vec<(String, Value)>,
     /// Appearance (`ui.theme`): dark by default, light or follow the system on request.
     pub theme: theme::ThemeMode,
+    /// Shortcut profile (R13): Pro Tools style, Studio One style or Custom (= `shortcut_base`
+    /// plus `shortcut_overrides`, command key → chord; empty chord = unbound).
+    /// The user's theme file for `ThemeMode::Custom` (validated; an invalid saved one loads as None).
+    #[serde(default, deserialize_with = "theme::lenient_custom")]
+    pub theme_custom: Option<theme::ThemeData>,
+    /// Monitor-only controls (R37): speaker path, never export; per machine.
+    #[serde(default)]
+    pub monitor: MonitorState,
+    /// SML Remote (R21): the interface to bind when started (loopback by default) and whether
+    /// the service starts with the app (opt-in; pairing is always explicit).
+    #[serde(default = "default_remote_bind")]
+    pub remote_bind: String,
+    #[serde(default)]
+    pub remote_autostart: bool,
+    #[serde(default)]
+    pub shortcut_profile: shortcut_profiles::Profile,
+    #[serde(default)]
+    pub shortcut_base: shortcut_profiles::Profile,
+    #[serde(default)]
+    pub shortcut_overrides: std::collections::BTreeMap<String, String>,
     /// Visual mixer channel filter (view only).
     #[serde(skip)]
     pub visual_filter: String,
@@ -172,6 +222,9 @@ impl Default for UiState {
             show_undo_history: false,
             show_session_info: false,
             show_recording: false,
+            show_remote: false,
+            show_help: false,
+            help_query: String::new(),
             show_audio_health: false,
             show_about: false,
             show_midi_editor: false,
@@ -209,6 +262,13 @@ impl Default for UiState {
             workspace_dir: String::new(),
             configurations: Vec::new(),
             theme: theme::ThemeMode::Dark,
+            theme_custom: None,
+            monitor: MonitorState::default(),
+            remote_bind: default_remote_bind(),
+            remote_autostart: false,
+            shortcut_profile: shortcut_profiles::Profile::default(),
+            shortcut_base: shortcut_profiles::Profile::default(),
+            shortcut_overrides: std::collections::BTreeMap::new(),
             visual_filter: String::new(),
             visual_gesture: None,
             output_devices: Vec::new(),
@@ -250,16 +310,118 @@ pub struct MeterDisplay {
 /// An in-progress mouse gesture in the Edit window.
 #[derive(Debug, Clone)]
 pub enum Gesture {
-    Select { track: TrackId, anchor: Samples, tracks: Vec<TrackId> },
-    MoveClips { clips: Vec<soundcraft_model::ClipId>, grab_at: Samples, delta: Samples, from_track: TrackId, to_track: TrackId },
-    TrimStart { clip: soundcraft_model::ClipId, track: TrackId, to: Samples },
-    TrimEnd { clip: soundcraft_model::ClipId, track: TrackId, to: Samples },
-    Fade { clip: soundcraft_model::ClipId, track: TrackId, fade_in: bool, to: Samples },
-    Scrub { last: Samples },
-    Fader { track: TrackId, start_db: f32 },
-    ClipGain { clip: soundcraft_model::ClipId, track: TrackId, pos: f32, anchor: (f32, f32), fine: bool, fader_bottom: egui::Pos2 },
-    Pencil { track: TrackId, points: Vec<(Samples, f32)> },
-    ZoomBox { start: f32 },
+    Select {
+        track: TrackId,
+        anchor: Samples,
+        tracks: Vec<TrackId>,
+    },
+    MoveClips {
+        clips: Vec<soundcraft_model::ClipId>,
+        grab_at: Samples,
+        delta: Samples,
+        from_track: TrackId,
+        to_track: TrackId,
+    },
+    TrimStart {
+        clip: soundcraft_model::ClipId,
+        track: TrackId,
+        to: Samples,
+    },
+    TrimEnd {
+        clip: soundcraft_model::ClipId,
+        track: TrackId,
+        to: Samples,
+    },
+    Fade {
+        clip: soundcraft_model::ClipId,
+        track: TrackId,
+        fade_in: bool,
+        to: Samples,
+    },
+    Scrub {
+        last: Samples,
+    },
+    Fader {
+        track: TrackId,
+        start_db: f32,
+    },
+    ClipGain {
+        clip: soundcraft_model::ClipId,
+        track: TrackId,
+        pos: f32,
+        anchor: (f32, f32),
+        fine: bool,
+        fader_bottom: egui::Pos2,
+    },
+    Pencil {
+        track: TrackId,
+        points: Vec<(Samples, f32)>,
+    },
+    ZoomBox {
+        start: f32,
+    },
+    /// Eraser sweep (T05): every clip the pointer passed, each id once; committed on release.
+    Erase {
+        clips: Vec<soundcraft_model::ClipId>,
+    },
+    /// Mute sweep (T07): the target state comes from the first clip; each id once.
+    MuteSweep {
+        target: bool,
+        clips: Vec<soundcraft_model::ClipId>,
+    },
+    /// Paint (T06): the drawn range and values; `auto` = the shown automation lane, else the
+    /// clip-gain envelope of `clip`.
+    Paint {
+        track: TrackId,
+        clip: Option<soundcraft_model::ClipId>,
+        auto: Option<String>,
+        start: Samples,
+        start_v: f64,
+        points: Vec<(Samples, f64)>,
+    },
+    /// Bend (T08): dragging anchor `index` of `clip` to destination `dst` (clip-relative).
+    BendMove {
+        clip: soundcraft_model::ClipId,
+        index: usize,
+        dst: Samples,
+    },
+    /// Listen (T09): the audition runs while the button is held.
+    Listen {
+        track: TrackId,
+    },
+}
+
+fn default_remote_bind() -> String {
+    "127.0.0.1:0".into()
+}
+
+/// Monitor-only volume/dim/mono (R37).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
+pub struct MonitorState {
+    pub volume_db: f32,
+    pub dim: bool,
+    pub mono: bool,
+}
+
+impl Default for MonitorState {
+    fn default() -> Self {
+        MonitorState { volume_db: 0.0, dim: false, mono: false }
+    }
+}
+
+/// Paint › Transform (T06): the selection box and numeric controls, applied as one command.
+#[derive(Debug, Clone)]
+pub struct TransformBox {
+    pub track: TrackId,
+    pub clip: Option<soundcraft_model::ClipId>,
+    pub auto: Option<String>,
+    pub box_start: Samples,
+    pub box_end: Samples,
+    pub time_shift: f64,
+    pub time_scale: f64,
+    pub value_offset: f64,
+    pub value_scale: f64,
 }
 
 pub struct SoundApp {
@@ -296,6 +458,21 @@ pub struct SoundApp {
     pub meters: HashMap<TrackId, MeterDisplay>,
     pub main_meter: MeterDisplay,
     pub gesture: Option<Gesture>,
+    /// Open Paint › Transform box (numeric controls), if any.
+    pub transform: Option<TransformBox>,
+    /// Resolved shortcut table for the active profile, rebuilt when the profile or overrides change.
+    shortcut_cache: Option<(shortcut_profiles::Profile, shortcut_profiles::Profile, String, Vec<shortcut_profiles::Resolved>)>,
+    /// Command id → chord of the active profile (menus read this per item; rebuilt with the cache).
+    pub shortcut_labels: HashMap<String, String>,
+    /// Keyboard Shortcuts window: the row (override key) waiting for its next chord.
+    pub shortcut_capture: Option<String>,
+    pub shortcut_query: String,
+    /// SML Remote service (R21) while running, and the open pairing code (native builds).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub remote: Option<soundcraft_remote::Server>,
+    pub remote_code: Option<String>,
+    remote_snapshot_rev: Option<(u64, bool, bool, Samples)>,
+    monitor_applied: Option<MonitorState>,
     pub edit_layout: edit_window::EditLayout,
     pub midi: midi_editor::MidiEditorState,
     pub ops: ops_windows::OpsState,
@@ -309,7 +486,7 @@ pub struct SoundApp {
     fonts_ready: bool,
     fonts_installed: bool,
     /// The palette last applied to the context (light?), so visuals are set only on a change.
-    theme_applied: Option<bool>,
+    theme_applied: Option<(bool, theme::Tokens)>,
     /// Last panel host context, used to cancel renderer-owned gestures on explicit replacement.
     pub(crate) docking_context: Option<egui::Context>,
     /// Transport simulation when there is no player (tests, offscreen renders).
@@ -362,6 +539,16 @@ impl SoundApp {
             meters: HashMap::new(),
             main_meter: MeterDisplay::default(),
             gesture: None,
+            transform: None,
+            shortcut_cache: None,
+            shortcut_labels: HashMap::new(),
+            shortcut_capture: None,
+            shortcut_query: String::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            remote: None,
+            remote_code: None,
+            remote_snapshot_rev: None,
+            monitor_applied: None,
             edit_layout: edit_window::EditLayout::default(),
             midi: midi_editor::MidiEditorState::default(),
             ops: ops_windows::OpsState::default(),
@@ -422,6 +609,187 @@ impl SoundApp {
 
     pub fn is_playing(&self) -> bool {
         self.engine.transport.playing
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn serve_remote(&mut self) {}
+
+    /// SML Remote host side (R21): execute queued envelopes on this thread, publish the
+    /// reconnect snapshot when the document or transport changed, feed coalesced meters.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn serve_remote(&mut self) {
+        let Some(server) = self.remote.clone() else { return };
+        if self.remote_code.is_some() && server.pairing_remaining().is_none() {
+            self.remote_code = None;
+        }
+        let ran = server.poll(|env| self.submit_remote(env));
+        let t = &self.engine.transport;
+        let key = (self.engine.revision, t.playing, t.recording, t.position / 4800);
+        if ran > 0 || self.remote_snapshot_rev != Some(key) {
+            self.remote_snapshot_rev = Some(key);
+            server.set_snapshot(self.engine.revision, self.remote_snapshot());
+        }
+        let tracks: serde_json::Map<String, Value> =
+            self.meters.iter().map(|(id, m)| (id.0.to_string(), json!(m.level[0].max(m.level[1])))).collect();
+        server.set_meters(json!({"main": [self.main_meter.level[0], self.main_meter.level[1]], "clip": self.main_meter.clip, "tracks": tracks}));
+    }
+
+    /// Execute one remote envelope: UI-layer commands (monitor, windows) answer with a receipt
+    /// built here; everything else goes through the engine's R09 service (dedup, stale
+    /// revision, atomic rejection).
+    pub fn submit_remote(&mut self, env: &soundcraft_engine::envelope::Envelope) -> soundcraft_engine::envelope::Receipt {
+        use soundcraft_engine::envelope::{Receipt, Rejection};
+        if menus::UI_COMMANDS.iter().any(|c| c.0 == env.command) {
+            let r = menus::run_ui_command(self, &env.command, &env.params);
+            return match r {
+                Some(Ok(v)) => Receipt {
+                    request_id: env.request_id.clone(),
+                    accepted: true,
+                    duplicate: false,
+                    applied: v,
+                    rejection: None,
+                    revision: self.engine.revision,
+                },
+                Some(Err(e)) => Receipt {
+                    request_id: env.request_id.clone(),
+                    accepted: false,
+                    duplicate: false,
+                    applied: Value::Null,
+                    rejection: Some(Rejection::Failed(e)),
+                    revision: self.engine.revision,
+                },
+                None => Receipt {
+                    request_id: env.request_id.clone(),
+                    accepted: false,
+                    duplicate: false,
+                    applied: Value::Null,
+                    rejection: Some(Rejection::UnknownCommand),
+                    revision: self.engine.revision,
+                },
+            };
+        }
+        self.engine.submit(env)
+    }
+
+    /// What a phone sees after (re)connecting: enough to render the controls, never media.
+    pub fn remote_snapshot(&self) -> Value {
+        let s = self.engine.session();
+        let t = &self.engine.transport;
+        let pos = if t.playing { t.position } else { s.edit.selection.start };
+        let position_text = soundcraft_time::format_position(pos, s.edit.main_counter, s.sample_rate, &s.tempo, s.frame_rate, s.timecode_start);
+        let tracks: Vec<Value> = s
+            .tracks
+            .iter()
+            .filter(|x| !x.hidden && matches!(x.kind, soundcraft_model::TrackKind::Audio | soundcraft_model::TrackKind::Aux | soundcraft_model::TrackKind::Instrument))
+            .map(|x| {
+                json!({"id": x.id.0, "name": x.name, "kind": format!("{:?}", x.kind), "volume_db": x.mixer.volume_db, "pan": x.mixer.pan.first().copied().unwrap_or(0.0),
+                    "mute": x.mixer.mute, "solo": x.mixer.solo, "arm": x.mixer.record_arm, "monitor": x.mixer.input_monitor, "selected": s.edit.selected_tracks.contains(&x.id)})
+            })
+            .collect();
+        let clip =
+            s.edit.selected_clips.first().and_then(|c| s.find_clip(*c)).map(|(_, c)| json!({"id": c.id.0, "name": c.name, "rating": c.rating}));
+        json!({
+            "session": s.name,
+            "transport": {"playing": t.playing, "recording": t.recording, "position": pos, "position_text": position_text},
+            "loop": s.edit.loop_playback, "pre_roll": s.edit.pre_post_roll, "countoff": s.edit.countoff,
+            "tracks": tracks,
+            "markers": s.markers.iter().map(|m| json!({"name": m.name, "at": m.start})).collect::<Vec<_>>(),
+            "selected_clip": clip,
+            "monitor": {"volume_db": self.ui.monitor.volume_db, "dim": self.ui.monitor.dim, "mono": self.ui.monitor.mono, "cue": self.cue_path()},
+            "limits": "HTTP only; no PWA, microphone or encryption claimed; receipts are not sample-accurate execution",
+        })
+    }
+
+    /// A dedicated cue/headphone output path, if I/O Setup has one beyond the main output
+    /// (R37: headphone control appears only for a real cue route).
+    pub fn cue_path(&self) -> Option<String> {
+        let s = self.engine.session();
+        s.outputs
+            .iter()
+            .skip(1)
+            .find(|o| {
+                let n = o.name.to_ascii_lowercase();
+                n.contains("cue") || n.contains("phone") || n.contains("hp")
+            })
+            .map(|o| o.name.clone())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn remote_start(&mut self, _bind: Option<&str>) -> Result<Value, String> {
+        Err("SML Remote is not available in the web build".into())
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn remote_stop(&mut self) {
+        self.remote_code = None;
+    }
+
+    /// Start the remote service on the configured interface (explicit opt-in).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn remote_start(&mut self, bind: Option<&str>) -> Result<Value, String> {
+        if let Some(b) = bind {
+            self.ui.remote_bind = b.trim().to_string();
+        }
+        let addr: std::net::SocketAddr = self
+            .ui
+            .remote_bind
+            .parse()
+            .map_err(|e| format!("bind address `{}`: {e} (use host:port, e.g. 127.0.0.1:0 or 0.0.0.0:8787)", self.ui.remote_bind))?;
+        if let Some(old) = self.remote.take() {
+            old.stop();
+        }
+        let server = soundcraft_remote::Server::start(soundcraft_remote::Config { bind: addr, ..soundcraft_remote::Config::default() })
+            .map_err(|e| format!("cannot bind {addr}: {e}"))?;
+        let url = server.url();
+        self.remote = Some(server);
+        self.remote_code = None;
+        self.remote_snapshot_rev = None;
+        Ok(json!({"url": url, "https": false, "note": "plain HTTP on the local network; pair with the code from Window › SML Remote"}))
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn remote_stop(&mut self) {
+        if let Some(s) = self.remote.take() {
+            s.stop();
+        }
+        self.remote_code = None;
+    }
+
+    /// The active profile's table (R13).
+    pub fn shortcut_table(&self) -> Vec<shortcut_profiles::Entry> {
+        shortcut_profiles::table(self.ui.shortcut_profile, self.ui.shortcut_base, &self.ui.shortcut_overrides)
+    }
+
+    /// Resolved rows of the active profile, cached until the profile or an override changes.
+    pub fn active_shortcuts(&mut self) -> &[shortcut_profiles::Resolved] {
+        let fp = soundcraft_engine::autosave::fnv1a64(serde_json::to_string(&self.ui.shortcut_overrides).unwrap_or_default().as_bytes());
+        let stale = self.shortcut_cache.as_ref().is_none_or(|(p, b, f, _)| *p != self.ui.shortcut_profile || *b != self.ui.shortcut_base || *f != fp);
+        if stale {
+            let table = self.shortcut_table();
+            self.shortcut_labels = table.iter().filter(|e| e.params.is_null()).map(|e| (e.command.clone(), e.chord.clone())).collect();
+            let rows = shortcut_profiles::resolve(&table);
+            self.shortcut_cache = Some((self.ui.shortcut_profile, self.ui.shortcut_base, fp, rows));
+        }
+        self.shortcut_cache.as_ref().map_or(&[], |c| c.3.as_slice())
+    }
+
+    /// The chord the active profile gives a command (for menus, search and help).
+    pub fn shortcut_for(&self, command: &str, params: Option<&Value>) -> Option<String> {
+        let want = match params {
+            Some(p) if !p.is_null() => format!("{command}|{p}"),
+            _ => command.to_string(),
+        };
+        self.shortcut_table().into_iter().find(|e| e.key() == want).map(|e| e.chord)
+    }
+
+    /// Whether the Pro Tools-style context keys (F-keys, Enter marker, single-key focus) apply.
+    pub fn pro_tools_keys(&self) -> bool {
+        use shortcut_profiles::Profile;
+        match self.ui.shortcut_profile {
+            Profile::ProTools => true,
+            Profile::StudioOne => false,
+            Profile::Custom => self.ui.shortcut_base != Profile::StudioOne,
+        }
     }
 
     /// Current transport position (playhead while playing, else the edit insertion).
@@ -1064,10 +1432,10 @@ impl SoundApp {
                 ctx.request_repaint();
             }
         }
-        let light = theme::wants_light(ctx, self.ui.theme);
-        if self.theme_applied != Some(light) || theme::is_light() != light {
-            theme::apply(ctx, light);
-            self.theme_applied = Some(light);
+        let (light, tokens) = theme::resolve(ctx, self.ui.theme, self.ui.theme_custom.as_ref());
+        if self.theme_applied != Some((light, tokens)) || theme::is_light() != light || theme::Tokens::current() != tokens {
+            theme::apply_tokens(ctx, light, tokens);
+            self.theme_applied = Some((light, tokens));
         }
         let now = ctx.input(|i| i.time);
         let dt = self.last_frame.map_or(1.0 / 60.0, |t| (now - t) as f32).clamp(0.0, 0.25);
@@ -1075,7 +1443,31 @@ impl SoundApp {
         self.frame_ms = self.frame_ms * 0.9 + dt * 1000.0 * 0.1;
         control::drain(self, ctx);
         self.apply_editor_edits();
-        if !ctx.input(|i| i.pointer.any_down()) {
+        // T05/T07/T09/T10: Escape or focus loss cancels a tool sweep without committing it,
+        // ends a Listen audition and clears temporary tool state.
+        let (esc, focused, pointer_down) = ctx.input(|i| (i.key_pressed(egui::Key::Escape), i.focused, i.pointer.any_down()));
+        if (esc || !focused)
+            && matches!(self.gesture, Some(Gesture::Erase { .. } | Gesture::MuteSweep { .. } | Gesture::Paint { .. } | Gesture::BendMove { .. }))
+        {
+            self.gesture = None;
+        }
+        if esc {
+            self.transform = None;
+        }
+        if self.engine.session().listen.active() && (esc || !focused || !pointer_down) {
+            let _ = self.engine.execute("audition.stop", &json!({}));
+        }
+        // The Listen gesture ends with the button, so a cancelled audition cannot restart while
+        // the button is still held.
+        if !pointer_down && matches!(self.gesture, Some(Gesture::Listen { .. })) {
+            self.gesture = None;
+        }
+        // T08: finished Bend renders land here (never on the audio thread); stale ones are dropped.
+        if self.engine.warp.is_busy() {
+            let _ = self.engine.execute("clip.warp_poll", &json!({}));
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
+        }
+        if !pointer_down {
             if matches!(self.gesture, Some(Gesture::Fader { .. })) {
                 self.gesture = None;
             }
@@ -1137,6 +1529,14 @@ impl SoundApp {
         }
         self.write_automation(ctx);
         self.autosave(now);
+        // R37: monitor-only controls reach the device output stage only.
+        if self.monitor_applied != Some(self.ui.monitor) {
+            if let Some(p) = &self.player {
+                p.set_monitor(self.ui.monitor.volume_db, self.ui.monitor.dim, self.ui.monitor.mono);
+            }
+            self.monitor_applied = Some(self.ui.monitor);
+        }
+        self.serve_remote();
         if self.recorder.is_none()
             && !self.recorder_failed
             && self.engine.session().tracks.iter().any(|t| t.mixer.input_monitor || t.mixer.record_arm)
@@ -1202,6 +1602,8 @@ impl SoundApp {
         match self.ui.window {
             MainWindow::Edit => edit_window::show(self, ui),
             MainWindow::Mix => mix_window::show(self, ui),
+            MainWindow::Record => layouts::record(self, ui),
+            MainWindow::Master => layouts::master(self, ui),
         }
         panels::floating(self, &ctx);
         windows::show(self, &ctx);

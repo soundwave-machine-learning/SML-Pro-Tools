@@ -1,0 +1,24 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-ddbff99f9f6617e2)
+
+running 17 tests
+test cmd::bus::tests::bt2_mixed_destinations_and_nested_selection ... ok
+test cmd::bus::tests::bt3_nesting_cycles_and_reload ... ok
+test cmd::bus::tests::bt1_create_bus_from_selection_is_transparent_and_one_undo ... ok
+test cmd::bus::missing_tests::missing_processors_survive_reload_and_block_silent_export ... ok
+test cmd::bus::tests::bt6_delete_bus_and_undo ... ok
+test cmd::bus::tests::fx_return_rejects_bundled_plugins ... ok
+test cmd::slots::tests::audition_is_not_saved_and_latency_is_reported ... ok
+test cmd::bus::tests::bt4_send_scaling_post_and_pre_fader ... ok
+test cmd::bus::tests::bt5_view_only_spill_and_single_edge_change ... ok
+test cmd::slots::tests::cl03_tracking_deactivation_is_realtime_only ... ok
+test cmd::slots::tests::slt4_slot_state_persistence_and_rules ... ok
+test cmd::snapshot::tests::vmt5_snapshots_round_trip_and_scope ... ok
+test cmd::snapshot::tests::vmt5_snapshot_recall_and_read_automation_arbitration ... ok
+test cmd::snapshot::tests::width_is_unavailable_on_mono ... ok
+test cmd::snapshot::visual_tests::vmt6_deleted_channel_mid_gesture_is_isolated ... ok
+test cmd::slots::tests::v13_named_export_paths ... ok
+test cmd::snapshot::visual_tests::vmt1_vmt4_one_model_one_undo_per_gesture ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 139 filtered out; finished in 0.01s
+

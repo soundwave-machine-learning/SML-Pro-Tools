@@ -8,8 +8,11 @@ use egui::{Align2, Key, vec2};
 pub struct PaletteState {
     pub query: String,
     pub selected: usize,
+    /// Indexed entries (E04/R19: built when the shortcut profile changes, not per keystroke).
+    cache: Option<(crate::shortcut_profiles::Profile, crate::shortcut_profiles::Profile, usize, Vec<Entry>)>,
 }
 
+#[derive(Debug, Clone)]
 struct Entry {
     id: String,
     label: String,
@@ -17,15 +20,29 @@ struct Entry {
     shortcut: String,
 }
 
-fn entries() -> Vec<Entry> {
+/// The indexed entries for the active profile (cached; see `PaletteState::cache`).
+fn indexed(app: &mut SoundApp) -> Vec<Entry> {
+    let key = (app.ui.shortcut_profile, app.ui.shortcut_base, app.ui.shortcut_overrides.len());
+    if let Some((p, b, n, v)) = &app.palette.cache
+        && (*p, *b, *n) == key
+    {
+        return v.clone();
+    }
+    let v = entries(app);
+    app.palette.cache = Some((key.0, key.1, key.2, v.clone()));
+    v
+}
+
+/// Every command with the chord the *active profile* gives it (R13 help shows the live binding).
+fn entries(app: &SoundApp) -> Vec<Entry> {
+    let table = app.shortcut_table();
+    let chord = |id: &str| table.iter().find(|e| e.command == id && e.params.is_null()).map(|e| e.chord.clone()).unwrap_or_default();
     let mut v: Vec<Entry> = soundcraft_engine::command_specs()
         .iter()
-        .map(|c| Entry {
-            id: c.id.to_string(), label: c.label.to_string(), path: c.menu.join(" › "), shortcut: c.shortcut.unwrap_or("").to_string()
-        })
+        .map(|c| Entry { id: c.id.to_string(), label: c.label.to_string(), path: c.menu.join(" › "), shortcut: chord(c.id) })
         .collect();
-    for (id, label, path, sc) in crate::menus::UI_COMMANDS {
-        v.push(Entry { id: id.to_string(), label: label.to_string(), path: path.replace(" > ", " › "), shortcut: sc.unwrap_or("").to_string() });
+    for (id, label, path, _) in crate::menus::UI_COMMANDS {
+        v.push(Entry { id: id.to_string(), label: label.to_string(), path: path.replace(" > ", " › "), shortcut: chord(id) });
     }
     v
 }
@@ -77,7 +94,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
             r.request_focus();
             let q = app.palette.query.trim().to_string();
             let mut hits: Vec<(i32, Entry)> =
-                entries().into_iter().filter_map(|e| score(&format!("{} {} {}", e.label, e.path, e.id), &q).map(|s| (s, e))).collect();
+                indexed(app).into_iter().filter_map(|e| score(&format!("{} {} {}", e.label, e.path, e.id), &q).map(|s| (s, e))).collect();
             hits.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.label.cmp(&b.1.label)));
             hits.truncate(14);
             let (down, up, enter) = ctx.input(|i| (i.key_pressed(Key::ArrowDown), i.key_pressed(Key::ArrowUp), i.key_pressed(Key::Enter)));
@@ -110,7 +127,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
         });
     if let Some(id) = run {
         close = true;
-        let path = entries().into_iter().find(|e| e.id == id).map(|e| e.path.replace(" › ", " > ")).unwrap_or_default();
+        let path = indexed(app).into_iter().find(|e| e.id == id).map(|e| e.path.replace(" › ", " > ")).unwrap_or_default();
         crate::menus::invoke_menu(app, &id, &path);
     }
     if close {

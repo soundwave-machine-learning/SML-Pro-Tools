@@ -194,3 +194,30 @@ instance mode (worker process, one-block-ahead pipeline, declared added latency,
 fault, automatic restart) is the Sprint 3 R31 design, labelled as compatibility mode, never a
 default; (3) no claim of runtime crash containment is made for this build. Status: R07 runtime
 part DEFERRED to Sprint 3 with these numbers as the admission criteria.
+
+## E04 — what stalls menus and search (Sprint 2) — portable part DONE, native PENDING
+
+Findings in the repository: the menu bar rebuilt the whole catalog tree (`menus::tree()`) on
+every frame, and the command palette rebuilt and re-scored its entry list on every keystroke.
+Plugin menus already read the R07 scan cache (no scan while a menu opens). Fixes: the tree is
+built once per process (`OnceLock`), the palette index is cached per shortcut profile, and the
+menu shortcut column reads a per-profile map instead of the registry per item.
+
+Portable measurement (headless egui_kittest with the software renderer in container P, W1 =
+16 tracks / 2000 clips, 100 repetitions, cold = first opening after launch):
+`SML_MENU_TIMING_CSV=… cargo test -p soundcraft-ui-egui --test menu_timing` →
+`docs/evidence/next_cycle/sprint_02/menu-timing.csv`.
+
+| case | p50 | p95 | p99 | max |
+|---|---|---|---|---|
+| menu open, warm (99) | 9.6 ms | 12.5 ms | 18.1 ms | 18.1 ms |
+| menu open, cold (1) | 9.9 ms | | | |
+| indexed search, warm (99) | 10.4 ms | 14.7 ms | 15.6 ms | 15.6 ms |
+| indexed search, cold (1) | 11.3 ms | | | |
+
+Reading: these are UI-thread model + layout + software-rasterisation costs per frame (the
+harness renders every frame on the CPU); the SML goals (p95 ≤ 50 ms menu, ≤ 100 ms search) are
+met by the model/layout work with margin, so a native stall would have to come from frame
+delivery, input latency or the GPU path, which this environment cannot measure. Native W1/W2
+cold/warm distributions, delivered frame intervals and audio continuity while operating menus
+remain TARGET_PENDING (R19 PARTIAL). No command was dropped to improve a percentile.

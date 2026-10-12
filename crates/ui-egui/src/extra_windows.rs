@@ -14,6 +14,7 @@ const AUTO_UPDATE_SECS: f64 = 2.0;
 pub struct ExtraState {
     pub show_renderer: bool,
     pub show_ui_customization: bool,
+    pub show_theme_editor: bool,
     pub auto_update_config: bool,
     pub ui_scale: f32,
     pub reduce_motion: bool,
@@ -27,6 +28,7 @@ impl Default for ExtraState {
         Self {
             show_renderer: false,
             show_ui_customization: false,
+            show_theme_editor: false,
             auto_update_config: false,
             ui_scale: 1.0,
             reduce_motion: false,
@@ -56,6 +58,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     auto_update(app, ctx);
     renderer(app, ctx);
     ui_customization(app, ctx);
+    theme_editor(app, ctx);
 }
 
 fn apply_customization(app: &mut SoundApp, ctx: &egui::Context) {
@@ -144,6 +147,64 @@ fn renderer(app: &mut SoundApp, ctx: &egui::Context) {
     app.extra.show_renderer = open;
 }
 
+/// Theme editor (R20): every semantic token with a colour picker and live preview, the
+/// typography scale within bounds, import/export/reset, and the validation reason when an edit
+/// is refused. Edits go through `ui.theme_token`, so the built-in themes are never modified.
+fn theme_editor(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.extra.show_theme_editor;
+    if !open {
+        return;
+    }
+    let t = crate::theme::Tokens::current();
+    egui::Window::new(egui::RichText::new("Theme Editor").font(bold(13.0))).open(&mut open).default_size(vec2(420.0, 560.0)).show(ctx, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(format!("Mode: {}", app.ui.theme.label()));
+            if let Some(c) = &app.ui.theme_custom {
+                ui.label(egui::RichText::new(format!("· {} (base {})", if c.name.is_empty() { "unnamed" } else { &c.name }, c.base.label())).small());
+            }
+            if ui.button("Import…").clicked() {
+                let _ = app.run("ui.theme_import", json!({}));
+            }
+            if ui.button("Export…").clicked() {
+                let _ = app.run("ui.theme_export", json!({}));
+            }
+            if ui.button("Reset").on_hover_text("Back to the built-in Dark theme").clicked() {
+                let _ = app.run("ui.theme_reset", json!({}));
+            }
+        });
+        ui.label(egui::RichText::new("Themes are data: colours, a base and a typography scale (0.8–1.5). Text must keep a 3:1 contrast on every surface and record/solo/mute/clip states must stay distinguishable; an edit that breaks this is refused and the reason shown here.").small().color(t.text_dim));
+        if app.ui.status.starts_with("ui.theme_token") || app.ui.status.contains("not applied") {
+            ui.label(egui::RichText::new(&app.ui.status).color(t.rec));
+        }
+        let mut scale = app.ui.theme_custom.as_ref().map_or(1.0, |c| c.typography_scale);
+        ui.horizontal(|ui| {
+            ui.label("Typography scale");
+            if ui.add(egui::Slider::new(&mut scale, 0.8..=1.5).step_by(0.05)).changed() {
+                let _ = app.run("ui.theme_token", json!({"name": "", "typography_scale": scale}));
+            }
+        });
+        ui.separator();
+        let mut edited: Option<(&'static str, [u8; 4])> = None;
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::Grid::new("theme_tokens").num_columns(2).striped(true).show(ui, |ui| {
+                let mut tokens = t;
+                for (name, c) in tokens.fields_mut() {
+                    ui.label(egui::RichText::new(name).font(crate::theme::mono(11.0)));
+                    let mut rgba = c.to_srgba_unmultiplied();
+                    if ui.color_edit_button_srgba_unmultiplied(&mut rgba).changed() {
+                        edited = Some((name, rgba));
+                    }
+                    ui.end_row();
+                }
+            });
+        });
+        if let Some((name, rgba)) = edited {
+            let _ = app.run("ui.theme_token", json!({"name": name, "rgba": rgba}));
+        }
+    });
+    app.extra.show_theme_editor = open;
+}
+
 fn ui_customization(app: &mut SoundApp, ctx: &egui::Context) {
     let mut open = app.extra.show_ui_customization;
     if !open {
@@ -176,11 +237,16 @@ fn ui_customization(app: &mut SoundApp, ctx: &egui::Context) {
                 ui.checkbox(&mut app.extra.auto_update_config, "");
                 ui.end_row();
             });
-            if ui.button("Reset").clicked() {
-                app.extra.ui_scale = 1.0;
-                app.extra.reduce_motion = false;
-                let _ = app.run("ui.theme", json!({"mode": crate::theme::ThemeMode::default().id()}));
-            }
+            ui.horizontal(|ui| {
+                if ui.button("Reset").clicked() {
+                    app.extra.ui_scale = 1.0;
+                    app.extra.reduce_motion = false;
+                    let _ = app.run("ui.theme_reset", json!({}));
+                }
+                if ui.button("Theme Editor…").clicked() {
+                    app.extra.show_theme_editor = true;
+                }
+            });
         },
     );
     app.extra.show_ui_customization = open;

@@ -22,6 +22,19 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.narrow_mix", "Narrow Mix", "View > Narrow Mix", Some("Cmd+Alt+M")),
     ("window.session_info", "Session Info", "", None),
     ("window.recording", "Recording", "Window > Recording", None),
+    ("window.record", "Record Layout", "Window > Record Layout", None),
+    ("window.master", "Master Layout", "Window > Master Layout", None),
+    ("window.remote", "SML Remote", "Window > SML Remote", None),
+    ("window.help", "Command Help", "Help > Command Help", Some("F1")),
+    ("remote.start", "Start SML Remote", "", None),
+    ("remote.stop", "Stop SML Remote", "", None),
+    ("remote.pair", "Open Remote Pairing", "", None),
+    ("remote.revoke", "Revoke Remote Client", "", None),
+    ("remote.status", "SML Remote Status", "", None),
+    ("monitor.volume", "Monitor Volume", "", None),
+    ("monitor.dim", "Monitor Dim", "", None),
+    ("monitor.mono", "Monitor Mono", "", None),
+    ("monitor.cue", "Headphone (Cue) Control", "", None),
     ("window.audio_health", "Session Audio Health", "", None),
     ("window.about", "About SML Recording", "", None),
     ("window.close", "Close Window", "Window > Close Window", Some("Cmd+W")),
@@ -73,6 +86,17 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("ui.bounce_dialog", "Bounce Mix…", "", None),
     ("ui.set", "Set UI State", "", None),
     ("ui.theme", "Appearance", "", None),
+    ("ui.theme_import", "Import Theme…", "", None),
+    ("ui.theme_export", "Export Theme…", "", None),
+    ("ui.theme_reset", "Reset Theme", "", None),
+    ("ui.theme_token", "Set Theme Token", "", None),
+    ("window.theme_editor", "Theme Editor", "Window > Theme Editor", None),
+    ("ui.shortcut_profile", "Shortcut Profile", "", None),
+    ("ui.shortcut_set", "Assign Shortcut", "", None),
+    ("ui.shortcuts_reset", "Reset Custom Shortcuts", "", None),
+    ("ui.shortcuts_export", "Export Shortcuts…", "", None),
+    ("ui.shortcuts_import", "Import Shortcuts…", "", None),
+    ("ui.shortcuts_conflicts", "Shortcut Conflicts", "", None),
 ];
 
 /// Extra catalog mappings handled by the UI layer.
@@ -193,16 +217,21 @@ fn insert_path(roots: &mut Vec<MenuNode>, line: &str) {
     }
 }
 
-pub fn tree() -> Vec<MenuNode> {
-    let mut roots: Vec<MenuNode> = Vec::new();
-    for line in catalog::catalog() {
-        insert_path(&mut roots, line);
-    }
-    insert_path(&mut roots, "Window > Reset Panel Layout");
-    for (path, _) in MENU_WINDOWS {
-        insert_path(&mut roots, path);
-    }
-    roots
+/// The menu model, built once per process (E04/R19: opening a menu never rebuilds the catalog
+/// tree; the per-item enabled/checked state is the only per-frame work).
+pub fn tree() -> &'static [MenuNode] {
+    static TREE: std::sync::OnceLock<Vec<MenuNode>> = std::sync::OnceLock::new();
+    TREE.get_or_init(|| {
+        let mut roots: Vec<MenuNode> = Vec::new();
+        for line in catalog::catalog() {
+            insert_path(&mut roots, line);
+        }
+        insert_path(&mut roots, "Window > Reset Panel Layout");
+        for (path, _) in MENU_WINDOWS {
+            insert_path(&mut roots, path);
+        }
+        roots
+    })
 }
 
 pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
@@ -211,8 +240,8 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
         ui,
         |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
-                ui.menu_button("SML Recording", |ui| {
-                    if ui.button("About SoundCraft").clicked() {
+                ui.menu_button("SML Studio", |ui| {
+                    if ui.button("About SML Studio").clicked() {
                         app.ui.show_about = true;
                     }
                     if ui.button("Session Info").clicked() {
@@ -238,14 +267,11 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
                         }
                     });
                 }
-                let title = format!(
-                    "{}{}  —  {}",
-                    app.engine.session().name,
-                    if app.engine.is_dirty() { " *" } else { "" },
-                    if app.ui.window == MainWindow::Edit { "Edit" } else { "Mix" }
-                );
+                let title = format!("{}{}", app.engine.session().name, if app.engine.is_dirty() { " *" } else { "" });
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(egui::RichText::new(title).color(t.text_dim));
+                    ui.add_space(6.0);
+                    crate::layouts::switcher(app, ui);
                 });
             });
         },
@@ -264,8 +290,9 @@ fn menu_node(app: &mut SoundApp, ui: &mut egui::Ui, n: &MenuNode, extra: &[(&str
     let id = command_for_path(&n.path, extra);
     let (enabled, checked) = item_state(app, &n.path, id.as_deref());
     let label = if checked { format!("✔ {}", n.label) } else { n.label.clone() };
-    let shortcut = id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| c.shortcut).unwrap_or("");
-    let btn = egui::Button::new(label).shortcut_text(crate::shortcuts::shortcut_label(shortcut, ui.ctx().os().is_mac()));
+    // The active profile's chord (R13), not the registry's Pro Tools string.
+    let shortcut = id.as_deref().and_then(|i| app.shortcut_labels.get(i)).cloned().unwrap_or_default();
+    let btn = egui::Button::new(label).shortcut_text(crate::shortcuts::shortcut_label(&shortcut, ui.ctx().os().is_mac()));
     // A disabled item says why (e.g. "not implemented in this build"), never a silent grey entry.
     let reason = if enabled { None } else { id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| (c.enabled)(&app.engine).err()) };
     let resp = ui.add_enabled(enabled, btn);
@@ -320,6 +347,10 @@ fn checked_state(app: &SoundApp, path: &str, id: Option<&str>) -> bool {
         Some("view.main_counter") => path.rsplit(" > ").next().map(ruler_id).is_some_and(|r| e.main_counter.id() == r),
         Some("window.mix") => app.ui.window == MainWindow::Mix,
         Some("window.edit") => app.ui.window == MainWindow::Edit,
+        Some("window.record") => app.ui.window == MainWindow::Record,
+        Some("window.master") => app.ui.window == MainWindow::Master,
+        Some("window.remote") => app.ui.show_remote,
+        Some("window.help") => app.ui.show_help,
         Some("window.track_list") => app.ui.show_tracks_list,
         Some("window.clip_list_view") | Some("window.clip_list") => app.ui.show_clip_list,
         Some("window.narrow_mix") => app.ui.narrow_mix,
@@ -463,9 +494,83 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
             json!({"window": "edit"})
         }
         "window.toggle_mix_edit" => {
-            app.ui.window = if app.ui.window == MainWindow::Edit { MainWindow::Mix } else { MainWindow::Edit };
+            app.ui.window = if app.ui.window.is_edit() { MainWindow::Mix } else { MainWindow::Edit };
             json!({"window": app.ui.window})
         }
+        "window.record" => {
+            app.ui.window = MainWindow::Record;
+            json!({"window": "record"})
+        }
+        "window.master" => {
+            app.ui.window = MainWindow::Master;
+            json!({"window": "master"})
+        }
+        "window.remote" => toggle(&mut app.ui.show_remote),
+        "window.help" => toggle(&mut app.ui.show_help),
+        "remote.start" => match app.remote_start(p.get("bind").and_then(Value::as_str)) {
+            Ok(v) => v,
+            Err(e) => return Some(Err(e)),
+        },
+        "remote.stop" => {
+            app.remote_stop();
+            json!({"running": false})
+        }
+        #[cfg(target_arch = "wasm32")]
+        "remote.pair" | "remote.revoke" | "remote.status" => return Some(Err("SML Remote is not available in the web build".into())),
+        #[cfg(not(target_arch = "wasm32"))]
+        "remote.pair" => match &app.remote {
+            Some(s) => {
+                let code = s.start_pairing();
+                app.remote_code = Some(code.clone());
+                json!({"code": code, "url": s.url(), "expires_s": s.pairing_remaining()})
+            }
+            None => return Some(Err("SML Remote is not running (remote.start first)".into())),
+        },
+        #[cfg(not(target_arch = "wasm32"))]
+        "remote.revoke" => match &app.remote {
+            Some(s) => match p.get("id").and_then(Value::as_str) {
+                Some(id) => json!({"revoked": s.revoke(id)}),
+                None => {
+                    s.revoke_all();
+                    json!({"revoked": "all"})
+                }
+            },
+            None => return Some(Err("SML Remote is not running".into())),
+        },
+        #[cfg(not(target_arch = "wasm32"))]
+        "remote.status" => match &app.remote {
+            Some(s) => {
+                json!({"running": true, "url": s.url(), "https": false, "pairing_open": s.pairing_remaining(), "clients": s.tokens(), "events": s.events()})
+            }
+            None => json!({"running": false, "bind": app.ui.remote_bind}),
+        },
+        "monitor.volume" => {
+            let Some(db) = p.get("db").and_then(Value::as_f64) else { return Some(Ok(json!({"db": app.ui.monitor.volume_db}))) };
+            if !db.is_finite() {
+                return Some(Err("`db` must be finite".into()));
+            }
+            app.ui.monitor.volume_db = (db as f32).clamp(-90.0, 0.0);
+            json!({"db": app.ui.monitor.volume_db, "path": "monitor (speaker) only; bounces unaffected"})
+        }
+        "monitor.dim" => {
+            app.ui.monitor.dim = p.get("value").and_then(Value::as_bool).unwrap_or(!app.ui.monitor.dim);
+            json!({"dim": app.ui.monitor.dim, "attenuation_db": -20.0})
+        }
+        "monitor.mono" => {
+            app.ui.monitor.mono = p.get("value").and_then(Value::as_bool).unwrap_or(!app.ui.monitor.mono);
+            json!({"mono": app.ui.monitor.mono})
+        }
+        "monitor.cue" => match app.cue_path() {
+            Some(path) => {
+                json!({"cue": path, "control": "unavailable in this build: a dedicated cue path is detected but its separate level/mix is not implemented (reported, not relabelled)"})
+            }
+            None => {
+                return Some(Err(
+                    "headphone control unavailable: no dedicated cue output path in I/O Setup (the Main fader is never relabelled as headphones)"
+                        .into(),
+                ));
+            }
+        },
         "window.transport" => toggle(&mut app.ui.show_transport),
         "window.big_counter" => toggle(&mut app.ui.show_big_counter),
         "window.memory_locations" => toggle(&mut app.ui.show_memory_locations),
@@ -577,12 +682,207 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         "ui.bounce_dialog" => {
             return Some(Err("ui.bounce_dialog opens a dialog from the menu only; call file.bounce_mix with a path".into()));
         }
+        "ui.theme_import" => {
+            let text = match (p.get("text").and_then(Value::as_str), p.get("path").and_then(Value::as_str)) {
+                (Some(t), _) => t.to_string(),
+                (None, Some(path)) => match std::fs::read_to_string(path) {
+                    Ok(t) => t,
+                    Err(e) => return Some(Err(format!("cannot read {path}: {e}"))),
+                },
+                (None, None) => match app.services.pick_open.as_ref().and_then(|f| f("Import theme", &["json"])) {
+                    Some(path) => match std::fs::read_to_string(&path) {
+                        Ok(t) => t,
+                        Err(e) => return Some(Err(format!("cannot read {path}: {e}"))),
+                    },
+                    None => return Some(Err("import cancelled".into())),
+                },
+            };
+            match crate::theme::import(&text) {
+                Ok(t) => {
+                    let name = t.name.clone();
+                    app.ui.theme_custom = Some(t);
+                    app.ui.theme = crate::theme::ThemeMode::Custom;
+                    json!({"mode": "custom", "name": name})
+                }
+                // The current theme stays; the reason is the error.
+                Err(e) => return Some(Err(format!("theme not applied: {e}"))),
+            }
+        }
+        "ui.theme_export" => {
+            let name = p.get("name").and_then(Value::as_str).unwrap_or("SML theme");
+            let data = match (&app.ui.theme, &app.ui.theme_custom) {
+                (crate::theme::ThemeMode::Custom, Some(t)) => t.clone(),
+                (mode, _) => crate::theme::export(
+                    name,
+                    if *mode == crate::theme::ThemeMode::Light {
+                        crate::theme::ThemeMode::Light
+                    } else if *mode == crate::theme::ThemeMode::HighContrast {
+                        crate::theme::ThemeMode::HighContrast
+                    } else {
+                        crate::theme::ThemeMode::Dark
+                    },
+                    app.extra.ui_scale,
+                ),
+            };
+            let text = serde_json::to_string_pretty(&data).unwrap_or_default();
+            let path = p
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| app.services.pick_save.as_ref().and_then(|f| f("theme.json", "json")));
+            match path {
+                Some(path) => match std::fs::write(&path, text) {
+                    Ok(()) => json!({"path": path}),
+                    Err(e) => return Some(Err(format!("cannot write {path}: {e}"))),
+                },
+                None => json!({"text": text}),
+            }
+        }
+        "ui.theme_reset" => {
+            app.ui.theme_custom = None;
+            app.ui.theme = crate::theme::ThemeMode::default();
+            json!({"mode": app.ui.theme.id()})
+        }
+        "ui.theme_token" => {
+            // Theme editor: edit one token of the Custom theme (started from the active palette)
+            // and preview it live; a change that breaks validation is refused and reported.
+            let Some(name) = p.get("name").and_then(Value::as_str) else { return Some(Err("`name` required".into())) };
+            let rgba: Vec<u8> = p
+                .get("rgba")
+                .and_then(Value::as_array)
+                .map(|a| a.iter().filter_map(Value::as_u64).map(|v| v.min(255) as u8).collect())
+                .unwrap_or_default();
+            let scale = p.get("typography_scale").and_then(Value::as_f64).map(|v| v as f32);
+            let mut t = match (&app.ui.theme, &app.ui.theme_custom) {
+                (crate::theme::ThemeMode::Custom, Some(t)) => t.clone(),
+                (mode, _) => {
+                    let base = match mode {
+                        crate::theme::ThemeMode::Light => crate::theme::ThemeMode::Light,
+                        crate::theme::ThemeMode::HighContrast => crate::theme::ThemeMode::HighContrast,
+                        _ => crate::theme::ThemeMode::Dark,
+                    };
+                    crate::theme::export("Custom", base, app.extra.ui_scale)
+                }
+            };
+            if let Some(sc) = scale {
+                t.typography_scale = sc;
+            }
+            if !name.is_empty() {
+                let Some((_, slot)) = t.tokens.fields_mut().into_iter().find(|(n, _)| *n == name) else {
+                    return Some(Err(format!("unknown token `{name}`")));
+                };
+                if rgba.len() != 4 {
+                    return Some(Err("`rgba` must be [r, g, b, a]".into()));
+                }
+                *slot = egui::Color32::from_rgba_unmultiplied(rgba[0], rgba[1], rgba[2], rgba[3]);
+            }
+            if let Err(e) = crate::theme::validate(&t) {
+                return Some(Err(format!("not applied: {e}")));
+            }
+            app.ui.theme_custom = Some(t);
+            app.ui.theme = crate::theme::ThemeMode::Custom;
+            json!({"mode": "custom", "token": name})
+        }
+        "window.theme_editor" => {
+            app.extra.show_theme_editor = !app.extra.show_theme_editor;
+            json!({"value": app.extra.show_theme_editor})
+        }
+        "ui.shortcut_profile" => {
+            use crate::shortcut_profiles::Profile;
+            if let Some(v) = p.get("profile").and_then(Value::as_str) {
+                let Some(prof) = Profile::parse(v) else { return Some(Err(format!("unknown profile `{v}` (pro_tools, studio_one, custom)"))) };
+                app.ui.shortcut_profile = prof;
+            }
+            if let Some(v) = p.get("base").and_then(Value::as_str) {
+                let Some(base) = Profile::parse(v).filter(|b| *b != Profile::Custom) else {
+                    return Some(Err(format!("unknown base `{v}` (pro_tools or studio_one)")));
+                };
+                app.ui.shortcut_base = base;
+            }
+            app.shortcut_capture = None;
+            json!({"profile": app.ui.shortcut_profile.id(), "base": app.ui.shortcut_base.id(), "bindings": app.shortcut_table().len()})
+        }
+        "ui.shortcut_set" => {
+            // Reassign in the Custom profile (switching to it when another profile is active, so
+            // the built-in tables are never edited in place).
+            let key = match (p.get("key").and_then(Value::as_str), p.get("command").and_then(Value::as_str)) {
+                (Some(k), _) => k.to_string(),
+                (None, Some(c)) => match p.get("params") {
+                    Some(v) if !v.is_null() => format!("{c}|{v}"),
+                    _ => c.to_string(),
+                },
+                (None, None) => return Some(Err("`key` or `command` required".into())),
+            };
+            let chord = p.get("chord").and_then(Value::as_str).unwrap_or("").to_string();
+            if !chord.is_empty() && crate::shortcuts::parse(&chord).is_none() {
+                return Some(Err(format!("`{chord}` is not a chord this build can bind")));
+            }
+            let command = key.split_once('|').map_or(key.as_str(), |(c, _)| c).to_string();
+            if soundcraft_engine::find_command(&command).is_none() && !UI_COMMANDS.iter().any(|c| c.0 == command) {
+                return Some(Err(format!("unknown command `{command}`")));
+            }
+            if app.ui.shortcut_profile != crate::shortcut_profiles::Profile::Custom {
+                app.ui.shortcut_base = app.ui.shortcut_profile;
+                app.ui.shortcut_profile = crate::shortcut_profiles::Profile::Custom;
+            }
+            app.ui.shortcut_overrides.insert(key.clone(), chord.clone());
+            let conflicts = crate::shortcut_profiles::conflicts(&app.shortcut_table()).into_iter().filter(|c| c.chord == chord).collect::<Vec<_>>();
+            json!({"key": key, "chord": chord, "conflicts": conflicts})
+        }
+        "ui.shortcuts_reset" => {
+            app.ui.shortcut_overrides.clear();
+            app.shortcut_capture = None;
+            json!({"profile": app.ui.shortcut_profile.id()})
+        }
+        "ui.shortcuts_conflicts" => {
+            json!({"profile": app.ui.shortcut_profile.id(), "conflicts": crate::shortcut_profiles::conflicts(&app.shortcut_table())})
+        }
+        "ui.shortcuts_export" => {
+            let text = crate::shortcut_profiles::export(app.ui.shortcut_base, &app.ui.shortcut_overrides);
+            let path = p
+                .get("path")
+                .and_then(Value::as_str)
+                .map(str::to_string)
+                .or_else(|| app.services.pick_save.as_ref().and_then(|f| f("shortcuts.json", "json")));
+            match path {
+                Some(path) => match std::fs::write(&path, text) {
+                    Ok(()) => json!({"path": path}),
+                    Err(e) => return Some(Err(format!("cannot write {path}: {e}"))),
+                },
+                None => json!({"text": text}),
+            }
+        }
+        "ui.shortcuts_import" => {
+            let text = match (p.get("text").and_then(Value::as_str), p.get("path").and_then(Value::as_str)) {
+                (Some(t), _) => t.to_string(),
+                (None, Some(path)) => match std::fs::read_to_string(path) {
+                    Ok(t) => t,
+                    Err(e) => return Some(Err(format!("cannot read {path}: {e}"))),
+                },
+                (None, None) => match app.services.pick_open.as_ref().and_then(|f| f("Import shortcuts", &["json"])) {
+                    Some(path) => match std::fs::read_to_string(&path) {
+                        Ok(t) => t,
+                        Err(e) => return Some(Err(format!("cannot read {path}: {e}"))),
+                    },
+                    None => return Some(Err("import cancelled".into())),
+                },
+            };
+            match crate::shortcut_profiles::import(&text) {
+                Ok(f) => {
+                    app.ui.shortcut_base = f.base;
+                    app.ui.shortcut_overrides = f.overrides;
+                    app.ui.shortcut_profile = crate::shortcut_profiles::Profile::Custom;
+                    json!({"base": f.base.id(), "overrides": app.ui.shortcut_overrides.len()})
+                }
+                Err(e) => return Some(Err(e)),
+            }
+        }
         "ui.theme" => {
             let Some(mode) = p.get("mode").and_then(Value::as_str) else {
                 return Some(Ok(json!({"mode": app.ui.theme.id()})));
             };
             let Some(mode) = crate::theme::ThemeMode::parse(mode) else {
-                return Some(Err(format!("unknown theme `{mode}` (system, light or dark)")));
+                return Some(Err(format!("unknown theme `{mode}` (system, light, dark, high_contrast or custom)")));
             };
             app.ui.theme = mode;
             json!({"mode": mode.id()})

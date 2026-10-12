@@ -33,6 +33,11 @@ pub fn icon_button(ui: &mut Ui, size: egui::Vec2, icon: &str, on: bool, tip: &st
 
 /// Square text toggle used for S / M / I / record etc.
 pub fn text_toggle(ui: &mut Ui, size: egui::Vec2, text: &str, on: bool, on_color: Color32, tip: &str) -> Response {
+    text_toggle_named(ui, size, text, text, on, on_color, tip)
+}
+
+/// `text_toggle` with an accessible name different from the drawn text.
+pub fn text_toggle_named(ui: &mut Ui, size: egui::Vec2, text: &str, name: &str, on: bool, on_color: Color32, tip: &str) -> Response {
     let t = Tokens::current();
     let (r, resp) = ui.allocate_exact_size(size, Sense::click());
     let fill = if on {
@@ -45,6 +50,8 @@ pub fn text_toggle(ui: &mut Ui, size: egui::Vec2, text: &str, on: bool, on_color
     ui.painter().rect(r, CornerRadius::same(2), fill, Stroke::new(1.0, t.button_border), StrokeKind::Inside);
     let col = if on { t.text_dark } else { t.text };
     ui.painter().text(r.center(), Align2::CENTER_CENTER, text, bold((size.y * 0.62).clamp(8.0, 13.0)), col);
+    // Accessible name (T01): screen readers and the UI test harness address the button by it.
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, ui.is_enabled(), on, name));
     resp.on_hover_text(tip)
 }
 
@@ -164,6 +171,11 @@ pub fn meter(ui: &Ui, r: Rect, level: f32, hold: f32, clip: bool) {
     }
     let clip_r = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + 2.5));
     ui.painter().rect_filled(clip_r, 0.0, if clip { t.meter_red } else { t.meter_clip_off });
+    if clip {
+        // R20: the overload state is also a shape (a filled indicator with a bar through it),
+        // so it stays identifiable without colour.
+        ui.painter().rect_filled(Rect::from_min_max(pos2(r.min.x, r.min.y + 2.5), pos2(r.max.x, r.min.y + 4.0)), 0.0, t.text);
+    }
 }
 
 /// dB → 0..1 meter position (logarithmic-ish scale like hardware meters).

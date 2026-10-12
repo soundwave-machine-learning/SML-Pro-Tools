@@ -36,3 +36,7 @@ workspace = true
 [build-dependencies]
 serde_json = { workspace = true }
 toml = "1"
+
+# SML Remote is a native service (std::net + OS randomness); the web build has no LAN server.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+soundcraft-remote.workspace = true

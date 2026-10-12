@@ -1,0 +1,18 @@
+id,requirement,actual_commands,status,evidence
+T01,eight visible tools in reference order,edit.tool {arrow|range|split|eraser|paint|mute|bend|listen},PASS_PORTABLE,"audio_tools.rs eight_tools_are_visible_and_dispatch_real_commands (labelled buttons, accessible names); native H4 scale review pending"
+T02,"Arrow: select/move, edge trim, fade/gain handles","edit.move_clips, edit.fades_create, clip.gain (existing) via Arrow gesture",PASS_PORTABLE,"audio_tools.rs (move), smart_tool_tests (zones); feel = native gate"
+T03,Range: single/multitrack time selection,edit.select,PASS_PORTABLE,audio_tools.rs (range drag anchors at the press); numeric start/end/length = counters/edit.select params
+T04,"Split: preview line, exact time, eligible clips only",edit.split_at,PASS_PORTABLE,tools.rs split_at_pointer_is_exact_and_atomic; UI click test; zero-length pieces rejected; locks atomic
+T05,"Eraser: click/sweep, media preserved, one undo, no ripple unless Shuffle",edit.erase_clips,PASS_PORTABLE,tools.rs eraser_sweep_is_one_undo_and_keeps_media; UI Escape rollback + sweep
+T06,"Paint: all eight shapes, automation and clip-gain domains, Transform box","automation.draw, clip.gain_draw, edit.paint_shape",PASS_PORTABLE,paint.rs shape tests; tools.rs gain_draw_stays_in_its_domain; UI paint test incl. Transform Apply; plugin-parameter lanes finish in Sprint 3 (A3)
+T07,"Mute: reversible clip mute, sweep touches each id once",edit.mute_clips {muted},PASS_PORTABLE,tools.rs mute_sweep_uses_an_explicit_state; UI sweep test
+T08,"Bend: anchors, src/dst readout, pitch-preserving render, immutable original, bounded admission, stale drop",clip.warp_set/warp_clear/warp_poll/warp_status,PASS_PORTABLE,"warp.rs + bend.rs tests (pitch within 2 %, exact length, stale dropped, undo restores); UI add/move/remove test; listening = native gate; butt-joined segments (stated limit)"
+T09,"Listen: press-and-hold audition, cleanup on every exit, record protection",audition.start/stop/status,PASS_PORTABLE,"audition.rs listen_transaction test; mix listen_mask test (bus open, mute wins, offline unaffected); UI hold/release/Escape/running-transport test"
+T10,"Link Arrow/Range, alternate tool, compact fallback, 1-8 preset coexisting with keypad Nudge","edit.tool_link, edit.alt_tool, shortcut profile studio_one",PASS_PORTABLE,"effective_tool unit test (link_and_alternate_zones); shortcut_profiles test (1-8, Num+ still nudges)"
+T11,"zoom/pan, snap, Grid/Relative Grid, quantize, autoscroll, modes; Nudge separate section",existing toolbar groups,PASS_PORTABLE (carried),toolbar groups unchanged from the prior cycle; quantize preview not added (gap)
+T-T1,"eight-tool dispatch, affected ids, one undo, Escape",see rows,PASS_PORTABLE,"toolbar-tests.log, audio_tools test"
+T-T2,"numerical Paint fixtures, domains, bypass/undo/reload","automation.draw, clip.gain_draw",PASS_PORTABLE,paint/tools tests; external parameter binding = Sprint 3
+T-T3,"Bend monotonicity/ratio, stereo map, stale/cancel, exact map, duration/pitch",warp/bend,PASS_PORTABLE,warp.rs tests; vocal_workflow vocal_tools_workflow_lead_and_double
+T-T4,"Listen cleanup, record attempt, flags, route mask, serialization",audition,PASS_PORTABLE,audition.rs + mix listen_mask + UI listen test
+T-T5,"alternate/link zones, compact, modifier release/focus, keypad coexistence, snap","effective_tool, profiles",PASS_PORTABLE,link_and_alternate_zones; shortcut_profiles tests; snap override gesture not separately tested (gap)
+T-T6,"native walkthrough at H4 sizes/scales, audition and warp listening",n/a,TARGET_PENDING,owner machine

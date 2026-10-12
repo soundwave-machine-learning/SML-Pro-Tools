@@ -126,6 +126,59 @@ impl AuditionBypass {
     }
 }
 
+/// Which source tracks a Listen audition admits, by track index (fixed size so the realtime
+/// host copies it without allocating). Inactive = every track plays as usual.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ListenMask {
+    pub active: bool,
+    bits: [u64; 4],
+}
+
+impl ListenMask {
+    /// Up to this many tracks can be addressed (index 0..256).
+    pub const CAPACITY: usize = 256;
+
+    pub fn set(&mut self, index: usize) -> bool {
+        if index >= Self::CAPACITY {
+            return false;
+        }
+        self.bits[index / 64] |= 1u64 << (index % 64);
+        true
+    }
+
+    pub fn contains(&self, index: usize) -> bool {
+        index < Self::CAPACITY && self.bits[index / 64] & (1u64 << (index % 64)) != 0
+    }
+
+    pub fn count(&self) -> usize {
+        self.bits.iter().map(|b| b.count_ones() as usize).sum()
+    }
+
+    /// Whether a source track at `index` is silenced by an active Listen audition.
+    pub fn excludes(&self, index: usize) -> bool {
+        self.active && !self.contains(index)
+    }
+}
+
+/// The Listen tool's audition transaction (EDIT_TOOLBAR_SPEC T09): realtime only, never
+/// serialized, never exported; no mute/solo/arm flag is modified.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct ListenState {
+    pub mask: ListenMask,
+    /// Playhead when the audition started, restored on stop while still owned.
+    pub cursor: i64,
+    /// Cleared by any other command that runs during the audition (later user commands win).
+    pub cursor_owned: bool,
+    /// Where the audition started playing from.
+    pub from: i64,
+}
+
+impl ListenState {
+    pub fn active(&self) -> bool {
+        self.mask.active
+    }
+}
+
 /// Mix profile (M01/M02). Standard keeps the legacy panner; Logic-style uses the SML profile laws.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
 pub enum ProfileKind {

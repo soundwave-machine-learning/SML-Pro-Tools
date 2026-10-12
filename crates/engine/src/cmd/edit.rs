@@ -101,7 +101,15 @@ pub fn specs() -> Vec<CommandSpec> {
         }),
         cmd!("edit.trim_to_file_boundaries", "To File Boundaries", ["Edit", "Trim"], None, "{clips?}", has_selection, trim_to_file),
         cmd!("edit.trim_to_fill_selection", "To Fill Selection", ["Edit", "Trim"], None, "{}", has_range, trim_to_fill),
-        cmd!("edit.mute_clips", "Mute", ["Edit"], Some("Cmd+M"), "{clips?}", has_selection, mute_clips),
+        cmd!(
+            "edit.mute_clips",
+            "Mute",
+            ["Edit"],
+            Some("Cmd+M"),
+            "{clips?, muted?: bool} — without `muted`, toggles: all muted if any is unmuted",
+            has_selection,
+            mute_clips
+        ),
         cmd!("edit.copy_to_new_playlist", "New Playlist", ["Edit", "Copy Selection to..."], None, "{}", has_range, copy_to_new_playlist),
         cmd!(
             "edit.strip_silence",
@@ -130,7 +138,7 @@ pub fn specs() -> Vec<CommandSpec> {
             e.session_mut().edit.edit_mode = m;
             Ok(json!({"mode": m}))
         }),
-        cmd!(noundo "edit.tool", "Edit Tool", [], Some("F5-F10"), "{tool: zoom|trim|selector|grabber|scrubber|pencil|smart}", always, |e, p| {
+        cmd!(noundo "edit.tool", "Edit Tool", [], Some("F5-F10"), "{tool: zoom|trim|selector|grabber|scrubber|pencil|smart|arrow|range|split|eraser|paint|mute|bend|listen}", always, |e, p| {
             let t = str_param(p, "tool").and_then(soundcraft_model::Tool::from_id).ok_or_else(|| bad("edit.tool", "unknown tool"))?;
             e.session_mut().edit.tool = t;
             Ok(json!({"tool": t}))
@@ -611,14 +619,15 @@ fn trim_to_fill(e: &mut Engine, p: &Value) -> Result<Value> {
 
 fn mute_clips(e: &mut Engine, p: &Value) -> Result<Value> {
     let ids = clip_ids_param(e, p);
+    let explicit = p.get("muted").and_then(Value::as_bool);
     let s = e.session_mut();
-    let any_unmuted = ids.iter().any(|id| s.find_clip(*id).is_some_and(|(_, c)| !c.muted));
+    let target = explicit.unwrap_or_else(|| ids.iter().any(|id| s.find_clip(*id).is_some_and(|(_, c)| !c.muted)));
     for id in &ids {
         if let Some(c) = s.find_clip_mut(*id) {
-            c.muted = any_unmuted;
+            c.muted = target;
         }
     }
-    Ok(json!({"muted": any_unmuted, "clips": ids.len()}))
+    Ok(json!({"muted": target, "clips": ids.len()}))
 }
 
 fn copy_to_new_playlist(e: &mut Engine, p: &Value) -> Result<Value> {

@@ -1,0 +1,32 @@
+# utc: 2026-10-12T01:54:07Z commit: 3f7e50f+worktree; headless egui_kittest, software renderer, container P
+menu_open_warm,W1,99,9.63,12.48,18.05,18.09
+menu_open_cold,W1,1,9.86,9.86,9.86,9.86
+search_warm,W1,99,10.36,14.73,15.55,15.61
+search_cold,W1,1,11.32,11.32,11.32,11.32
+test menu_and_search_timings_at_w1 ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 7.48s
+
+     Running tests/studio_layouts.rs (target/debug/deps/studio_layouts-988fd3ac7684f602)
+
+--
+test monitor_controls_live_outside_the_document ... ok
+
+thread 'layouts_share_one_session_and_change_no_identity' (31119) panicked at crates/ui-egui/tests/studio_layouts.rs:39:7:
+Found two or more nodes matching the query: 
+By {
+    label: "Record enable",
+--
+test phone_client_drives_the_host_through_the_queue ... ok
+   0: __rustc::rust_begin_unwind
+             at /rustc/2d8144b7880597b6e6d3dfd63a9a9efae3f533d3/library/std/src/panicking.rs:689:5
+   1: core::panicking::panic_fmt
+--
+test layouts_share_one_session_and_change_no_identity ... FAILED
+
+failures:
+
+--
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+error: test failed, to rerun pass `-p soundcraft-ui-egui --test studio_layouts`

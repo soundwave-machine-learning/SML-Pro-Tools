@@ -1,0 +1,18 @@
+   Compiling soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Finished `test` profile [optimized + debuginfo] target(s) in 20.82s
+     Running tests/vocal_workflow.rs (target/debug/deps/vocal_workflow-a1f3d38ed0b21145)
+
+running 10 tests
+test vocal_v01_selection_and_zoom_are_audio_neutral ... ok
+test vocal_v02_separate_heal_trim_undo_keep_originals ... ok
+test vocal_e2e_staged_through_save_reopen ... ok
+test vocal_v05_clip_gain_breath_rides ... ok
+test vocal_v04_crossfade_and_fade_shapes ... ok
+test vocal_e2e_final_bus_slot_export ... ok
+test vocal_v09_strip_silence_preserves_breath_with_padding ... ok
+test vocal_v06_comp_phrase_from_alternate_take ... ok
+test vocal_tools_workflow_lead_and_double ... ok
+test vocal_v11_time_stretch_service_duration_and_pitch ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.07s
+

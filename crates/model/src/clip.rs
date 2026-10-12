@@ -105,6 +105,59 @@ pub struct Clip {
     /// Reversed playback (AudioSuite Reverse renders into a new source; this is for previews).
     #[serde(default)]
     pub group: Option<u64>,
+    /// Bend-tool warp anchors (T08): clip-relative source time → destination time, strictly
+    /// increasing in both; empty = unwarped. The render service turns them into a derived source.
+    #[serde(default)]
+    pub warp: Vec<WarpAnchor>,
+    /// Bumped by every anchor edit; a render result older than this is stale and dropped.
+    #[serde(default)]
+    pub warp_rev: u64,
+}
+
+/// One Bend anchor: material at `src` (samples from the original clip start) plays at `dst`
+/// (samples from the rendered clip start).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct WarpAnchor {
+    pub src: Samples,
+    pub dst: Samples,
+}
+
+/// Bend limits (T08): minimum anchor spacing and the stretch ratio each segment may carry.
+pub const WARP_MIN_SPACING: Samples = 64;
+pub const WARP_MIN_RATIO: f64 = 0.25;
+pub const WARP_MAX_RATIO: f64 = 4.0;
+
+/// Validate a warp map for a clip whose original material is `src_len` samples long: strictly
+/// increasing source and destination times, minimum spacing, bounded segment ratios, inside the
+/// material. Returns the reason when it is rejected.
+pub fn validate_warp(anchors: &[WarpAnchor], src_len: Samples) -> std::result::Result<(), String> {
+    let mut prev = WarpAnchor { src: 0, dst: 0 };
+    for (i, a) in anchors.iter().enumerate() {
+        if a.src <= 0 || a.src >= src_len {
+            return Err(format!("anchor {} source time {} is outside the clip (1..{})", i + 1, a.src, src_len - 1));
+        }
+        if a.dst <= 0 {
+            return Err(format!("anchor {} destination time {} must be positive", i + 1, a.dst));
+        }
+        if a.src - prev.src < WARP_MIN_SPACING || a.dst - prev.dst < WARP_MIN_SPACING {
+            return Err(format!("anchors must stay {WARP_MIN_SPACING} samples apart and in increasing order (anchor {})", i + 1));
+        }
+        let ratio = (a.dst - prev.dst) as f64 / (a.src - prev.src) as f64;
+        if !(WARP_MIN_RATIO..=WARP_MAX_RATIO).contains(&ratio) {
+            return Err(format!("segment {} stretch {ratio:.3} is outside {WARP_MIN_RATIO}..{WARP_MAX_RATIO}", i + 1));
+        }
+        prev = *a;
+    }
+    if src_len - prev.src < WARP_MIN_SPACING && !anchors.is_empty() {
+        return Err(format!("the last anchor must stay {WARP_MIN_SPACING} samples before the clip end"));
+    }
+    Ok(())
+}
+
+/// Rendered length of a warped clip: the material after the last anchor keeps its speed, so the
+/// clip grows or shrinks by the last anchor's displacement.
+pub fn warped_len(anchors: &[WarpAnchor], src_len: Samples) -> Samples {
+    anchors.last().map_or(src_len, |a| (src_len + (a.dst - a.src)).max(1))
 }
 
 fn one() -> f64 {
@@ -131,6 +184,8 @@ impl Clip {
             color: None,
             stretch: 1.0,
             group: None,
+            warp: Vec::new(),
+            warp_rev: 0,
         }
     }
 

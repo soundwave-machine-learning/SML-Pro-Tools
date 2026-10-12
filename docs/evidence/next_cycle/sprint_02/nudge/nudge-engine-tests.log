@@ -1,0 +1,15 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.16s
+     Running unittests src/lib.rs (target/debug/deps/soundcraft_engine-ddbff99f9f6617e2)
+
+running 8 tests
+test cmd::nudge::tests::n03_content_slip_sign_and_handles ... ok
+test cmd::nudge::tests::n04_trims_and_selection_boundaries ... ok
+test cmd::nudge::tests::n05_rigid_group_and_atomic_rejection ... ok
+test cmd::nudge::tests::n01_one_sample_round_trip ... ok
+test cmd::nudge::tests::rejected_commands_do_not_advance_accumulation ... ok
+test cmd::nudge::tests::n08_undo_redo_and_persistence ... ok
+test cmd::nudge::tests::n06_modes_do_not_change_delta_and_tempo_changes_are_followed ... ok
+test cmd::nudge::tests::n02_fractional_ms_accumulate_without_drift ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 148 filtered out; finished in 0.04s
+

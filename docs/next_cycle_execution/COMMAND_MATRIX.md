@@ -43,3 +43,27 @@ input is rejected before any change. Transform: shifts/scales the existing point
 `[box_start, box_end]` (inclusive) by `time_shift`, `time_scale` (0 < x ≤ 1000), `value_offset`,
 `value_scale`; points that leave the box are dropped; the clip-gain envelope is a separate domain
 (`clip.gain_draw`, Sprint 2) and is never written by this command.
+
+## Sprint 2 additions (discovered/created 2026-10-12)
+
+| Purpose | Exact command | Source | Notes |
+|---|---|---|---|
+| Audio tool commands (T02–T07) | `cargo test -p soundcraft-engine --lib -- tools:: paint::` | this cycle | split/erase/mute/gain_draw/tool settings; `automation.draw` shapes |
+| Listen audition transaction (T09) | `cargo test -p soundcraft-engine --lib -- audition::` and `cargo test -p soundcraft-mix --lib listen_mask` | this cycle | engine state machine; mixer route mask on the realtime engine only |
+| Bend warp service (T08, V11) | `cargo test -p soundcraft-engine --lib -- bend:: warp::` | this cycle | edit map, bounded admission, stale drop, undo, pitch within 2 % |
+| Toolbar UI (T-T1/T-T4/T-T5) | `cargo test -p soundcraft-ui-egui --test audio_tools` | this cycle | egui_kittest gestures for all eight tools, Escape rollback, Link/alternate zones |
+| Shortcut profiles (R13) | `cargo test -p soundcraft-ui-egui --lib -- shortcut` and `--test shortcut_profiles`; `SML_WRITE_INVENTORY=<csv> cargo test -p soundcraft-ui-egui --lib inventory_ledger` | this cycle | profiles, capture, import/export, conflicts; writes `shortcut-inventory.csv` |
+| Themes (R20) | `cargo test -p soundcraft-ui-egui --lib -- theme` and `--test theme_docking` | this cycle | validation/fallback; appearance at 1.0/1.5/2.0 scale incl. high contrast |
+| Layouts, monitor, remote through the host (R18/R37/R21) | `cargo test -p soundcraft-ui-egui --test studio_layouts` | this cycle | layout switch identity check; monitor outside the document; phone client over HTTP driving the UI thread |
+| Remote service (R21) | `cargo test -p soundcraft-remote` | this cycle | pairing, Origin, dedup/stale, record nonce, rate limit, bounded queue, meters |
+| Menu/search timing E04 (portable) | `SML_MENU_TIMING_CSV=<csv> cargo test -p soundcraft-ui-egui --test menu_timing` | this cycle | 100 repetitions cold/warm at W1 (16 tracks/2000 clips), software renderer; native W1/W2 pending |
+| Knowledge (R22) | `cargo test -p soundcraft-engine --lib -- help::` | this cycle | versioned question set incl. nonexistent tools |
+| Vocal tools workflow (R10 E2E extension) | `cargo test -p soundcraft-engine --test vocal_workflow` | this cycle | lead/double through the tool commands, save/reopen, source hashes |
+| Monitor stage math (R37) | `cargo test -p soundcraft-playback --lib monitor_tests` | this cycle | device-output-only gain/dim/mono |
+
+New command ids this sprint: `edit.split_at`, `edit.erase_clips`, `edit.mute_clips {muted?}`,
+`clip.gain_draw`, `edit.tool_link`, `edit.alt_tool`, `edit.paint_shape`, `audition.start/stop/status`,
+`clip.warp_set/warp_clear/warp_poll/warp_status`, `help.search`, `help.limits` (engine);
+`window.record/master/remote/help/theme_editor`, `remote.start/stop/pair/revoke/status`,
+`monitor.volume/dim/mono/cue`, `ui.theme_import/export/reset/token`,
+`ui.shortcut_profile/shortcut_set/shortcuts_reset/shortcuts_export/shortcuts_import/shortcuts_conflicts` (UI layer).
