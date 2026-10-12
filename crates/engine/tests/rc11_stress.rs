@@ -69,7 +69,7 @@ fn session() -> Engine {
         let data: Vec<f32> = (0..96_000).map(|i| ((i as f32 * (0.01 + k as f32 * 0.003)).sin()) * 0.3).collect();
         s.pool.insert(SourceId(100 + k), Arc::new(SourceAudio::new(AudioBuffer { sample_rate: 48_000, channels: vec![data] })));
         let id = s.new_clip_id();
-        s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, &format!("c{k}"), SourceId(100 + k), 0, 0, 96_000));
+        s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, format!("c{k}"), SourceId(100 + k), 0, 0, 96_000));
     }
     e
 }
