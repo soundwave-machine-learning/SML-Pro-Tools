@@ -10,7 +10,7 @@ Every sprint ran without routine approvals; each has a report, a CI log and evid
 | 1 Protect the session (R01–R09, B01–B04, B09) | `7bffb39`, `3f7e50f` | CI exit 0 (631) | `NEXT_SPRINT_01_REPORT.md` |
 | 2 Studio workflow (R10–R22, R37) | `79c419f`, `0baa780` | CI exit 0 (661) | `NEXT_SPRINT_02_REPORT.md` |
 | 3 Plugin hosting (R23–R31) | `f176366`, `aac507d` | CI exit 0 (673) | `NEXT_SPRINT_03_REPORT.md` |
-| 4 Assisted studio (R32–R36, R38) | see STATE.md | CI exit 0 | `NEXT_SPRINT_04_REPORT.md` |
+| 4 Assisted studio (R32–R36, R38) | `c7664e4` | CI exit 0 | `NEXT_SPRINT_04_REPORT.md` |
 
 ## Where the product stands
 - Portable (P): every one of the 38 rows has an implementation and tests; see

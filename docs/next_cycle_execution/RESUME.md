@@ -28,7 +28,7 @@ Committed as `feat: harden SML Studio plugin hosting and integration` (`f176366`
 `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_03/`.
 
 ## Sprint 4 state (2026-10-12) — CLOSED (PARTIAL, portable)
-Committed as `feat: complete assisted SML Studio mastering workflow` (SHA in STATE.md) after
+Committed as `feat: complete assisted SML Studio mastering workflow` (`c7664e4`) after
 `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0. Report `docs/sprint_reports/NEXT_SPRINT_04_REPORT.md`;
 final handoff `docs/sprint_reports/NEXT_CYCLE_FINAL_HANDOFF.md`; evidence
 `docs/evidence/next_cycle/sprint_04/`. Nothing further runs in P without new inputs: the next

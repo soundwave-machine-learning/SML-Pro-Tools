@@ -38,7 +38,7 @@ gates pending).
 - Aux monitor ring: summing/drop/gain/clear proven in isolation; render unchanged.
 
 ## Files / commits
-Milestone commit `feat: complete assisted SML Studio mastering workflow` (SHA in STATE.md).
+Milestone commit `feat: complete assisted SML Studio mastering workflow` (`c7664e4`).
 New: `crates/engine/src/assistant.rs`, `crates/engine/src/cmd/{assistant,mastering}.rs`,
 `crates/dsp/tests/e07_meter_vectors.rs`, `crates/engine/tests/e08_scenario.rs`, UI Assistant
 window and Master layout content, phone Ask box, `docs/{COMMAND_REFERENCE,MIGRATION_AND_RECOVERY}.md`,

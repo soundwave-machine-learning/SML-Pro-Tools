@@ -14,7 +14,7 @@ Updated: 2026-10-12T07:00Z. Branch `fable/recording-core` (pushed). Base checkpo
 | G2 (host/parameter/render interfaces) | portable PASS: warp render service, listen mask, envelope clients, capability matrix, sidechain and render report interfaces | ledgers |
 | G3 (generic host/parameter/state/PDC/render) | portable PASS on deterministic fixtures and the CLAP/VST3 test plugins; real native plugins pending | `docs/evidence/next_cycle/sprint_03/` |
 | Next Sprint 3 | PARTIAL — capability matrix, sidechain, PDC fixtures + bypass compensation, offline tail/export guard, versions, sandboxed mode (E03 follow-up), Bend reopen re-render, W1 hosted control; CI exit 0 (673 tests); milestone commit `feat: harden SML Studio plugin hosting and integration` (`f176366`); seven SML plugins AWAITING_EXTERNAL_PLUGIN; native pending | `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md` |
-| Next Sprint 4 | PARTIAL — assistant (rules, E06 BLOCKED for generation), typed phone assistant, monitor-only speech/reference path, mastering workspace + E07 meters + verified exports, portable E08 scenario, handoff docs; milestone commit `feat: complete assisted SML Studio mastering workflow` (SHA below); native gates pending | `docs/sprint_reports/NEXT_SPRINT_04_REPORT.md` |
+| Next Sprint 4 | PARTIAL — assistant (rules, E06 BLOCKED for generation), typed phone assistant, monitor-only speech/reference path, mastering workspace + E07 meters + verified exports, portable E08 scenario, handoff docs; milestone commit `feat: complete assisted SML Studio mastering workflow` (`c7664e4`); native gates pending | `docs/sprint_reports/NEXT_SPRINT_04_REPORT.md` |
 
 Current module: cycle complete in P; next is the native gauntlet (see NEXT_CYCLE_FINAL_HANDOFF.md).
 
