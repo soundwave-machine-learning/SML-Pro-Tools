@@ -519,6 +519,8 @@ pub struct SoundApp {
     pub video: video_track::VideoPool,
     /// Assistant runtime: local model worker, push-to-talk, speech output (RC04/RC05).
     pub assistant: assistant_ui::AssistantRuntime,
+    /// Where the Edit toolbar drew its always-reachable groups last frame (RC09).
+    pub toolbar_layout: toolbar::ToolbarLayout,
 }
 
 /// Whether another automation-write pass is due: the transport moved at least
@@ -590,6 +592,7 @@ impl SoundApp {
             last_frame: None,
             video: video_track::VideoPool::default(),
             assistant: assistant_ui::AssistantRuntime::default(),
+            toolbar_layout: toolbar::ToolbarLayout::default(),
         }
     }
 

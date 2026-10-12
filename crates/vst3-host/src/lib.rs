@@ -30,8 +30,10 @@
 //! main thread while the instance processes on the audio thread (VST3's own threading model:
 //! the controller and its views live on the UI thread). Parameter edits made in the editor
 //! (`IComponentHandler::performEdit`) are reported by the handle's `idle` so the host can write
-//! them into the session. Windows (HWND) and Linux (X11) editor windows are not hosted yet:
-//! opening reports "unsupported".
+//! them into the session. Windows hosts the view in a Win32 window (HWND; cross-built and
+//! exercised by `tests/editor_main_thread.rs` on a Windows runner, not yet run on Windows by the
+//! Remote Continuation cycle). Linux (X11) editor windows are not hosted yet: opening reports
+//! "unsupported".
 //!
 //! Not hosted yet: `IMessage`/`IAttributeList` creation through the host (plugins that need it
 //! for processor ↔ controller messaging may lose those messages), aux buses beyond the first
@@ -343,6 +345,8 @@ mod tests {
         let _ = std::fs::remove_dir_all(&d);
         std::fs::create_dir_all(&d).unwrap();
         // Point a single-file ".vst3" at it via a symlink (no copying of binaries).
+        #[cfg(not(unix))]
+        let _ = lib;
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink(&lib, d.join("z.vst3")).unwrap();

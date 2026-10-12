@@ -10,6 +10,11 @@ default-run = "soundcraft"
 [lints]
 workspace = true
 
+[features]
+# Windows ASIO host (off by default): `cargo build --release -p soundcraft --features asio` on a
+# Windows MSVC host with the ASIO SDK; see crates/playback/Cargo.toml.
+asio = ["soundcraft-playback/asio"]
+
 [dependencies]
 soundcraft-engine.workspace = true
 soundcraft-mix.workspace = true

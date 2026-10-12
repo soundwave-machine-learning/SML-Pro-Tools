@@ -563,13 +563,33 @@ fn pair(stream: &TcpStream, h: &Http, inner: &Arc<Inner>) {
     let _ = respond_with(&mut &*stream, 200, "application/json", body.as_bytes(), &[("Set-Cookie", cookie)]);
 }
 
+/// What this page can and cannot do, stated to the client (RC08): plain HTTP on the local
+/// network is not a secure origin, so browsers refuse the microphone (and installable-app
+/// features); a disconnect never stops the desktop's transport or capture.
+static CAPABILITIES: std::sync::LazyLock<Value> = std::sync::LazyLock::new(|| {
+    json!({
+        "https": false,
+        "secure_origin": false,
+        "microphone": "unavailable on this page: browsers allow the microphone only on HTTPS or localhost, and this local-network page is plain HTTP; push-to-talk runs in the desktop Assistant window",
+        "assistant": "typed requests, answered by the grounded rules",
+        "disconnect": "losing this page never stops playback or recording on the desktop; reopening shows the current state",
+    })
+});
+
 fn state_route(stream: &TcpStream, inner: &Arc<Inner>, token_id: &str) {
     let nonce = inner.nonce_counter.fetch_add(1, Ordering::Relaxed) ^ rand::random::<u64>();
     let mut st = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
     if let Some(t) = st.tokens.iter_mut().find(|t| t.id == token_id) {
         t.state_nonce = nonce;
     }
-    let body = json!({"revision": st.revision, "nonce": nonce, "token_id": token_id, "state": st.snapshot, "transport_note": "receipt ≠ sample execution: the DAW schedules audio; this is the last known state"});
+    let body = json!({
+        "revision": st.revision,
+        "nonce": nonce,
+        "token_id": token_id,
+        "state": st.snapshot,
+        "transport_note": "receipt ≠ sample execution: the DAW schedules audio; this is the last known state",
+        "capabilities": CAPABILITIES.clone(),
+    });
     drop(st);
     let _ = respond(stream, 200, "application/json", body.to_string().as_bytes());
 }
@@ -698,7 +718,7 @@ mod tests {
             loop {
                 s2.poll(|env| e2.lock().unwrap().submit(env));
                 let e = e2.lock().unwrap();
-                s2.set_snapshot(e.revision, json!({"name": e.session().name}));
+                s2.set_snapshot(e.revision, json!({"name": e.session().name, "recording": e.transport.recording, "playing": e.transport.playing}));
                 drop(e);
                 std::thread::sleep(Duration::from_millis(5));
             }
@@ -846,6 +866,54 @@ mod tests {
         std::thread::sleep(Duration::from_millis(30));
         assert_eq!(h.engine.lock().unwrap().transport.playing, playing);
         assert!(h.server.events().iter().all(|e| !e.contains(&token_a)), "secrets never reach the log");
+    }
+
+    /// RC08: a phone that vanishes mid-take (dropped socket, revoked, logged out) never stops
+    /// the desktop's capture or queues any transport request; re-pairing sees the current
+    /// state (still recording, current revision) and a fresh record nonce; the state names the
+    /// page's real capabilities (no HTTPS, no microphone).
+    #[test]
+    fn capture_survives_disconnect_and_reconnect_sees_current_state() {
+        let h = host(Config { rate_per_sec: 1000.0, burst: 1000.0, ..Config::default() });
+        let addr = h.server.local_addr();
+        let (token, id) = pair(&h);
+        let c = format!("sml_remote={token}");
+        // The desktop is recording (as the native host would set it).
+        {
+            let mut e = h.engine.lock().unwrap();
+            e.transport.recording = true;
+            e.transport.playing = true;
+            e.transport_requests.clear();
+        }
+        std::thread::sleep(Duration::from_millis(30));
+        let (st, _, s1) = http(addr, "GET", "/state", &[("Cookie", &c)], "");
+        assert_eq!(st, 200);
+        assert_eq!(s1["state"]["recording"], true, "{s1}");
+        assert_eq!(s1["capabilities"]["secure_origin"], false);
+        assert!(s1["capabilities"]["microphone"].as_str().unwrap().contains("HTTPS"));
+        // The phone disappears in every way it can.
+        drop(TcpStream::connect(addr).unwrap());
+        let mut half = TcpStream::connect(addr).unwrap();
+        let _ = half.write_all(b"POST /cmd HTTP/1.1\r\nContent-Length: 500\r\n\r\n{\"request_id\":");
+        drop(half);
+        assert!(h.server.revoke(&id));
+        std::thread::sleep(Duration::from_millis(60));
+        {
+            let e = h.engine.lock().unwrap();
+            assert!(e.transport.recording && e.transport.playing, "capture keeps running");
+            assert!(e.transport_requests.is_empty(), "no stop/record was queued by a disconnect: {:?}", e.transport_requests);
+        }
+        // Reconnect: a new pairing sees the current state and gets a new nonce.
+        let rev_now = h.engine.lock().unwrap().revision;
+        let (token2, _) = pair(&h);
+        let (_, _, s2) = http(addr, "GET", "/state", &[("Cookie", &format!("sml_remote={token2}"))], "");
+        assert_eq!(s2["state"]["recording"], true);
+        assert_eq!(s2["revision"], rev_now);
+        assert_ne!(s2["nonce"], s1["nonce"]);
+        // The old record nonce from before the disconnect cannot start anything.
+        let (st, _) = cmd(&h, &token2, &[], json!({"request_id": "late", "command": "transport.record", "nonce": s1["nonce"]}));
+        assert_eq!(st, 409);
+        assert!(h.engine.lock().unwrap().transport_requests.is_empty());
     }
 
     #[test]

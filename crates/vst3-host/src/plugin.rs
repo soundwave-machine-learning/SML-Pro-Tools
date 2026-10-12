@@ -180,7 +180,7 @@ impl Vst3Plugin {
                 "the first aux input bus carries the sidechain; other aux buses stay inactive",
                 "32-bit processing only",
                 "IMessage/IAttributeList are not created by the host",
-                "editor windows are hosted on macOS only",
+                "editor windows are hosted on macOS and Windows (Win32 HWND window); not on Linux",
             ],
         }
     }

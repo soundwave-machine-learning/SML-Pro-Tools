@@ -10,6 +10,12 @@ use soundcraft_time::{TimeFormat, format_length, format_position};
 
 pub const HEIGHT: f32 = 78.0;
 
+/// RC09 keyboard fallback, stated where Nudge is used: the toolkit cannot tell keypad − from
+/// the main-row − (only keypad + is distinguishable), so plain −/+ nudge whenever no text field,
+/// plugin editor, dialog or shortcut capture has focus; every Nudge action can be remapped.
+pub const NUDGE_EARLIER_HELP: &str = "Nudge earlier: Num− (keypad). Without a keypad, or when it is not recognised: − whenever no text field, plugin editor or dialog has focus. Remap in Setup › Keyboard Shortcuts (nudge.apply).";
+pub const NUDGE_LATER_HELP: &str = "Nudge later: Num+ (keypad). Without a keypad, or when it is not recognised: + whenever no text field, plugin editor or dialog has focus. Remap in Setup › Keyboard Shortcuts (nudge.apply).";
+
 fn group(ui: &mut Ui, w: f32, h: f32, add: impl FnOnce(&mut Ui, Rect)) {
     let t = Tokens::current();
     let (r, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
@@ -18,29 +24,98 @@ fn group(ui: &mut Ui, w: f32, h: f32, add: impl FnOnce(&mut Ui, Rect)) {
     add(&mut child, r);
 }
 
+/// Where the always-reachable toolbar controls were drawn last frame (RC09 evidence and tests).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ToolbarLayout {
+    /// The window was narrower than the full row: Nudge and transport are pinned on the right.
+    pub compact: bool,
+    /// Natural width of the full row (measured on a full-row frame; 0 until then).
+    pub full_width: f32,
+    /// Natural width of the Nudge panel (measured with the full row).
+    pub nudge_width: f32,
+    pub transport: Rect,
+    pub nudge: Rect,
+    /// The area the toolbar had.
+    pub visible: Rect,
+}
+
+impl Default for ToolbarLayout {
+    fn default() -> Self {
+        ToolbarLayout { compact: false, full_width: 0.0, nudge_width: 0.0, transport: Rect::NOTHING, nudge: Rect::NOTHING, visible: Rect::NOTHING }
+    }
+}
+
 pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let full = ui.max_rect();
     ui.painter().rect_filled(full, 0.0, t.toolbar_bg);
     ui.add_space(4.0);
-    // Scrolls sideways when the window is narrower than the row (e.g. 1366×768 at 150 %), so
-    // the NUDGE group and transport stay reachable instead of being clipped.
-    egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.add_space(8.0);
-            ui.spacing_mut().item_spacing.x = 8.0;
-            edit_modes(app, ui);
-            zoom_group(app, ui);
-            tools(app, ui);
-            audio_tools(app, ui);
-            counters(app, ui);
-            grid_nudge(app, ui);
-            nudge_panel(app, ui);
-            transport(app, ui);
-            tempo_meter(app, ui);
-            output_meter(app, ui);
+    let mut layout = app.toolbar_layout;
+    layout.visible = full;
+    // RC09: when the row does not fit (e.g. 1366×768 at 150 %), transport/record and the active
+    // Nudge are pinned on the right where they are always visible; only the other groups
+    // scroll. The row's natural width is learned from a frame where it fitted (or the first one).
+    layout.compact = layout.full_width > 0.0 && full.width() < layout.full_width;
+    if !layout.compact {
+        let out = egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.add_space(8.0);
+                ui.spacing_mut().item_spacing.x = 8.0;
+                edit_modes(app, ui);
+                zoom_group(app, ui);
+                tools(app, ui);
+                audio_tools(app, ui);
+                counters(app, ui);
+                grid_nudge(app, ui);
+                // Exactly its natural width, so the scrolling groups keep the rest of the row.
+            let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
+            layout.nudge = ui
+                .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                    ui.set_max_width(nw);
+                    nudge_panel(app, ui);
+                })
+                .response
+                .rect;
+                layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
+                tempo_meter(app, ui);
+                output_meter(app, ui);
+            });
         });
-    });
+        layout.full_width = out.content_size.x + 16.0;
+        layout.nudge_width = layout.nudge.width();
+    } else {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            ui.add_space(8.0);
+            layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
+            // Exactly its natural width, so the scrolling groups keep the rest of the row.
+            let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
+            layout.nudge = ui
+                .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                    ui.set_max_width(nw);
+                    nudge_panel(app, ui);
+                })
+                .response
+                .rect;
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                egui::ScrollArea::horizontal().id_salt("edit_toolbar_compact").auto_shrink([false, true]).show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.add_space(8.0);
+                        ui.spacing_mut().item_spacing.x = 8.0;
+                        edit_modes(app, ui);
+                        zoom_group(app, ui);
+                        tools(app, ui);
+                        audio_tools(app, ui);
+                        counters(app, ui);
+                        grid_nudge(app, ui);
+                        tempo_meter(app, ui);
+                        output_meter(app, ui);
+                    });
+                });
+            });
+        });
+    }
+    app.toolbar_layout = layout;
 }
 
 fn edit_modes(app: &mut SoundApp, ui: &mut Ui) {
@@ -338,12 +413,12 @@ fn nudge_panel(app: &mut SoundApp, ui: &mut Ui) {
         ui.spacing_mut().item_spacing.y = 2.0;
         ui.horizontal(|ui| {
             ui.label(egui::RichText::new("NUDGE").strong().small());
-            if ui.small_button("◀").on_hover_text("Nudge earlier (Num-)").clicked()
+            if ui.small_button("◀").on_hover_text(NUDGE_EARLIER_HELP).clicked()
                 && let Err(e) = app.run("nudge.apply", json!({"direction": -1}))
             {
                 app.ui.status = e;
             }
-            if ui.small_button("▶").on_hover_text("Nudge later (Num+)").clicked()
+            if ui.small_button("▶").on_hover_text(NUDGE_LATER_HELP).clicked()
                 && let Err(e) = app.run("nudge.apply", json!({"direction": 1}))
             {
                 app.ui.status = e;
@@ -523,5 +598,50 @@ fn output_meter(app: &mut SoundApp, ui: &mut Ui) {
     for c in 0..2 {
         let rr = Rect::from_min_size(pos2(r.min.x + 2.0 + c as f32 * (w + 2.0), r.min.y), vec2(w, r.height()));
         crate::widgets::meter(ui, rr, m.level[c], m.hold[c], m.clip);
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    /// Renders the Edit toolbar alone in a `w`×`h` (logical points) screen, twice (the first
+    /// frame learns the row's natural width), and returns where things landed.
+    fn layout_at(w: f32, h: f32, light: bool) -> ToolbarLayout {
+        let mut app = SoundApp::new(soundcraft_engine::Engine::default(), None, crate::Services::default());
+        let ctx = egui::Context::default();
+        crate::fonts::install(&ctx);
+        ctx.set_visuals(if light { egui::Visuals::light() } else { egui::Visuals::dark() });
+        let raw = || egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(w, h))), ..Default::default() };
+        for _ in 0..3 {
+            let mut out = ctx.run_ui(raw(), |ui| {
+                egui::Panel::top("edit_toolbar").exact_size(HEIGHT).frame(egui::Frame::NONE).show(ui, |ui| show(&mut app, ui));
+            });
+            out.textures_delta.clear();
+        }
+        app.toolbar_layout
+    }
+
+    /// RC09: at 1366×768 at 150 % (911×512 logical points) the transport/record group and the
+    /// active Nudge panel are fully on screen without scrolling; at 1920×1080 and 2560×1440 the
+    /// normal full row is used and they are on screen too. Light and dark themes alike.
+    #[test]
+    fn transport_and_nudge_are_reachable_on_small_screens() {
+        for (w, h, compact) in [(1366.0 / 1.5, 768.0 / 1.5, true), (1280.0, 720.0, true), (1920.0, 1080.0, true), (2560.0, 1440.0, false)] {
+            for light in [false, true] {
+                let l = layout_at(w, h, light);
+                println!("{w}x{h} light {light}: {l:?}");
+                assert_eq!(l.compact, compact, "{w}x{h}: compact layout {l:?}");
+                for (name, r) in [("transport", l.transport), ("nudge", l.nudge)] {
+                    assert!(r.width() > 20.0 && r.height() > 20.0, "{w}x{h} {name} drawn: {r:?}");
+                    assert!(r.min.x >= 0.0 && r.max.x <= w + 0.5 && r.max.y <= HEIGHT + 0.5, "{w}x{h} {name} on screen: {r:?} (visible {:?})", l.visible);
+                }
+                assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}x{h}: transport and Nudge do not overlap");
+                if compact {
+                    assert!(l.nudge.min.x >= 250.0, "{w}x{h}: the other groups keep a scrollable strip: {l:?}");
+                }
+            }
+        }
     }
 }

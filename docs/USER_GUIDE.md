@@ -306,8 +306,10 @@ slots, routing, trims and automation are not part of snapshots.
   worker (up to 3 s per block) instead of substituting silence, so an export is never a
   degraded result; a worker that stays silent faults the export. Measured in
   `docs/evidence/next_cycle/sprint_03/`.
-- **Editors.** CLAP editors open as floating windows; VST3 editors are hosted on macOS only
-  (other platforms report "unsupported"). Sandboxed instances have no editor.
+- **Editors.** CLAP editors open as floating windows; VST3 editors are hosted on macOS and on
+  Windows (a Win32 window that floats over SoundCraft; closing it closes the editor), Linux
+  reports "unsupported". The Windows window was built for Windows here but has not yet been
+  run on Windows by this cycle. Sandboxed instances have no editor.
 - **Not hosted.** VST3 64-bit processing and host-created IMessage; CLAP tail extension (tail
   reported as 0); AU capabilities are not probed. The seven SML plugins (Channel EQ,
   Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align) are separate projects:

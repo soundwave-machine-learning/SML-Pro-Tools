@@ -51,6 +51,7 @@ small{color:#999}
  <h3 style="margin:12px 0 4px">Ask</h3>
  <div class="row"><input id="ask" placeholder="ask, or say what to do (typed)" maxlength="200" style="flex:1"><button id="askbtn">Ask</button></div>
  <small>Answers here come from the grounded rules. The optional local model, spoken replies and push-to-talk run in the desktop Assistant window: a phone microphone needs a secure (HTTPS) page, and this local-network page is plain HTTP.</small>
+ <small id="caps"></small>
  <pre id="answer" style="white-space:pre-wrap;font-size:12px;margin:4px 0"></pre>
  <button id="runplan" style="display:none">Run plan (one undo step)</button>
  <h3 style="margin:12px 0 4px">Monitor (speaker path only, never export)</h3>
@@ -151,6 +152,8 @@ $('loop').onclick=()=>cmd('options.loop_playback'); $('preroll').onclick=()=>cmd
 $('marker').onclick=()=>cmd('markers.add'); $('audition').onclick=()=>cmd('transport.play_selection');
 $('dim').onclick=()=>cmd('monitor.dim'); $('mono').onclick=()=>cmd('monitor.mono');
 $('monvol').onchange=e=>cmd('monitor.volume',{db:+e.target.value});
+// RC08: what this browser itself reports (the server states the same in /state.capabilities).
+$('caps').textContent='This page: '+(window.isSecureContext?'secure origin':'not a secure origin (plain HTTP)')+'; microphone '+((window.isSecureContext&&navigator.mediaDevices)?'available to the browser (push-to-talk still runs on the desktop)':'unavailable')+'. Closing this page never stops playback or recording on the desktop.';
 let lastPlan=null;
 $('askbtn').onclick=async()=>{
   const text=$('ask').value.trim(); if(!text) return;

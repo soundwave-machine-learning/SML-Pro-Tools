@@ -32,5 +32,5 @@ interfaces: another app holding the driver makes opening fail with the driver's 
 |---|---|
 | WASAPI build | cross-built here (GNU); MSVC build in `.github/workflows/release.yml` (not run by this cycle) |
 | WASAPI at runtime | W pending (T10) |
-| ASIO feature wiring | Sprint 3 (compile-checked without the feature only: the SDK is not present here and must not be fetched by this environment) |
+| ASIO feature wiring | done: `--features asio` on `soundcraft` → `soundcraft-playback/asio` → `cpal/asio`; not built here (the SDK must not be fetched by this environment) |
 | ASIO build + runtime | W pending: owner action with the SDK (T11) |

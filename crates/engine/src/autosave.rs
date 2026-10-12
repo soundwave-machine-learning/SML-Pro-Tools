@@ -344,6 +344,10 @@ fn sync_dir(dir: &Path) {
     if let Ok(d) = std::fs::File::open(dir) {
         let _ = d.sync_all();
     }
+    // Windows: a directory cannot be opened and flushed like this (std has no handle for it);
+    // the rename itself is journaled by NTFS. Durability across power loss there is W pending.
+    #[cfg(not(unix))]
+    let _ = dir;
 }
 
 fn io_err(p: &Path, e: std::io::Error) -> EngineError {

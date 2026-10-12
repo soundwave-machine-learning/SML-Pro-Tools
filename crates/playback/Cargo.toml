@@ -22,6 +22,13 @@ cpal.workspace = true
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 
+[features]
+# ASIO as a Windows audio host (cpal's `asio`): needs the Steinberg ASIO SDK accepted and
+# installed by the builder (set CPAL_ASIO_DIR, or cpal's build script fetches it itself), LLVM
+# (LIBCLANG_PATH) and the MSVC toolchain. Off by default; WASAPI is always built in.
+# See docs/remote_continuation/WINDOWS_AUDIO_BACKENDS.md.
+asio = ["cpal/asio"]
+
 [dev-dependencies]
 soundcraft-speech.workspace = true
 soundcraft-mix = { workspace = true, features = ["test-providers"] }
