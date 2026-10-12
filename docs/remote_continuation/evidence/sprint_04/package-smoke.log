@@ -1,0 +1,55 @@
+# Package smoke: utc 2026-10-12T22:32:01Z; env P (Linux container); artifacts from b641b5a (dist-final)
+## Linux tar.gz: clean extraction into an empty folder
+./soundcraft-0.5.0-linux-x86_64/bin/soundcraft
+./soundcraft-0.5.0-linux-x86_64/bin/soundcraft-cli
+./soundcraft-0.5.0-linux-x86_64/share/applications/ai.storyteller.soundcraft.desktop
+./soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/ATTRIBUTION.md
+./soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/LICENSE-APACHE
+./soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/LICENSE-MIT
+./soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/NOTICE
+./soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/README.md
+./soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/128x128/apps/ai.storyteller.soundcraft.png
+./soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/16x16/apps/ai.storyteller.soundcraft.png
+./soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/24x24/apps/ai.storyteller.soundcraft.png
+./soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/256x256/apps/ai.storyteller.soundcraft.png
+... 19 files
+## shared libraries resolve
+cli missing: 0
+gui missing: 0
+## CLI version
+SoundCraft CLI 0.5.0
+exit 0
+## commands registered: 533
+## headless script on the demo session
+assistant.provider: {"language_model":"off: answers come from the grounded rules (turn on a local model server in Window › Assistant)","name":"SoundCraft assistant: grounded rules, optional local la
+assistant.speak: {"queued":1,"seconds":0.8}
+assistant.ask: {"answer":"Apply Finished Bend Renders (`clip.warp_poll`) — no shortcut in the active profile — parameters: {} — host-side: applies finished renders whose revision still matches; 
+assistant.ask: {"answer":"plan (one undo step, at revision 1): mute Kick","build":"0.5.0","citations":["mix.mute"],"labels":[],"measurements":[],"mode":"operate","plan":[{"command":"mix.mute","describ
+/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/smoke.txt:5: assistant.model: bad parameters for `assistant.model`: refused: `192.168.1.2` is not this mach
+## bounce (tail auto, report, decoded verification) and save
+file.bounce_mix: {"bytes":16094696,"loudness_range_lu":15.950000762939453,"lufs":-16.833688735961914,"path":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/smoke.wav","peak_db":-3.3155534267425537,"rate":48000,"report":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/smoke.wav.report.json","seconds":55.8
+session.save: {"audio_files_written":5,"path":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/smoke.scraft"}
+exit 0
+90642 /tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/smoke.scraft
+16094696 /tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/smoke.wav
+## reopen the saved session, meters, bounce again
+mastering.meters: {"correlation":0.9622015953063965,"integrated_lufs":-16.833688735961914,"loudness_range_lu":15.950000762939453,"max_momentary_lufs":-13.87010383605957,"max_short_term_lufs":-16.001752853393555,"mono_peak_db":-3.6890130043029785,"range":[0,2682432],"sample_peak_db":-3.31555342674255
+file.bounce_mix: {"bytes":16094696,"loudness_range_lu":15.950000762939453,"lufs":-16.833688735961914,"path":"/tmp/claude-0/-home-user-SML-Pro-Tools/a269edb8-aecc-5adf-a8e1-461229a5cc90/scratchpad/smoke/x/again.wav","peak_db":-3.3155534267425537,"rate":48000,"seconds":55.884,"tail_samples":0,"true_pe
+exit 0
+## GUI binary version (no display: a window cannot open here)
+SoundCraft 0.5.0
+exit 0
+## Windows zip: clean extraction, every file against its MANIFEST hash, PE headers (not executed: no Windows here)
+soundcraft-0.5.0-windows-x64-gnu-portable/LICENSE-APACHE
+soundcraft-0.5.0-windows-x64-gnu-portable/LICENSE-MIT
+soundcraft-0.5.0-windows-x64-gnu-portable/MANIFEST.json
+soundcraft-0.5.0-windows-x64-gnu-portable/README.txt
+soundcraft-0.5.0-windows-x64-gnu-portable/soundcraft-cli.exe
+soundcraft-0.5.0-windows-x64-gnu-portable/soundcraft.exe
+manifest source {'commit': 'b641b5ad938d47a9387f611cf717f9933c7cdb19', 'dirty': False, 'uncommitted_changes': []}
+hash mismatches: none
+soundcraft.exe:     PE32+ executable (GUI) x86-64 (stripped to external PDB), for MS Windows, 11 sections
+soundcraft-cli.exe: PE32+ executable (console) x86-64 (stripped to external PDB), for MS Windows, 10 sections
+## sha256 of the deliverables
+fe1cd6949353fae37b2621ba0ed4abfbc473ac3565a3c58809b3ae046b46f963  soundcraft-0.5.0-linux-x86_64.tar.gz
+3ae863aab5339798afad94a3f5a3dedc175ec1ba962e485f48ff118166de27fd  soundcraft-0.5.0-windows-x64-gnu-portable.zip

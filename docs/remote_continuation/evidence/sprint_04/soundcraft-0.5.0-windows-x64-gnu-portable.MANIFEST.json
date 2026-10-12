@@ -1,0 +1,85 @@
+{
+  "artifact": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+  "version": "0.5.0",
+  "source": {
+    "commit": "b641b5ad938d47a9387f611cf717f9933c7cdb19",
+    "dirty": false,
+    "uncommitted_changes": []
+  },
+  "built_utc": "2026-10-12T22:31:11Z",
+  "target": "x86_64-pc-windows-gnu",
+  "toolchain": {
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+    "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)",
+    "mingw_gcc": "x86_64-w64-mingw32-gcc (GCC) 13-win32"
+  },
+  "audio_backends": [
+    "WASAPI (cpal default)"
+  ],
+  "not_included": [
+    "ASIO (needs the Steinberg SDK and the MSVC toolchain; owner build)",
+    "code signing",
+    "installer (MSI comes from package.ps1)",
+    "language model (none ships)"
+  ],
+  "verification": "cross-built on Linux; NOT executed on Windows by this build (W pending)",
+  "files": {
+    "LICENSE-APACHE": {
+      "bytes": 10174,
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    "LICENSE-MIT": {
+      "bytes": 1102,
+      "sha256": "6aff3a3f0d8eb4c2d4fca151a00cdf26d8ff3020889402a453381a12dba3381e"
+    },
+    "README.txt": {
+      "bytes": 357,
+      "sha256": "5dd171298a54eef1ead2bbed3b1f820f09411005877ef619343febcab2da6006"
+    },
+    "soundcraft-cli.exe": {
+      "bytes": 13728098,
+      "sha256": "7e8ca105f4a64e80bd531bb54c3951e0ed812ac8de2c247694352be99a67300b",
+      "imports": [
+        "KERNEL32.dll",
+        "WS2_32.dll",
+        "api-ms-win-core-synch-l1-2-0.dll",
+        "bcryptprimitives.dll",
+        "kernel32.dll",
+        "msvcrt.dll",
+        "ntdll.dll",
+        "user32.dll"
+      ],
+      "pe": "/tmp/tmp.QPdVt00OSO/soundcraft-0.5.0-windows-x64-gnu-portable/soundcraft-cli.exe: PE32+ executable (console) x86-64 (stripped to external PDB), for MS Windows, 10 sections"
+    },
+    "soundcraft.exe": {
+      "bytes": 42653961,
+      "sha256": "bb405c79a3a3c2d3d4a9bf9f0bb80e845901f80f794d891b30653f1d34878967",
+      "imports": [
+        "KERNEL32.dll",
+        "USER32.dll",
+        "advapi32.dll",
+        "api-ms-win-core-synch-l1-2-0.dll",
+        "bcryptprimitives.dll",
+        "combase.dll",
+        "dwmapi.dll",
+        "dxgi.dll",
+        "gdi32.dll",
+        "imm32.dll",
+        "kernel32.dll",
+        "msvcrt.dll",
+        "ntdll.dll",
+        "ole32.dll",
+        "oleaut32.dll",
+        "opengl32.dll",
+        "setupapi.dll",
+        "shell32.dll",
+        "shlwapi.dll",
+        "uiautomationcore.dll",
+        "user32.dll",
+        "uxtheme.dll",
+        "ws2_32.dll"
+      ],
+      "pe": "/tmp/tmp.QPdVt00OSO/soundcraft-0.5.0-windows-x64-gnu-portable/soundcraft.exe: PE32+ executable (GUI) x86-64 (stripped to external PDB), for MS Windows, 11 sections"
+    }
+  }
+}

@@ -1,0 +1,9 @@
+# Linux package: utc 2026-10-12T22:23:03Z source b641b5ad938d47a9387f611cf717f9933c7cdb19 dirty 0
+==> SoundCraft 0.5.0 for Linux x86_64 (tar)
+    Finished `release` profile [optimized] target(s) in 5m 02s
+wrote /home/user/SML-Pro-Tools/dist-final/soundcraft-0.5.0-linux-x86_64.tar.gz
+SoundCraft CLI 0.5.0
+==> done
+total 17M
+-rw-r--r-- 1 root root 17M Oct 12 22:28 soundcraft-0.5.0-linux-x86_64.tar.gz
+EXIT: 0

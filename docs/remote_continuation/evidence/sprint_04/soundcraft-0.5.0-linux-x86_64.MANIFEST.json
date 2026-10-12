@@ -1,0 +1,118 @@
+{
+  "artifact": "soundcraft-0.5.0-linux-x86_64.tar.gz",
+  "sha256": "fe1cd6949353fae37b2621ba0ed4abfbc473ac3565a3c58809b3ae046b46f963",
+  "source": {
+    "commit": "b641b5ad938d47a9387f611cf717f9933c7cdb19",
+    "dirty": false,
+    "uncommitted_changes": []
+  },
+  "built_utc": "2026-10-12T22:31:14Z",
+  "build_host": "Linux 6.18.44-fc-v114 x86_64; ldd (Ubuntu GLIBC 2.39-0ubuntu8.9) 2.39",
+  "toolchain": {
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+    "cargo": "cargo 1.97.0 (c980f4866 2026-06-30)"
+  },
+  "rebuild": "packaging/linux/package.sh --formats tar  (from the commit above; glibc of the build host is the minimum)",
+  "audio_backends": [
+    "ALSA (cpal default; PipeWire and PulseAudio reach it through their ALSA plugins)"
+  ],
+  "jack": "not compiled in",
+  "not_included": [
+    "language model (none ships)",
+    "code signing",
+    "AppImage/deb/rpm (only tar.gz built here)"
+  ],
+  "verification": "built and smoke-tested in the Linux build container (P); not installed on the owner's machine",
+  "files": {
+    "soundcraft-0.5.0-linux-x86_64/share/metainfo/ai.storyteller.soundcraft.metainfo.xml": {
+      "bytes": 2567,
+      "sha256": "1c96cfa9a8469ded5e9863bc6b938abaffaea4fbe037b4d69541628cd605a78c"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/LICENSE-APACHE": {
+      "bytes": 10174,
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/NOTICE": {
+      "bytes": 832,
+      "sha256": "977949446409bf907b265d765f024d3194c09251c2a65a4ca418cf5cb2dc84c0"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/ATTRIBUTION.md": {
+      "bytes": 4867,
+      "sha256": "a15bc0ba6fd3d146724e957da8fb771f2dfd7d35a36521f766e1cfbdcd09d92c"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/README.md": {
+      "bytes": 24247,
+      "sha256": "411247182a2364e7b98fc40cf8d3187927c184e94d1f3923ffbdd4d80bfdc66e"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/doc/soundcraft/LICENSE-MIT": {
+      "bytes": 1102,
+      "sha256": "6aff3a3f0d8eb4c2d4fca151a00cdf26d8ff3020889402a453381a12dba3381e"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/512x512/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 35290,
+      "sha256": "4d408f65f7acfc2edf3847106a96c14814d38ac933f5911d3793540b1e1001db"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/scalable/apps/ai.storyteller.soundcraft.svg": {
+      "bytes": 18898,
+      "sha256": "34dc19422bf33dc57239ecec01804bf6ea0851389317be6fe9b20d12176e3c12"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/64x64/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 4252,
+      "sha256": "b91bbf89680d702f8931d1a033465697ce814e2f62a9fdbadc4f4b76a1295dfe"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/48x48/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 3064,
+      "sha256": "27d2ce5857f17d116ce7dd8bb8f0c0f6be8f2a7adbc6cfd4203078f6aa818e37"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/128x128/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 7896,
+      "sha256": "0e7f4f83d82f5539530f62f85ccf8717dcc00c6d25a3dba57e2a65111e3b248b"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/24x24/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 1308,
+      "sha256": "8fe7b5a90e6a10306b9b593f4a571262cc00590af8ae1614d35ffd5f42e52d29"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/16x16/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 767,
+      "sha256": "a258754c98384b567e842eb29cd25cdcbad8f3a74927d9866a5914dce46be42d"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/32x32/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 1857,
+      "sha256": "dba6824016d4decbaab0ea97dce999a9da22cc9302e0501effb9f92a846b7425"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/icons/hicolor/256x256/apps/ai.storyteller.soundcraft.png": {
+      "bytes": 16627,
+      "sha256": "fd6fa6a938fb734990218e23523354762b601c3f06a9b93e77a5efbdae2b0fe6"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/mime/packages/ai.storyteller.soundcraft.xml": {
+      "bytes": 568,
+      "sha256": "2d429becff8f01a911a70e4c64f0dc3ce39ab95bebe5d5ff27723b96586b2593"
+    },
+    "soundcraft-0.5.0-linux-x86_64/share/applications/ai.storyteller.soundcraft.desktop": {
+      "bytes": 562,
+      "sha256": "f94f1b9c8f65c334727c0985f622e3182a255a5610393f8e48b6325cc30c2f6d"
+    },
+    "soundcraft-0.5.0-linux-x86_64/bin/soundcraft-cli": {
+      "bytes": 9501256,
+      "sha256": "f1cca515aade9fc466ef9e3979aaba51166b2a1974e31d79ebe64917be906060",
+      "needed": [
+        "libgcc_s.so.1",
+        "libm.so.6",
+        "libc.so.6"
+      ],
+      "elf": "ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=cbe4203e90a4b9534fc75e9af4a831d9e4a95743, stripped"
+    },
+    "soundcraft-0.5.0-linux-x86_64/bin/soundcraft": {
+      "bytes": 34875240,
+      "sha256": "88ab9af5128583201e593251f493a6858554048c8a2009452944ef3f199776d7",
+      "needed": [
+        "libasound.so.2",
+        "libgcc_s.so.1",
+        "libm.so.6",
+        "libc.so.6",
+        "ld-linux-x86-64.so.2"
+      ],
+      "elf": "ELF 64-bit LSB pie executable, x86-64, version 1 (SYSV), dynamically linked, interpreter /lib64/ld-linux-x86-64.so.2, for GNU/Linux 3.2.0, BuildID[sha1]=a718a14b381ba7951fdfa229123208e3d14463ae, stripped"
+    }
+  }
+}

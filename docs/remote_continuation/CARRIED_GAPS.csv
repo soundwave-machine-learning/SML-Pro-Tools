@@ -4,6 +4,6 @@ C02,Windows VST3 editor windows (HWND),RC07,Sprint 3 (cross-built; W execution p
 C03,VST3 aux-bus sidechain activation,RC03,Sprint 1,DONE host side b1c3099 (P); real plugins H
 C04,Bend anchor boundary clicks (crossfade joins),RC01,Sprint 1,DONE b1c3099 (P); listening L
 C05,Actual AI/STT/TTS runtime,RC04/RC05,Sprint 2,"STT/TTS real (Sprint 2, synthetic speech); LLM BLOCKED in P (T06)"
-C06,"Current Windows/Linux packages from final verified source, attached to the session",RC07/RC12,Sprint 3/4,OPEN
+C06,"Current Windows/Linux packages from final verified source, attached to the session",RC07/RC12,Sprint 3/4,DONE: Linux tar.gz + Windows x64 GNU zip rebuilt from b641b5a with manifests/sha256 and attached (see SPRINT_04_REPORT); installs W/H pending
 C07,Full CI gate at HEAD (audit found none at 9f9b4d3),RC01,Sprint 1 X01,"DONE (baseline-ci.log, exit 0)"
 C08,"Ledger staleness: R36 note, STATE.md duplicate lines",RC01,Sprint 1,DONE (STATE.md lines; R36 superseded in GAP_MATRIX)
