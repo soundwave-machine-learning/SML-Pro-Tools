@@ -19,6 +19,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     workspace(app, ctx);
     configurations(app, ctx);
     playback_engine(app, ctx);
+    recover(app, ctx);
     io_setup(app, ctx);
     shortcuts_window(app, ctx);
     clip_effects(app, ctx);
@@ -558,6 +559,68 @@ pub fn playback_engine(app: &mut SoundApp, ctx: &egui::Context) {
         }
     });
     app.ui.show_playback_engine = open;
+}
+
+/// File › Recover Autosave…: recovery points (rolling autosave generations per session) and
+/// unfinished takes (capture journals still "recording"). Nothing is parsed or changed until a
+/// button is pressed; recovery opens an unsaved session and never overwrites originals.
+pub fn recover(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_recover;
+    win(ctx, &mut open, "Recover Autosave", vec2(640.0, 380.0), |ui| {
+        ui.label(egui::RichText::new(app.autosave_summary()).small());
+        ui.separator();
+        ui.label(egui::RichText::new("Recovery points").strong());
+        let points = app.recovery_points();
+        if points.is_empty() {
+            ui.label("No autosave generations found.");
+        }
+        let mut open_point = None;
+        egui::Grid::new("recover_points").num_columns(5).striped(true).show(ui, |ui| {
+            for (i, p) in points.iter().enumerate() {
+                ui.label(&p.session_name);
+                ui.label(format!("generation {}", p.generation));
+                ui.label(crate::unix_hms(p.unix_time));
+                ui.label(p.plugin_state_age_s.map_or("plugin state: not captured".to_string(), |a| format!("plugin state {a} s older")));
+                if ui.button("Open as unsaved session").clicked() {
+                    open_point = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = open_point
+            && let Some(p) = points.get(i)
+            && let Err(e) = app.open_recovery_point(p)
+        {
+            app.ui.status = format!("Recovery failed: {e}");
+        }
+        ui.separator();
+        ui.label(egui::RichText::new("Unfinished takes").strong());
+        let takes = app.unfinished_takes();
+        if takes.is_empty() {
+            ui.label("No unfinished takes beside this session or in the temp capture folder.");
+        }
+        let mut recover_take = None;
+        egui::Grid::new("recover_takes").num_columns(4).striped(true).show(ui, |ui| {
+            for (i, t) in takes.iter().enumerate() {
+                ui.label(t.media.file_name().and_then(|n| n.to_str()).unwrap_or("?"));
+                ui.label(format!("{} durable frames @ {} Hz, {} ch", t.journal.durable_frames, t.journal.sample_rate, t.journal.channels));
+                ui.label(format!("{:?}{}", t.journal.state, t.journal.error.as_deref().map(|e| format!(" — {e}")).unwrap_or_default()));
+                if ui.button("Recover to a new track").clicked() {
+                    recover_take = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = recover_take
+            && let Some(t) = takes.get(i)
+            && let Err(e) = app.recover_take(t)
+        {
+            app.ui.status = format!("Take recovery failed: {e}");
+        }
+        ui.separator();
+        ui.label(egui::RichText::new("Recovery keeps every validated generation and every journaled frame; nothing here deletes or overwrites a file. Media written after the last durable checkpoint is discarded and reported.").small());
+    });
+    app.ui.show_recover = open;
 }
 
 /// Setup › I/O: busses and output paths.

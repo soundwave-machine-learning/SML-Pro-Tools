@@ -1,13 +1,13 @@
 id,lead_sprint,requirement,status,evidence,commit,env,note
-R01,1,"Reconcile original prompts, preserve code",IN_PROGRESS,docs/evidence/next_cycle/sprint_01/baseline-ci.log; environment.json,396fd0a,P,checkpoint verified; baseline rerun pending result
-R02,1,"Dry capture, device negotiation, bounded callback",UNVERIFIED,prior: docs/evidence/sprint_01/capture-tests.log (REPORTED until rerun),396fd0a,P,rerun in baseline-ci.log; structural-mutation guard (B01) pending
-R03,1,"Clock, placement, latency, honest comparison",UNVERIFIED,prior: clock-tests.log,396fd0a,P,portable CL-T1..5 rerun in baseline; CL-T6/7 native pending
-R04,1,"Atomic autosave, rolling snapshots, recoverable media",MISSING,—,396fd0a,P,"current autosave: 120 s copy, no fsync/index/rolling generations (inspected crates/ui-egui/src/lib.rs:557, crates/engine/src/io.rs:466)"
-R05,1,"Reliability audit, Safe Open, logs, containment",MISSING,—,396fd0a,P,no Safe Open flag (apps/soundcraft/src/main.rs); crash log exists? to inspect
-R06,1,"VST3 scans, editors/state/PDC, CLAP",UNVERIFIED,prior: plugin-compatibility.csv,396fd0a,P,in-process scan loads binaries (vst3-host ffi.rs:245 libloading); no isolation
-R07,1,"Isolated scanning, quarantine, runtime sandbox experiment",MISSING,—,396fd0a,P,"scanner is a worker thread (ui-egui/plugin_scan.rs), not a process; no quarantine; E03 not run"
-R08,1,Remove bundled processors; legacy placeholders,UNVERIFIED,prior: plugin-removal-inventory.md,396fd0a,P,rerun in baseline-ci.log (missing_plugin tests)
-R09,1,Shared command/parameter/knowledge contracts,PARTIAL,crates/engine/src/cmd/mod.rs CommandSpec,396fd0a,P,no request id / expected revision / risk / help / impl status fields; to implement
+R01,1,"Reconcile original prompts, preserve code",PASS_PORTABLE,docs/evidence/next_cycle/sprint_01/baseline-ci.log; environment.json,396fd0a,P,"checkpoint verified (clean tree, main untouched); baseline rerun exit 0, 616 passed"
+R02,1,"Dry capture, device negotiation, bounded callback",UNVERIFIED,prior: docs/evidence/sprint_01/capture-tests.log (REPORTED until rerun),396fd0a,P,baseline rerun passed; B01 structural guard PASS (structural_alloc)
+R03,1,"Clock, placement, latency, honest comparison",PASS_PORTABLE,"baseline-ci.log (clock::, device::), keyboard-backend-inspection.md (B03)",396fd0a,P,portable CL-T1..5 rerun; CL-T6/7 native pending; Pro Tools/Reason comparison not performed
+R04,1,"Atomic autosave, rolling snapshots, recoverable media",PASS_PORTABLE,"autosave tests (engine), unfinished_takes (playback), autosave_worker (ui)",396fd0a,P,rolling generations + validated commit + index; recovery window; power-loss model PENDING (native)
+R05,1,"Reliability audit, Safe Open, logs, containment",PARTIAL,safe_open_tests (mix); autosave_worker (ui) unclean-exit marker,396fd0a,P,Safe Open + reset-prefs + unclean-exit notice done; log redaction and a reliability audit document pending; runtime containment E03 pending
+R06,1,"VST3 scans, editors/state/PDC, CLAP",UNVERIFIED,prior: plugin-compatibility.csv,396fd0a,P,scan now isolated; editors/state/PDC rows carried from the prior cycle (REPORTED) — native H2 pending
+R07,1,"Isolated scanning, quarantine, runtime sandbox experiment",PASS_PORTABLE,"scan_isolated tests (mix), plugin_scan (ui)",396fd0a,P,scan isolation + cache + quarantine done; runtime sandbox experiment E03 pending
+R08,1,Remove bundled processors; legacy placeholders,PASS_PORTABLE,"baseline-ci.log (missing_plugin, no_bundled tests)",396fd0a,P,rerun; placeholders round-trip
+R09,1,Shared command/parameter/knowledge contracts,PASS_PORTABLE,envelope tests (engine),396fd0a,P,envelope/receipt/dedup/stale-revision + knowledge corpus; clients adopt in Sprints 2/4
 R10,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R11,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started
 R12,2,see docs/next_cycle_contracts/docs/REQUIREMENTS.md,UNVERIFIED,—,396fd0a,P,not started

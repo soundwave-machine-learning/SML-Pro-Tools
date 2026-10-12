@@ -28,7 +28,7 @@ pub mod device;
 pub mod record;
 
 use soundcraft_dsp::{Plugin, PluginEditor};
-use soundcraft_mix::{MAX_CHANNELS, MixEngine, PreparedInstance, StripMeter, itu_stereo_fold, main_channels};
+use soundcraft_mix::{GraphPrep, MAX_CHANNELS, MixEngine, PreparedInstance, StripMeter, itu_stereo_fold, main_channels};
 use soundcraft_model::{Session, TrackId};
 use soundcraft_time::{Range, Samples};
 use std::collections::HashMap;
@@ -56,8 +56,10 @@ pub type PluginStates = Vec<(TrackId, usize, Vec<u8>)>;
 pub type EditorEdit = (TrackId, usize, String, f32);
 
 enum Cmd {
-    /// A new snapshot plus the third-party instances it needs (created on the UI thread).
-    Session(Arc<Session>, Vec<PreparedInstance>),
+    /// A new snapshot plus its prepared graph (B01: strips, buffers, order and the third-party
+    /// instances it needs, all created on the UI thread). A fresh engine comes along when the
+    /// sample rate changed (the old one is dropped on the UI thread).
+    Session(Arc<Session>, Box<GraphPrep>, Option<Box<MixEngine>>),
     /// Read every plugin state and reply.
     CaptureStates(Sender<PluginStates>),
     /// Count Off: click before this session position even with the click off.
@@ -143,6 +145,16 @@ pub(crate) struct Garbage {
     plugins: Vec<Box<dyn Plugin>>,
     /// Held only so it is dropped by the receiver.
     _session: Option<Arc<Session>>,
+    /// Leftovers of an applied graph preparation (old maps, unused strips, retired instances).
+    graph: Option<Box<GraphPrep>>,
+    /// A replaced engine (sample-rate change), dropped here.
+    engine: Option<Box<MixEngine>>,
+}
+
+impl Garbage {
+    fn plugins(plugins: Vec<Box<dyn Plugin>>) -> Garbage {
+        Garbage { plugins, _session: None, graph: None, engine: None }
+    }
 }
 
 /// Stream failure code kept by the error callbacks: 1 device gone, 2 other backend error.
@@ -209,14 +221,16 @@ impl AudioState {
                     self.mix.ensure_synced(&self.session);
                     let _ = reply.send(self.mix.capture_states());
                 }
-                Cmd::Session(s, instances) => {
+                Cmd::Session(s, prep, fresh) => {
                     changed = true;
-                    if (s.sample_rate.as_f64() - self.session.sample_rate.as_f64()).abs() > 0.5 {
-                        let mut old = std::mem::replace(&mut self.mix, new_engine(s.sample_rate.as_f64() as f32));
-                        let _ = self.garbage.send(Garbage { plugins: old.drain_plugins(), _session: None });
+                    let mut old_engine = None;
+                    if let Some(fresh) = fresh {
+                        // The rate changed: the UI thread prepared a whole new engine.
+                        old_engine = Some(Box::new(std::mem::replace(&mut self.mix, *fresh)));
                     }
-                    self.mix.adopt(instances);
-                    self.mix.session_changed();
+                    // Structure, buffers and instances were prepared off this thread (B01).
+                    let leftovers = self.mix.apply_prepared(&s, *prep);
+                    let _ = self.garbage.send(Garbage { plugins: Vec::new(), _session: None, graph: Some(Box::new(leftovers)), engine: old_engine });
                     // The main format changed (a document edit, not steady state): resize.
                     let nch = main_channels(&s);
                     if self.block.len() != nch {
@@ -229,7 +243,7 @@ impl AudioState {
                     // Temporary audition overrides are realtime-only (offline exports ignore them).
                     self.mix.audition = s.audition;
                     let old = std::mem::replace(&mut self.session, s);
-                    let _ = self.garbage.send(Garbage { plugins: Vec::new(), _session: Some(old) });
+                    let _ = self.garbage.send(Garbage { plugins: Vec::new(), _session: Some(old), graph: None, engine: None });
                 }
                 Cmd::Play { from, end, looped } => {
                     // A count-off applies to the one Play that follows it, never to a later one.
@@ -268,7 +282,7 @@ impl AudioState {
     fn send_garbage(&mut self) {
         let g = self.mix.take_retired();
         if !g.is_empty() {
-            let _ = self.garbage.send(Garbage { plugins: g, _session: None });
+            let _ = self.garbage.send(Garbage::plugins(g));
         }
     }
 
@@ -431,14 +445,24 @@ struct Side {
     /// Editor handles of the live instances.
     editors: HashMap<(TrackId, usize), Box<dyn PluginEditor>>,
     garbage: Receiver<Garbage>,
+    /// Track count of the last session sent (bounds the retire capacity of the next preparation).
+    prev_tracks: usize,
 }
 
 impl Side {
     /// Drops retired instances (closing their editors first, inside the plugin's drop).
     fn collect_garbage(&mut self) {
-        while let Ok(g) = self.garbage.try_recv() {
+        while let Ok(mut g) = self.garbage.try_recv() {
             // Instances first: a plugin's drop may still close an editor.
             drop(g.plugins);
+            if let Some(mut p) = g.graph.take() {
+                drop(p.drain_plugins());
+                drop(p);
+            }
+            if let Some(mut e) = g.engine.take() {
+                drop(e.drain_plugins());
+                drop(e);
+            }
             drop(g._session);
         }
     }
@@ -509,7 +533,13 @@ impl Player {
 
     fn open_from(session: Arc<Session>, dev: Result<(cpal::Device, cpal::StreamConfig, String), String>) -> Player {
         let (gtx, grx) = channel();
-        let side = Mutex::new(Side { shadow: HashMap::new(), rate: session.sample_rate.as_f64() as f32, editors: HashMap::new(), garbage: grx });
+        let side = Mutex::new(Side {
+            shadow: HashMap::new(),
+            rate: session.sample_rate.as_f64() as f32,
+            editors: HashMap::new(),
+            garbage: grx,
+            prev_tracks: 0,
+        });
         let shared = Arc::new(Shared::new());
         let (tx, rx) = channel();
         let want = session.sample_rate.hz();
@@ -646,8 +676,15 @@ impl Player {
     /// Sends a new session snapshot to the audio thread, with freshly created (state-restored,
     /// prepared) instances of any third-party plugin it newly needs. Call on the UI thread.
     pub fn update_session(&self, s: Arc<Session>) {
-        let instances = self.side().prepare(&s);
-        let _ = self.tx.send(Cmd::Session(s, instances));
+        let mut side = self.side();
+        let sr = s.sample_rate.as_f64() as f32;
+        let rate_changed = (sr - side.rate).abs() > 0.5;
+        let instances = side.prepare(&s);
+        let prep = GraphPrep::build(&s, sr, BLOCK, instances, side.prev_tracks);
+        side.prev_tracks = s.tracks.len();
+        let fresh = rate_changed.then(|| Box::new(new_engine(sr)));
+        drop(side);
+        let _ = self.tx.send(Cmd::Session(s, Box::new(prep), fresh));
     }
 
     /// Reads the state of every live third-party plugin (for saving the session). Waits briefly
@@ -817,7 +854,14 @@ impl Side {
                 if let Some(e) = plugin.editor() {
                     self.editors.insert(key, e);
                 }
-                out.push(PreparedInstance { track: spec.track, slot: spec.slot, id: spec.id, ch: spec.ch, plugin });
+                out.push(PreparedInstance {
+                    track: spec.track,
+                    slot: spec.slot,
+                    id: spec.id,
+                    ch: spec.ch,
+                    plugin,
+                    applied: vec![f32::NAN; spec.params],
+                });
             }
         }
         out
@@ -879,6 +923,18 @@ fn open_device(want_rate: u32, want_ch: u16) -> Result<(cpal::Device, cpal::Stre
 
 #[cfg(test)]
 mod tests {
+    /// A session command with its graph prepared the way `update_session` does it.
+    fn session_cmd(s: Arc<soundcraft_model::Session>, instances: Vec<PreparedInstance>) -> Cmd {
+        let prep = GraphPrep::build(&s, s.sample_rate.as_f64() as f32, BLOCK, instances, 0);
+        Cmd::Session(s, Box::new(prep), None)
+    }
+
+    /// Like `update_session` when the sample rate changed: a fresh engine comes along.
+    fn session_cmd_new_rate(s: Arc<soundcraft_model::Session>, instances: Vec<PreparedInstance>) -> Cmd {
+        let sr = s.sample_rate.as_f64() as f32;
+        let prep = GraphPrep::build(&s, sr, BLOCK, instances, 0);
+        Cmd::Session(s, Box::new(prep), Some(Box::new(new_engine(sr))))
+    }
     use super::*;
 
     #[test]
@@ -964,21 +1020,34 @@ mod tests {
         let (gtx, grx) = channel();
         let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::new(soundcraft_model::Session::default()), 48_000.0, gtx);
         let plugin: Box<dyn Plugin> = Box::new(Stateful(soundcraft_mix::test_providers::create("test:gain:0").unwrap()));
-        tx.send(Cmd::Session(Arc::clone(&s), vec![PreparedInstance { track: t, slot: 1, id: "clap:test.fake".into(), ch: 2, plugin }])).unwrap();
+        tx.send(session_cmd(
+            Arc::clone(&s),
+            vec![PreparedInstance { track: t, slot: 1, id: "clap:test.fake".into(), ch: 2, plugin, applied: Vec::new() }],
+        ))
+        .unwrap();
         let (rtx, rrx) = channel();
         tx.send(Cmd::CaptureStates(rtx)).unwrap();
         // Stopped: the callback only drains commands (adopting the instance) and answers.
         let mut out = vec![0.0f32; 256];
         st.fill(&mut out, 2);
         assert_eq!(rrx.try_recv().unwrap(), vec![(t, 1, b"blob".to_vec())]);
-        let retired = |grx: &std::sync::mpsc::Receiver<Garbage>| grx.try_iter().map(|g| g.plugins.len()).sum::<usize>();
+        // Retired instances travel directly or inside an applied graph's leftovers.
+        let retired = |grx: &std::sync::mpsc::Receiver<Garbage>| {
+            grx.try_iter()
+                .map(|mut g| {
+                    g.plugins.len()
+                        + g.graph.as_mut().map_or(0, |p| p.drain_plugins().len())
+                        + g.engine.as_mut().map_or(0, |e| e.drain_plugins().len())
+                })
+                .sum::<usize>()
+        };
         assert_eq!(retired(&grx), 0, "nothing retired yet");
         // A session without the insert retires the instance to the return channel.
-        tx.send(Cmd::Session(Arc::new(soundcraft_model::Session::default()), Vec::new())).unwrap();
+        tx.send(session_cmd(Arc::new(soundcraft_model::Session::default()), Vec::new())).unwrap();
         st.fill(&mut out, 2);
         assert_eq!(retired(&grx), 1);
         // A sample-rate change rebuilds the engine without dropping plugins on this thread.
-        tx.send(Cmd::Session(
+        tx.send(session_cmd(
             Arc::clone(&s),
             vec![PreparedInstance {
                 track: t,
@@ -986,13 +1055,14 @@ mod tests {
                 id: "clap:test.fake".into(),
                 ch: 2,
                 plugin: Box::new(Stateful(soundcraft_mix::test_providers::create("test:gain:0").unwrap())),
+                applied: Vec::new(),
             }],
         ))
         .unwrap();
         st.fill(&mut out, 2);
         let mut s44 = (*s).clone();
         s44.sample_rate = soundcraft_time::SampleRate::new(44_100).unwrap();
-        tx.send(Cmd::Session(Arc::new(s44), Vec::new())).unwrap();
+        tx.send(session_cmd_new_rate(Arc::new(s44), Vec::new())).unwrap();
         st.fill(&mut out, 2);
         assert_eq!(retired(&grx), 1);
     }
@@ -1045,13 +1115,15 @@ mod tests {
         let first = Arc::new(soundcraft_model::Session::default());
         let weak = Arc::downgrade(&first);
         let mut st = AudioState::new(rx, Arc::clone(&shared), first, 48_000.0, gtx);
-        tx.send(Cmd::Session(Arc::new(soundcraft_model::Session::default()), Vec::new())).unwrap();
+        tx.send(session_cmd(Arc::new(soundcraft_model::Session::default()), Vec::new())).unwrap();
         let mut out = vec![0.0f32; 256];
         st.fill(&mut out, 2);
         assert!(weak.upgrade().is_some(), "the audio thread did not free the old session");
-        let g = grx.try_recv().unwrap();
-        assert!(g.plugins.is_empty());
-        drop(g);
+        // One message carries the graph leftovers, another the replaced session.
+        let garbage: Vec<Garbage> = grx.try_iter().collect();
+        assert!(garbage.iter().all(|g| g.plugins.is_empty()));
+        assert!(garbage.iter().any(|g| g._session.is_some()), "the old session travels back");
+        drop(garbage);
         assert!(weak.upgrade().is_none(), "freed where the UI thread drops the garbage");
     }
 
@@ -1059,7 +1131,7 @@ mod tests {
     fn side_creates_each_missing_instance_once() {
         use soundcraft_model::{ChannelFormat, Insert, TrackKind};
         let (_gtx, grx) = channel();
-        let mut side = Side { shadow: HashMap::new(), rate: 48_000.0, editors: HashMap::new(), garbage: grx };
+        let mut side = Side { shadow: HashMap::new(), rate: 48_000.0, editors: HashMap::new(), garbage: grx, prev_tracks: 0 };
         let mut s = soundcraft_model::Session::default();
         let t = s.add_track(TrackKind::Audio, ChannelFormat::Mono, None);
         s.track_mut(t).unwrap().mixer.inserts[0] = Some(Insert::new("clap:does.not.exist"));

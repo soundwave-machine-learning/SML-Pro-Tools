@@ -24,3 +24,22 @@ executed in this container (environment P) unless its row says otherwise.
 
 Pre-existing conditions: `cargo check --target wasm32-unknown-unknown` prints one dead-code warning
 (`CaptureStates` variant) that predates both cycles (`docs/evidence/sprint_01/baseline-wasm.log`).
+
+## Paint shape conventions (T06, declared before tests were authored)
+
+Command `automation.draw` (`crates/engine/src/cmd/paint.rs`). Orientation: time runs from `start`
+to `end` (samples); values are the parameter's own units (dB for volume/send level, −1..1 for pan).
+Endpoint convention: `from` is the value at `start`, `to` the value at `end`; both endpoints are
+written (the final endpoint survives coalescing). Points inside the range are replaced; points
+outside are preserved; one undo record per draw. Periodic shapes (square, triangle, saw, sine)
+use `baseline` (centre value), `amplitude` (peak deviation), `cycles` (over the range, > 0) and
+`phase` (fraction of a cycle, 0..1). Square: high for the first half of each cycle. Triangle:
+baseline at the cycle start, peak at the half cycle. Saw: rises from −amplitude to +amplitude
+across the cycle. Sine: starts at the baseline, rising. Parabola: `from`→`to` with exponent
+`curve` (1 = line). Point density: one point per `density_ms` (default 10 ms, minimum 1 ms),
+capped at 100 000 points per draw; the declared error tolerance is the linear interpolation
+error between points at that density. Values are clamped to the parameter range; non-finite
+input is rejected before any change. Transform: shifts/scales the existing points inside
+`[box_start, box_end]` (inclusive) by `time_shift`, `time_scale` (0 < x ≤ 1000), `value_offset`,
+`value_scale`; points that leave the box are dropped; the clip-gain envelope is a separate domain
+(`clip.gain_draw`, Sprint 2) and is never written by this command.

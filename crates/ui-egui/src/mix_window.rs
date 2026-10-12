@@ -730,6 +730,42 @@ fn hosted_menus(ui: &mut Ui, scan: &crate::plugin_scan::Scanner, instruments: bo
             }
         });
     }
+    // R07: quarantined bundles (crashed / hung / failed while loading in their worker process)
+    // with their reasons; re-enable retries one on the next scan, rescan picks up new files.
+    let quarantined: Vec<(std::path::PathBuf, String)> = scan.quarantined.lock().map(|q| q.clone()).unwrap_or_default();
+    ui.separator();
+    if quarantined.is_empty() {
+        ui.label(
+            egui::RichText::new(if scan.isolated.load(std::sync::atomic::Ordering::Acquire) {
+                "Scanned in isolated worker processes; nothing quarantined"
+            } else {
+                "Scanned in-process (no isolation in this run)"
+            })
+            .small(),
+        );
+    } else {
+        ui.menu_button(format!("Quarantined ({})", quarantined.len()), |ui| {
+            for (path, reason) in &quarantined {
+                ui.horizontal(|ui| {
+                    ui.label(path.file_name().and_then(|n| n.to_str()).unwrap_or("?")).on_hover_text(format!("{}\n{reason}", path.display()));
+                    if ui
+                        .small_button("Re-enable")
+                        .on_hover_text("Scan this plugin again next time (it may crash the scan worker again, never the app)")
+                        .clicked()
+                    {
+                        scan.re_enable(path);
+                    }
+                });
+            }
+        });
+    }
+    if ui
+        .small_button("Rescan plugins")
+        .on_hover_text("Scans for new or changed plugins (cached results are reused; quarantines are kept unless re-enabled)")
+        .clicked()
+    {
+        scan.rescan();
+    }
     picked
 }
 

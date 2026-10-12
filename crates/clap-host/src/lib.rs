@@ -52,7 +52,7 @@ pub fn parse_id(id: &str) -> Option<&str> {
 }
 
 /// One plugin found by a scan.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct ClapDescriptor {
     /// SoundCraft id: `clap:<plugin_id>`.
     pub id: String,
@@ -100,6 +100,9 @@ mod api {
     pub fn scan_paths(dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
         registry::scan_paths(dirs)
     }
+    pub fn adopt_scanned(descriptors: Vec<ClapDescriptor>) {
+        registry::adopt_scanned(descriptors)
+    }
     pub fn load_bundle(path: &Path) -> Result<Vec<ClapDescriptor>, ClapError> {
         registry::load_bundle(path)
     }
@@ -127,6 +130,7 @@ mod api {
     pub fn scan_paths(_dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
         Vec::new()
     }
+    pub fn adopt_scanned(_descriptors: Vec<ClapDescriptor>) {}
     pub fn load_bundle(_path: &Path) -> Result<Vec<ClapDescriptor>, ClapError> {
         Err(ClapError::Unsupported)
     }
@@ -164,6 +168,12 @@ pub fn scan_paths(dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
 /// The plugins in one `.clap` file or bundle.
 pub fn load_bundle(path: &Path) -> Result<Vec<ClapDescriptor>, ClapError> {
     api::load_bundle(path)
+}
+
+/// Adopts descriptors found by an out-of-process scan (see `soundcraft_mix::scan_isolated`):
+/// `scan()` then returns them without loading any bundle in this process.
+pub fn adopt_scanned(descriptors: Vec<ClapDescriptor>) {
+    api::adopt_scanned(descriptors)
 }
 
 /// Creates a plugin by `clap:<id>`, prepared for 48 kHz stereo with 1024-frame blocks (like

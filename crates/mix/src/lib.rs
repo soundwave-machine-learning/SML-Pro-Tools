@@ -58,6 +58,9 @@ use std::collections::HashMap;
 #[cfg(any(test, feature = "test-providers"))]
 pub mod test_providers;
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod scan_isolated;
+
 /// True when a session insert/slot id cannot be instantiated in this build: a removed upstream
 /// built-in, or an external plugin that is not installed. Such entries keep their id, parameters
 /// and state and pass audio through (an inactive missing placeholder).
@@ -96,6 +99,16 @@ pub fn is_third_party(id: &str) -> bool {
         || id.starts_with(soundcraft_au_host::ID_PREFIX)
 }
 
+/// Plugins that are created off the audio thread and handed to the engine as prepared
+/// instances: hosted plugins, plus the test providers (feature `test-providers`).
+fn is_prepared_externally(id: &str) -> bool {
+    #[cfg(any(test, feature = "test-providers"))]
+    if id.starts_with(test_providers::PREFIX) {
+        return true;
+    }
+    is_third_party(id)
+}
+
 /// A third-party plugin instance a session needs: which slot, which plugin, how many channels,
 /// and the state to restore.
 #[derive(Debug, Clone, PartialEq)]
@@ -108,6 +121,8 @@ pub struct InstanceSpec {
     pub ch: usize,
     /// Decoded [`Insert::state`](soundcraft_model::Insert::state).
     pub state: Option<Vec<u8>>,
+    /// Number of parameter values the insert carries (sizes the applied-values vector).
+    pub params: usize,
 }
 
 /// A plugin instance created and prepared off the audio thread, handed to [`MixEngine::adopt`].
@@ -117,6 +132,9 @@ pub struct PreparedInstance {
     pub id: String,
     pub ch: usize,
     pub plugin: Box<dyn Plugin>,
+    /// Last-applied parameter values, sized to the insert's parameter map off the audio thread
+    /// (`vec![NAN; n]`); empty when the caller did not size it (then the first block allocates).
+    pub applied: Vec<f32>,
 }
 
 /// Every third-party plugin slot (inserts and instruments) of a session, with the channel count
@@ -128,21 +146,35 @@ pub fn instance_specs(s: &Session) -> Vec<InstanceSpec> {
         let ch = strip_channels(t, main_ch);
         for (i, ins) in t.mixer.inserts.iter().enumerate() {
             if let Some(ins) = ins
-                && is_third_party(&ins.plugin)
+                && is_prepared_externally(&ins.plugin)
             {
-                out.push(InstanceSpec { track: t.id, slot: i, id: ins.plugin.clone(), ch, state: ins.state_bytes() });
+                out.push(InstanceSpec { track: t.id, slot: i, id: ins.plugin.clone(), ch, state: ins.state_bytes(), params: ins.params.len() });
             }
         }
         if let Some(ins) = &t.instrument
-            && is_third_party(&ins.plugin)
+            && is_prepared_externally(&ins.plugin)
         {
-            out.push(InstanceSpec { track: t.id, slot: INSTRUMENT_SLOT, id: ins.plugin.clone(), ch: ch.max(2), state: ins.state_bytes() });
+            out.push(InstanceSpec {
+                track: t.id,
+                slot: INSTRUMENT_SLOT,
+                id: ins.plugin.clone(),
+                ch: ch.max(2),
+                state: ins.state_bytes(),
+                params: ins.params.len(),
+            });
         }
         for k in SlotKind::ALL {
             if let Some(ins) = t.mixer.slots.get(k).and_then(|x| x.provider.as_ref())
-                && is_third_party(&ins.plugin)
+                && is_prepared_externally(&ins.plugin)
             {
-                out.push(InstanceSpec { track: t.id, slot: k.instance_index(), id: ins.plugin.clone(), ch, state: ins.state_bytes() });
+                out.push(InstanceSpec {
+                    track: t.id,
+                    slot: k.instance_index(),
+                    id: ins.plugin.clone(),
+                    ch,
+                    state: ins.state_bytes(),
+                    params: ins.params.len(),
+                });
             }
         }
     }
@@ -280,13 +312,65 @@ struct DelayLine {
     len: usize,
 }
 
+/// Samples of delay-compensation ring reserved per channel for strips prepared off the audio
+/// thread (B01): a latency change within the reserve never allocates in the callback.
+pub const PDC_RESERVE: usize = 4096;
+
+/// Allocations the audio thread had to make because a prepared resource was missing or too
+/// small (B01 fallback). Zero in the structural-mutation guard; logged once at runtime.
+static PREPARED_FALLBACKS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
+
+fn note_fallback() {
+    if on_audio_thread() {
+        let n = PREPARED_FALLBACKS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        if n == 0 {
+            log::warn!("mix: allocated on the audio thread outside the prepared graph (B01 fallback)");
+        }
+    }
+}
+
+/// Allocations made on the audio thread outside the prepared graph since the last reset.
+pub fn prepared_fallbacks() -> u32 {
+    PREPARED_FALLBACKS.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+pub fn reset_prepared_fallbacks() {
+    PREPARED_FALLBACKS.store(0, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Pushes without growing when the prepared capacity suffices; a growth is a counted fallback.
+fn push_counted<T>(v: &mut Vec<T>, x: T) {
+    if v.len() == v.capacity() {
+        note_fallback();
+    }
+    v.push(x);
+}
+
 impl DelayLine {
+    /// Allocates `cap` samples per channel ahead of time (off the audio thread).
+    fn reserve(&mut self, cap: usize, ch: usize) {
+        self.bufs = vec![vec![0.0; cap]; ch];
+        self.len = 0;
+        self.idx = 0;
+    }
+
+    /// Sets the delay. Reuses the ring's capacity when it suffices (clearing the used part);
+    /// otherwise reallocates — on the audio thread that is a counted B01 fallback.
     fn set(&mut self, len: usize, ch: usize) {
         let len = len.min(1 << 20);
-        if len != self.len || self.bufs.len() != ch {
-            self.len = len;
-            self.idx = 0;
-            self.bufs = vec![vec![0.0; len]; ch];
+        if len == self.len && self.bufs.len() == ch {
+            return;
+        }
+        self.len = len;
+        self.idx = 0;
+        let cap = self.bufs.first().map_or(0, Vec::len);
+        if self.bufs.len() == ch && cap >= len {
+            for b in &mut self.bufs {
+                b.iter_mut().take(len).for_each(|x| *x = 0.0);
+            }
+        } else {
+            note_fallback();
+            self.bufs = vec![vec![0.0; len.max(cap)]; ch];
         }
     }
     fn process(&mut self, io: &mut [Vec<f32>], frames: usize) {
@@ -348,6 +432,169 @@ impl Strip {
             audition_delay: DelayLine::default(),
         }
     }
+}
+
+impl Strip {
+    /// A strip with every buffer the first blocks would otherwise allocate, built off the audio
+    /// thread for [`GraphPrep`].
+    fn prepared(ch: usize, mb: usize, inserts: usize) -> Strip {
+        let mut st = Strip::new();
+        st.buf = vec![vec![0.0; mb]; ch];
+        st.pre = (0..ch).map(|_| Vec::with_capacity(mb)).collect();
+        st.outbuf = (0..ch).map(|_| Vec::with_capacity(mb)).collect();
+        st.scratch = vec![0.0; mb];
+        st.plugins = Vec::with_capacity(inserts);
+        st.held = Vec::with_capacity(128);
+        for d in [&mut st.align, &mut st.align_pre, &mut st.out_extra, &mut st.audition_delay].into_iter().chain(st.slot_delay.iter_mut()) {
+            d.reserve(PDC_RESERVE, ch);
+        }
+        st
+    }
+
+    fn retire_all(&mut self, into: &mut Vec<Box<dyn Plugin>>) {
+        for p in self.plugins.drain(..).flatten() {
+            push_counted(into, p.plugin);
+        }
+        if let Some(p) = self.instrument.take() {
+            push_counted(into, p.plugin);
+        }
+        for d in self.dedicated.iter_mut() {
+            if let Some(p) = d.take() {
+                push_counted(into, p.plugin);
+            }
+        }
+    }
+}
+
+/// Everything a structural session change may need on the audio thread, allocated off it
+/// (B01): maps with reserved capacity, a fresh strip/bus/meter per track and bus, the processing
+/// order and the plugin instances. [`MixEngine::apply_prepared`] moves what already exists across
+/// and fills the rest from here; afterwards the same value holds the leftovers (old maps, unused
+/// strips, retired instances) so the UI thread frees them.
+pub struct GraphPrep {
+    strips: HashMap<TrackId, Strip>,
+    fresh: Vec<(TrackId, Strip)>,
+    busses: HashMap<BusId, BusBuf>,
+    fresh_busses: Vec<(BusId, BusBuf)>,
+    meters: HashMap<TrackId, StripMeter>,
+    fresh_meters: Vec<(TrackId, StripMeter)>,
+    order: Vec<usize>,
+    work: Vec<(usize, Strip)>,
+    main: Vec<Vec<f32>>,
+    main_acc: Vec<Vec<f64>>,
+    instances: Vec<PreparedInstance>,
+    /// Whole slots retired by `apply_prepared` (plugin, id string, applied values): dropped
+    /// off the audio thread.
+    retired: Vec<PluginSlot>,
+    /// Prepared instances that no slot took (dropped off the audio thread).
+    unplaced: Vec<PreparedInstance>,
+    orphans: Vec<Strip>,
+    orphan_busses: Vec<BusBuf>,
+    orphan_meters: Vec<StripMeter>,
+    old_order: Vec<usize>,
+    old_work: Vec<(usize, Strip)>,
+}
+
+impl GraphPrep {
+    /// Prepares resources for rendering `s` with an engine of `max_block` frames. `instances`
+    /// are the hosted/test instances the session needs (see [`prepare_instances`]);
+    /// `previous_tracks` bounds how many strips the engine may retire (its last session size).
+    pub fn build(s: &Session, _sample_rate: f32, max_block: usize, instances: Vec<PreparedInstance>, previous_tracks: usize) -> GraphPrep {
+        let mb = max_block.clamp(16, 16_384);
+        let main_ch = main_channels(s);
+        let n = s.tracks.len();
+        let slack = 8;
+        let fresh: Vec<(TrackId, Strip)> =
+            s.tracks.iter().map(|t| (t.id, Strip::prepared(strip_channels(t, main_ch), mb, t.mixer.inserts.len()))).collect();
+        let fresh_meters: Vec<(TrackId, StripMeter)> = s
+            .tracks
+            .iter()
+            .map(|t| (t.id, StripMeter { peaks: Vec::with_capacity(strip_channels(t, main_ch).max(2)), ..StripMeter::default() }))
+            .collect();
+        let fresh_busses: Vec<(BusId, BusBuf)> = s
+            .busses
+            .iter()
+            .map(|b| {
+                let c = b.format.channels().clamp(1, MAX_CHANNELS);
+                (b.id, BusBuf { fmt: b.format, buf: vec![vec![0.0; mb]; c], acc: vec![vec![0.0; mb]; c] })
+            })
+            .collect();
+        let n_inst = instances.len();
+        let retire_cap = (previous_tracks.max(n) + slack) * (soundcraft_model::INSERT_SLOTS + 4) + n_inst;
+        GraphPrep {
+            strips: HashMap::with_capacity(n + slack),
+            fresh,
+            busses: HashMap::with_capacity(s.busses.len() + slack),
+            fresh_busses,
+            meters: HashMap::with_capacity(n + slack),
+            fresh_meters,
+            order: processing_order(s),
+            work: Vec::with_capacity(n + slack),
+            main: vec![vec![0.0; mb]; main_ch],
+            main_acc: vec![vec![0.0; mb]; main_ch],
+            instances,
+            retired: Vec::with_capacity(retire_cap),
+            unplaced: Vec::with_capacity(n_inst + slack),
+            orphans: Vec::with_capacity(previous_tracks + n + slack),
+            orphan_busses: Vec::with_capacity(previous_tracks + s.busses.len() + slack),
+            orphan_meters: Vec::with_capacity(previous_tracks + n + slack),
+            old_order: Vec::new(),
+            old_work: Vec::new(),
+        }
+    }
+
+    /// Plugin instances left over (retired or never placed), for a host that drops them itself.
+    pub fn drain_plugins(&mut self) -> Vec<Box<dyn Plugin>> {
+        let mut out: Vec<Box<dyn Plugin>> = self.retired.drain(..).map(|s| s.plugin).collect();
+        out.extend(self.instances.drain(..).chain(self.unplaced.drain(..)).map(|p| p.plugin));
+        for st in self.orphans.iter_mut().chain(self.fresh.iter_mut().map(|(_, s)| s)).chain(self.old_work.iter_mut().map(|(_, s)| s)) {
+            st.retire_all(&mut out);
+        }
+        for st in self.strips.values_mut() {
+            st.retire_all(&mut out);
+        }
+        out
+    }
+
+    /// The prepared instance for this slot, if one matches; a mismatched one stays here (dropped
+    /// off the audio thread).
+    fn take_instance(&mut self, t: TrackId, slot: usize, id: &str, ch: usize) -> Option<PluginSlot> {
+        let i = self.instances.iter().position(|p| p.track == t && p.slot == slot && p.id == id && p.ch == ch)?;
+        let p = self.instances.swap_remove(i);
+        Some(PluginSlot { id: p.id, ch, plugin: p.plugin, applied: p.applied })
+    }
+
+    fn retire(&mut self, slot: Option<PluginSlot>) {
+        if let Some(s) = slot {
+            push_counted(&mut self.retired, s);
+        }
+    }
+
+    /// Moves every instance of `st` here, whole, without freeing anything.
+    fn retire_strip_slots(&mut self, st: &mut Strip) {
+        while let Some(p) = st.plugins.pop() {
+            self.retire(p);
+        }
+        let i = st.instrument.take();
+        self.retire(i);
+        for d in st.dedicated.iter_mut() {
+            let p = d.take();
+            self.retire(p);
+        }
+    }
+}
+
+/// Creates (state-restored, prepared) instances of every hosted or test-provider plugin `s`
+/// needs — off the audio thread, for [`GraphPrep::build`]. Missing plugins yield nothing (their
+/// slots pass audio through as placeholders).
+pub fn prepare_instances(s: &Session, sample_rate: f32, max_block: usize) -> Vec<PreparedInstance> {
+    instance_specs(s)
+        .into_iter()
+        .filter_map(|spec| {
+            let plugin = create_instance(&spec.id, spec.state.as_deref(), sample_rate, max_block, spec.ch)?;
+            Some(PreparedInstance { track: spec.track, slot: spec.slot, id: spec.id, ch: spec.ch, plugin, applied: vec![f32::NAN; spec.params] })
+        })
+        .collect()
 }
 
 /// Renders sessions. Keep one per playback stream; plugin state persists across blocks.
@@ -500,7 +747,7 @@ impl SlotCtx<'_> {
 
     /// A new instance for `ins` on track `t`, slot `idx`, prepared for `ch` channels.
     fn make(&mut self, t: TrackId, idx: usize, ins: &soundcraft_model::Insert, ch: usize) -> Option<PluginSlot> {
-        let third = is_third_party(&ins.plugin);
+        let third = is_prepared_externally(&ins.plugin);
         let plugin = if third && self.external {
             match self.adopt.remove(&(t, idx)) {
                 Some(p) if p.id == ins.plugin && p.ch == ch => Some(p.plugin),
@@ -573,6 +820,139 @@ impl MixEngine {
         }
         // Force a re-sync so waiting slots pick their instance up.
         self.synced = (usize::MAX, usize::MAX, usize::MAX);
+    }
+
+    /// Applies a session's prepared graph (B01): moves the strips, bus buffers and meters that
+    /// still match from the current maps into the prepared ones, takes fresh ones for new
+    /// tracks/busses, places the prepared plugin instances and retires the rest — without
+    /// allocating or freeing on the calling (audio) thread. Returns the bundle holding everything
+    /// to drop elsewhere. Any allocation that was still needed is counted by
+    /// [`prepared_fallbacks`].
+    pub fn apply_prepared(&mut self, s: &Session, mut prep: GraphPrep) -> GraphPrep {
+        let main_ch = main_channels(s);
+        self.main_fmt = s.main_format();
+        if self.main.len() != main_ch {
+            std::mem::swap(&mut self.main, &mut prep.main);
+        }
+        // `new` leaves the f64 accumulator for `sync` to size: take the prepared one.
+        if self.main_acc.len() != main_ch {
+            std::mem::swap(&mut self.main_acc, &mut prep.main_acc);
+        }
+        // Instances waiting from `adopt` (unused in prepared mode) are dropped off-thread too.
+        for (_, p) in self.adopt.drain() {
+            push_counted(&mut prep.unplaced, p);
+        }
+        // Strips: keep those whose channel count still matches, retire the others' plugins.
+        let mut old = std::mem::replace(&mut self.strips, std::mem::take(&mut prep.strips));
+        for (id, mut st) in old.drain() {
+            match s.track(id) {
+                Some(t) if st.buf.len() == strip_channels(t, main_ch) => {
+                    self.strips.insert(id, st);
+                }
+                _ => {
+                    prep.retire_strip_slots(&mut st);
+                    push_counted(&mut prep.orphans, st);
+                }
+            }
+        }
+        prep.strips = old;
+        while let Some((id, st)) = prep.fresh.pop() {
+            match self.strips.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => push_counted(&mut prep.orphans, st),
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(st);
+                }
+            }
+        }
+        for t in &s.tracks {
+            let ch = strip_channels(t, main_ch);
+            let Some(strip) = self.strips.get_mut(&t.id) else { continue };
+            while strip.plugins.len() > t.mixer.inserts.len() {
+                let p = strip.plugins.pop().flatten();
+                prep.retire(p);
+            }
+            if strip.plugins.capacity() < t.mixer.inserts.len() {
+                note_fallback();
+            }
+            strip.plugins.resize_with(t.mixer.inserts.len(), || None);
+            for (idx, (slot, ins)) in strip.plugins.iter_mut().zip(t.mixer.inserts.iter()).enumerate() {
+                match ins {
+                    Some(i) if slot.as_ref().is_none_or(|p| p.id != i.plugin || p.ch != ch) => {
+                        let old = slot.take();
+                        prep.retire(old);
+                        *slot = prep.take_instance(t.id, idx, &i.plugin, ch);
+                    }
+                    None => {
+                        let old = slot.take();
+                        prep.retire(old);
+                    }
+                    _ => {}
+                }
+            }
+            let want = t.instrument.as_ref();
+            let ich = ch.max(2);
+            if strip.instrument.as_ref().map(|p| (p.id.as_str(), p.ch)) != want.map(|i| (i.plugin.as_str(), ich)) {
+                let old = strip.instrument.take();
+                prep.retire(old);
+                strip.instrument = want.and_then(|i| prep.take_instance(t.id, INSTRUMENT_SLOT, &i.plugin, ich));
+            }
+            for (k, inst) in SlotKind::ALL.iter().zip(strip.dedicated.iter_mut()) {
+                let want = t.mixer.slots.get(*k).and_then(|x| x.provider.as_ref());
+                if inst.as_ref().map(|p| (p.id.as_str(), p.ch)) != want.map(|i| (i.plugin.as_str(), ch)) {
+                    let old = inst.take();
+                    prep.retire(old);
+                    *inst = want.and_then(|i| prep.take_instance(t.id, k.instance_index(), &i.plugin, ch));
+                }
+            }
+        }
+        // Busses.
+        let mut old_b = std::mem::replace(&mut self.busses, std::mem::take(&mut prep.busses));
+        for (id, b) in old_b.drain() {
+            match s.bus(id) {
+                Some(bus) if b.buf.len() == bus.format.channels().clamp(1, MAX_CHANNELS) => {
+                    self.busses.insert(id, b);
+                }
+                _ => push_counted(&mut prep.orphan_busses, b),
+            }
+        }
+        prep.busses = old_b;
+        while let Some((id, mut b)) = prep.fresh_busses.pop() {
+            if let Some(cur) = self.busses.get_mut(&id) {
+                cur.fmt = b.fmt;
+                push_counted(&mut prep.orphan_busses, b);
+            } else {
+                if let Some(bus) = s.bus(id) {
+                    b.fmt = bus.format;
+                }
+                self.busses.insert(id, b);
+            }
+        }
+        // Meters: keep existing values, pre-place one per track.
+        let mut old_m = std::mem::replace(&mut self.meters, std::mem::take(&mut prep.meters));
+        for (id, m) in old_m.drain() {
+            if s.track(id).is_some() {
+                self.meters.insert(id, m);
+            } else {
+                push_counted(&mut prep.orphan_meters, m);
+            }
+        }
+        prep.meters = old_m;
+        while let Some((id, m)) = prep.fresh_meters.pop() {
+            match self.meters.entry(id) {
+                std::collections::hash_map::Entry::Occupied(_) => push_counted(&mut prep.orphan_meters, m),
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert(m);
+                }
+            }
+        }
+        // Order and the reusable work list.
+        prep.old_order = std::mem::replace(&mut self.order, std::mem::take(&mut prep.order));
+        if prep.work.capacity() > self.work.capacity() {
+            prep.old_work = std::mem::replace(&mut self.work, std::mem::take(&mut prep.work));
+        }
+        self.synced = (structure_fingerprint(s), s.tracks.len(), s.busses.len());
+        self.session_dirty = false;
+        prep
     }
 
     /// True once if the total compensation latency changed while recording (then cleared).
@@ -2392,6 +2772,19 @@ pub fn render_track_pre_fader(s: &Session, track: TrackId, range: Range) -> Vec<
 
 /// A hosted external plugin (CLAP / VST3 / AU). Removed upstream built-ins are never created:
 /// their inserts stay in the session as inactive missing placeholders that pass audio through.
+/// Safe Open (R05): when set, no hosted (CLAP/VST3/AU) plugin is loaded — every hosted slot
+/// becomes a pass-through placeholder with its state kept, exactly like a missing plugin — and
+/// the plugin scanner does not start. Session data is never changed by this switch.
+static HOSTED_PLUGINS_DISABLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn set_hosted_plugins_disabled(on: bool) {
+    HOSTED_PLUGINS_DISABLED.store(on, std::sync::atomic::Ordering::Release);
+}
+
+pub fn hosted_plugins_disabled() -> bool {
+    HOSTED_PLUGINS_DISABLED.load(std::sync::atomic::Ordering::Acquire)
+}
+
 fn create_plugin(id: &str) -> Option<Box<dyn Plugin>> {
     #[cfg(any(test, feature = "test-providers"))]
     if id.starts_with(test_providers::PREFIX) {
@@ -2400,7 +2793,33 @@ fn create_plugin(id: &str) -> Option<Box<dyn Plugin>> {
     if soundcraft_dsp::is_removed_builtin(id) {
         return None;
     }
+    if is_third_party(id) && hosted_plugins_disabled() {
+        return None;
+    }
     soundcraft_clap_host::create(id).or_else(|| soundcraft_vst3_host::create(id)).or_else(|| soundcraft_au_host::create(id))
+}
+
+#[cfg(test)]
+mod safe_open_tests {
+    use super::*;
+
+    /// R05 Safe Open: hosted ids yield no instance (placeholder path), test providers and the
+    /// session data are untouched, and the switch is reversible.
+    #[test]
+    fn safe_open_disables_hosted_plugins_only() {
+        set_hosted_plugins_disabled(true);
+        assert!(hosted_plugins_disabled());
+        assert!(create_instance("clap:does.not.exist", None, 48_000.0, 64, 2).is_none());
+        assert!(create_instance("vst3:00000000000000000000000000000001", None, 48_000.0, 64, 2).is_none());
+        assert!(create_instance("test:gain:0", None, 48_000.0, 64, 2).is_some(), "built-in test providers are not hosted plugins");
+        let mut s = Session::default();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Stereo, None);
+        s.track_mut(t).unwrap().mixer.inserts[0] = Some(soundcraft_model::Insert::new("clap:some.plugin"));
+        assert!(prepare_instances(&s, 48_000.0, 64).is_empty());
+        assert_eq!(s.track(t).unwrap().mixer.inserts[0].as_ref().map(|i| i.plugin.as_str()), Some("clap:some.plugin"), "session untouched");
+        set_hosted_plugins_disabled(false);
+        assert!(!hosted_plugins_disabled());
+    }
 }
 
 #[cfg(test)]
@@ -2614,7 +3033,7 @@ mod tests {
         ins.params.insert("gain".into(), -6.0);
         s.track_mut(t).unwrap().mixer.inserts[0] = Some(ins);
         let specs = instance_specs(&s);
-        assert_eq!(specs, vec![InstanceSpec { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, state: None }]);
+        assert_eq!(specs, vec![InstanceSpec { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, state: None, params: 1 }]);
         let mut eng = MixEngine::new(48_000.0, 512);
         eng.set_external_instances(true);
         // Nothing to adopt yet: the slot passes audio through (and sync never tried to load a
@@ -2627,10 +3046,10 @@ mod tests {
         let fake = Stateful { inner: gain, blob: b"live state".to_vec(), sets: Arc::clone(&sets) };
         // An instance for the wrong channel count is retired, not used.
         let wrong = Stateful { inner: test_providers::create("test:gain:0").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
-        eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 2, plugin: Box::new(wrong) }]);
+        eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 2, plugin: Box::new(wrong), applied: Vec::new() }]);
         assert!(render_block(&mut eng, &s, 512) > 0.3);
         assert_eq!(eng.take_retired().len(), 1);
-        eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, plugin: Box::new(fake) }]);
+        eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, plugin: Box::new(fake), applied: Vec::new() }]);
         let mut wet = 0.0;
         for b in 2..20 {
             wet = render_block(&mut eng, &s, b * 512);
@@ -2645,7 +3064,14 @@ mod tests {
         assert_eq!(eng.take_retired().len(), 1);
         assert!(eng.capture_states().is_empty());
         // Instances nobody claims are retired too; drain_plugins empties the engine.
-        eng.adopt(vec![PreparedInstance { track: t, slot: 3, id: "clap:x".into(), ch: 1, plugin: test_providers::create("test:gain:0").unwrap() }]);
+        eng.adopt(vec![PreparedInstance {
+            track: t,
+            slot: 3,
+            id: "clap:x".into(),
+            ch: 1,
+            plugin: test_providers::create("test:gain:0").unwrap(),
+            applied: Vec::new(),
+        }]);
         render_block(&mut eng, &s, 21 * 512);
         assert_eq!(eng.take_retired().len(), 1);
         assert!(eng.drain_plugins().is_empty());
@@ -2663,7 +3089,14 @@ mod tests {
         eng.set_external_instances(true);
         let sets = Arc::new(std::sync::atomic::AtomicUsize::new(0));
         let fake = Stateful { inner: test_providers::create("test:gain:0").unwrap(), blob: Vec::new(), sets: Arc::clone(&sets) };
-        eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "vst3:00000000000000000000000000000001".into(), ch: 1, plugin: Box::new(fake) }]);
+        eng.adopt(vec![PreparedInstance {
+            track: t,
+            slot: 0,
+            id: "vst3:00000000000000000000000000000001".into(),
+            ch: 1,
+            plugin: Box::new(fake),
+            applied: Vec::new(),
+        }]);
         render_block(&mut eng, &s, 0);
         assert_eq!(sets.load(std::sync::atomic::Ordering::Relaxed), 1, "session params apply once");
         render_block(&mut eng, &s, 512);

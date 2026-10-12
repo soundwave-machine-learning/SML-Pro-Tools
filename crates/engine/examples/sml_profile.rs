@@ -49,6 +49,38 @@ fn main() {
     let session = e.session().clone();
     let mut csv =
         String::from("config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance\n");
+    // B02 control: a thread that only keeps the callback cadence (spinning, no audio work) for
+    // the same 60 s. Its lateness per period is pure scheduler preemption of this process; a
+    // deadline miss here is a miss no DSP optimisation can remove. Compare with the rendering
+    // configs below (same process, same minute).
+    for n in [64usize, 128, 256] {
+        let callbacks = (sr as usize * 60) / n;
+        let period = std::time::Duration::from_secs_f64(n as f64 / f64::from(sr));
+        let start = Instant::now();
+        let mut late = Vec::with_capacity(callbacks);
+        for k in 0..callbacks {
+            let due = start + period * (k as u32 + 1);
+            let mut now = Instant::now();
+            while now < due {
+                std::hint::spin_loop();
+                now = Instant::now();
+            }
+            late.push((now - due).as_secs_f64() * 1e6);
+        }
+        late.sort_by(f64::total_cmp);
+        let budget = n as f64 / f64::from(sr) * 1e6;
+        let pct = |p: f64| late[((late.len() as f64 - 1.0) * p) as usize];
+        let misses = late.iter().filter(|t| **t >= budget).count();
+        let _ = writeln!(
+            csv,
+            "no-work control (paced spin; lateness = scheduler preemption only),{n},{sr},{callbacks},{budget:.1},{:.1},{:.1},{:.1},{:.3},{:.3},{misses},headless container release build (not native; no device; single process)",
+            pct(0.5),
+            pct(0.99),
+            late[late.len() - 1],
+            pct(0.99) / budget,
+            late[late.len() - 1] / budget
+        );
+    }
     // Configs: playback's (adaptive strips, announced session changes), the same with the
     // per-block structure check (offline default), and forced-serial strips.
     for (n, parallel, signalled) in [64usize, 128, 256].into_iter().flat_map(|n| [(n, true, false), (n, false, false), (n, true, true)]) {

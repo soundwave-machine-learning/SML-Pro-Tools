@@ -5,12 +5,14 @@
 //! The engine owns the [`Session`] behind an `Arc` (copy-on-write), so undo snapshots are cheap.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod autosave;
 pub mod catalog;
 pub mod catalog_more;
 pub mod clip_group_file;
 pub mod cmd;
 pub mod demo;
 pub mod edit;
+pub mod envelope;
 pub mod inspect;
 pub mod io;
 pub mod score;
@@ -113,6 +115,8 @@ pub struct Engine {
     dirty: bool,
     /// Gesture key for undo coalescing (see `execute_merged`).
     merge_key: Option<String>,
+    /// Recent envelope receipts for remote retry deduplication (R09).
+    dedup: envelope::Dedup,
     /// Messages for the UI status line / agents.
     pub messages: Vec<String>,
 }
@@ -139,6 +143,7 @@ impl Engine {
             revision: 1,
             dirty: false,
             merge_key: None,
+            dedup: envelope::Dedup::default(),
             messages: Vec::new(),
         }
     }
@@ -173,6 +178,11 @@ impl Engine {
     pub fn is_dirty(&self) -> bool {
         self.dirty
     }
+    /// Marks the document modified (a recovered session has unsaved state by definition).
+    pub fn mark_dirty(&mut self) {
+        self.dirty = true;
+    }
+
     pub fn mark_clean(&mut self) {
         self.dirty = false;
     }
@@ -209,6 +219,11 @@ impl Engine {
         self.revision = self.revision.wrapping_add(1);
         self.dirty = true;
         true
+    }
+
+    /// Number of undo steps available.
+    pub fn undo_depth(&self) -> usize {
+        self.undo.len()
     }
 
     /// Record an undo point manually (for interactive gestures committed by the UI).

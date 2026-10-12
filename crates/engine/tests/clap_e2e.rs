@@ -92,7 +92,7 @@ fn clap_state_is_captured_stored_and_restored_before_the_first_block() {
     p.set_param("7", 1.5);
     let mut io = vec![vec![0.0f32; 64]];
     p.process(&mut io, 64);
-    eng.adopt(vec![soundcraft_mix::PreparedInstance { track: t, slot: 0, id: gain.into(), ch: 1, plugin: p }]);
+    eng.adopt(vec![soundcraft_mix::PreparedInstance { track: t, slot: 0, id: gain.into(), ch: 1, plugin: p, applied: Vec::new() }]);
     eng.ensure_synced(e.session());
     let states = eng.capture_states();
     assert_eq!(states.len(), 1);
@@ -149,7 +149,7 @@ fn clap_provider_in_tape_slot_round_trips_state_and_renders() {
     p.set_param("7", 1.5);
     let mut io = vec![vec![0.0f32; 64]];
     p.process(&mut io, 64);
-    eng.adopt(vec![soundcraft_mix::PreparedInstance { track: t, slot: spec.slot, id: gain.into(), ch: spec.ch, plugin: p }]);
+    eng.adopt(vec![soundcraft_mix::PreparedInstance { track: t, slot: spec.slot, id: gain.into(), ch: spec.ch, plugin: p, applied: Vec::new() }]);
     eng.ensure_synced(e.session());
     let states = eng.capture_states();
     let (_, _, blob) = states.iter().find(|(tt, sl, _)| *tt == t && *sl == spec.slot).expect("slot state captured");

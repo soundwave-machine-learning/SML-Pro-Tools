@@ -628,6 +628,39 @@ pub fn recover(media: &Path) -> std::io::Result<RecoveryReport> {
     })
 }
 
+/// A take whose journal says it was still recording when the process ended (or that stopped
+/// with a loss): recoverable up to its durable frames. Found by scanning `Audio Files/` folders
+/// and the temp capture folder, so a take is discoverable even when the project snapshot
+/// predates it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct UnfinishedTake {
+    pub media: PathBuf,
+    pub journal: CaptureJournal,
+}
+
+/// Every unfinished take under `dirs` (non-recursive; each directory is read once). Journals
+/// that do not parse are skipped; a journal whose media file is gone is reported with
+/// `durable_frames` as recorded so the loss is visible.
+pub fn discover_unfinished_takes(dirs: &[PathBuf]) -> Vec<UnfinishedTake> {
+    let mut out = Vec::new();
+    for d in dirs {
+        let Ok(rd) = std::fs::read_dir(d) else { continue };
+        for e in rd.flatten().take(10_000) {
+            let p = e.path();
+            let Some(name) = p.file_name().and_then(|n| n.to_str()) else { continue };
+            let Some(media_name) = name.strip_suffix(".journal.json") else { continue };
+            let Ok(text) = std::fs::read_to_string(&p) else { continue };
+            let Ok(j) = serde_json::from_str::<CaptureJournal>(&text) else { continue };
+            if j.state == CaptureState::Finalized || j.state == CaptureState::Recovered {
+                continue;
+            }
+            out.push(UnfinishedTake { media: d.join(media_name), journal: j });
+        }
+    }
+    out.sort_by(|a, b| a.media.cmp(&b.media));
+    out
+}
+
 /// Reads a finalized (or recovered) float capture file back as planar channels.
 pub fn read_capture(media: &Path) -> std::io::Result<(u32, Vec<Vec<f32>>)> {
     read_capture_selected(media, &|_| true)
@@ -907,6 +940,44 @@ mod tests {
                 assert!(sel[c].is_empty());
             }
         }
+        let _ = std::fs::remove_dir_all(&d);
+    }
+
+    /// E02 media recovery: a take killed mid-recording is discovered from its journal (without
+    /// any project snapshot), recovered to its durable frames, and then no longer listed.
+    #[test]
+    fn unfinished_takes_are_discoverable_and_recoverable() {
+        let d = tmpdir("discover");
+        let ring = CaptureRing::new(1, 48_000);
+        // Durable checkpoints every 2048 frames so the kill lands between two of them.
+        let cfg = WriterConfig { flush_every_frames: 2048, ..WriterConfig::default() };
+        let cap = ActiveCapture::start_on_ring(Arc::clone(&ring), &d, "Vox", 48_000, cfg).unwrap();
+        let block: Vec<f32> = (0..256).map(|i| i as f32).collect();
+        for k in 0..40u64 {
+            assert!(ring.push(&block, 0, k * 256));
+        }
+        // Wait until the writer has journaled something, then "kill the process": forget the
+        // capture without finishing it (the thread stops; nothing is finalized).
+        for _ in 0..200 {
+            if read_journal(cap.media()).is_ok_and(|j| j.durable_frames > 0) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let media = cap.media().to_path_buf();
+        std::mem::forget(cap);
+        let found = discover_unfinished_takes(std::slice::from_ref(&d));
+        assert_eq!(found.len(), 1, "{found:?}");
+        assert_eq!(found[0].media, media);
+        assert_eq!(found[0].journal.state, CaptureState::Recording);
+        let durable = found[0].journal.durable_frames;
+        assert!(durable > 0 && durable <= 40 * 256);
+        let rep = recover(&media).unwrap();
+        assert_eq!(rep.kept_frames, durable);
+        let (_, ch) = read_capture(&media).unwrap();
+        assert_eq!(ch[0].len() as u64, durable);
+        assert_eq!(ch[0][5], 5.0, "frames intact");
+        assert!(discover_unfinished_takes(std::slice::from_ref(&d)).is_empty(), "recovered takes are not listed again");
         let _ = std::fs::remove_dir_all(&d);
     }
 }

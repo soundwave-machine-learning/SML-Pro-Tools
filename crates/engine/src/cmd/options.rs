@@ -19,7 +19,11 @@ macro_rules! toggle {
 pub fn specs() -> Vec<CommandSpec> {
     vec![
         toggle!("options.loop_record", "Loop Record", ["Options"], Some("Alt+L"), loop_record),
-        toggle!("options.quickpunch", "QuickPunch", ["Options"], Some("Cmd+Shift+P"), quickpunch),
+        // B04: registered but disabled with a reason (no behaviour exists); the session flag is
+        // kept for legacy sessions and never changed from here.
+        cmd!(noundo "options.quickpunch", "QuickPunch", ["Options"], Some("Cmd+Shift+P"), "{value?: bool} — DISABLED: not implemented", record_mode_unavailable, |_, _| {
+            Err(bad("options.quickpunch", RECORD_MODE_UNAVAILABLE))
+        }),
         toggle!("options.pre_post_roll", "Pre/Post-Roll", ["Options"], Some("Cmd+K"), pre_post_roll),
         toggle!("options.loop_playback", "Loop Playback", ["Options"], Some("Cmd+Shift+L"), loop_playback),
         toggle!("options.link_timeline_edit", "Link Timeline and Edit Selection", ["Options"], Some("Shift+/"), link_timeline_edit),
@@ -35,8 +39,12 @@ pub fn specs() -> Vec<CommandSpec> {
         toggle!("options.midi_merge", "MIDI Merge", [], None, midi_merge),
         toggle!("options.pre_fader_metering", "Pre-Fader Metering", ["Options"], None, pre_fader_metering),
         toggle!("options.delay_compensation", "Delay Compensation", ["Options"], None, delay_compensation),
-        cmd!(noundo "options.destructive_record", "Destructive Record", ["Options"], None, "{value?: bool}", always, |e, p| record_mode(e, p, "destructive")),
-        cmd!(noundo "options.trackpunch", "TrackPunch", ["Options"], Some("Cmd+Shift+T"), "{value?: bool}", always, |e, p| record_mode(e, p, "trackpunch")),
+        cmd!(noundo "options.destructive_record", "Destructive Record", ["Options"], None, "{value?: bool} — DISABLED: not implemented", record_mode_unavailable, |_, _| {
+            Err(bad("options.destructive_record", RECORD_MODE_UNAVAILABLE))
+        }),
+        cmd!(noundo "options.trackpunch", "TrackPunch", ["Options"], Some("Cmd+Shift+T"), "{value?: bool} — DISABLED: not implemented", record_mode_unavailable, |_, _| {
+            Err(bad("options.trackpunch", RECORD_MODE_UNAVAILABLE))
+        }),
         cmd!(noundo "options.scrolling", "Edit Window Scrolling", ["Options", "Edit Window Scrolling"], None, "{mode: none|after_playback|page|continuous|center}", always, |e, p| {
             let m = str_param(p, "mode").filter(|m| ["none", "after_playback", "page", "continuous", "center"].contains(m)).ok_or_else(|| bad("options.scrolling", "unknown mode"))?.to_string();
             e.session_mut().edit.scrolling = m.clone();
@@ -90,13 +98,6 @@ pub fn specs() -> Vec<CommandSpec> {
     ]
 }
 
-fn record_mode(e: &mut Engine, p: &Value, mode: &str) -> Result<Value> {
-    let s = e.session_mut();
-    let on = p.get("value").and_then(Value::as_bool).unwrap_or(s.edit.record_mode != mode);
-    s.edit.record_mode = if on { mode.to_string() } else { "normal".into() };
-    Ok(json!({"record_mode": s.edit.record_mode}))
-}
-
 fn session_setup(e: &mut Engine, p: &Value) -> Result<Value> {
     let fr = match str_param(p, "frame_rate") {
         Some(f) => {
@@ -126,4 +127,32 @@ fn session_setup(e: &mut Engine, p: &Value) -> Result<Value> {
         s.name = n.to_string();
     }
     Ok(json!({"frame_rate": s.frame_rate.label(), "bit_depth": s.bit_depth, "sample_rate": s.sample_rate.hz()}))
+}
+
+#[cfg(test)]
+mod record_mode_tests {
+    use crate::Engine;
+    use serde_json::json;
+
+    /// B04: the unimplemented recording modes are disabled with a reason and never change the
+    /// session; a legacy session that carries the flags still loads with them intact.
+    #[test]
+    fn unimplemented_recording_modes_are_disabled_not_silent() {
+        let mut e = Engine::default();
+        for id in ["options.quickpunch", "options.trackpunch", "options.destructive_record", "options.destructive_punch"] {
+            let err = e.execute(id, &json!({})).unwrap_err().to_string();
+            assert!(err.contains("not implemented"), "{id}: {err}");
+            let err = e.execute(id, &json!({"value": true})).unwrap_err().to_string();
+            assert!(err.contains("not implemented"), "{id} with value: {err}");
+            let info = crate::find_command(id).map(|c| c.info(&e)).expect(id);
+            assert!(!info.enabled && info.disabled_reason.as_deref().is_some_and(|r| r.contains("not implemented")), "{id}: {info:?}");
+        }
+        let s = e.session();
+        assert!(!s.edit.quickpunch && s.edit.record_mode == "normal" && !s.edit.flag("options.destructive_punch"));
+        let mut legacy = soundcraft_model::Session::default();
+        legacy.edit.quickpunch = true;
+        legacy.edit.record_mode = "trackpunch".into();
+        let back: soundcraft_model::Session = serde_json::from_str(&serde_json::to_string(&legacy).unwrap()).unwrap();
+        assert!(back.edit.quickpunch && back.edit.record_mode == "trackpunch", "legacy flags round-trip untouched");
+    }
 }

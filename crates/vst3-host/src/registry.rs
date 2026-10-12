@@ -110,6 +110,15 @@ pub fn add_search_dir(dir: &Path) -> usize {
     n
 }
 
+/// Takes descriptors found by the isolated (out-of-process) scanner instead of loading every
+/// bundle in this process: later `scan()` calls return them without touching any library.
+/// Instantiation still loads the bundle on demand (hosting is in-process; scanning is not).
+pub fn adopt_scanned(descriptors: Vec<Vst3Descriptor>) {
+    let mut r = registry().lock().unwrap_or_else(PoisonError::into_inner);
+    r.scanned = Some(descriptors);
+    r.failed.clear();
+}
+
 fn leak(s: String) -> &'static str {
     Box::leak(s.into_boxed_str())
 }

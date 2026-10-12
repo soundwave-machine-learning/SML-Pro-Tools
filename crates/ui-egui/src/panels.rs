@@ -257,6 +257,7 @@ fn recording_panel(app: &mut SoundApp, ctx: &egui::Context) {
             ui.label(format!("Capturing: {} frames to disk (dry)", r.captured_frames()));
         }
         ui.label(egui::RichText::new("Recording is always dry: clip, insert, slot and fader processing never reach the file.").small());
+        ui.label(egui::RichText::new(app.autosave_summary()).small());
     });
     app.ui.show_recording = open;
 }

@@ -22,6 +22,10 @@ today; anything not yet validated on the target machine is marked.
   the input device lacks that channel, Record refuses to start and says which track and channel;
   it never records (or monitors) a different input instead. A one-input device can feed a stereo track (the
   same signal on both sides).
+- **Not implemented in this build:** QuickPunch, TrackPunch, Destructive Record and
+  DestructivePunch. Their Options entries are present but disabled and say so on hover; they
+  change nothing. Recording is always non-destructive (every take is a new file). Punch-in with
+  a selection, pre/post-roll, loop recording and Count Off are the recording modes that exist.
 - **Count Off** (toolbar, beside Meter/Tempo; bars in Setup › Click/Countoff): Record starts the
   transport that many whole bars before the record point (selection start, or the playhead)
   and the click sounds during those bars even when the click is off; the take starts exactly
@@ -31,6 +35,40 @@ today; anything not yet validated on the target machine is marked.
   session rate and the status line says so (the capture file keeps the device rate). For
   bit-exact dry takes, open the input at the session rate (§9).
 - *Not yet validated on a real Windows interface (H1).*
+
+## 1a. Autosave and recovery
+- Every 60 s a modified session is snapshotted into a rolling store of recovery generations
+  (default 20, 256 MiB budget) under the settings folder's `Autosave/<session>/`. Each generation
+  is written to a temporary file, flushed, re-read and validated, renamed into place, and only
+  then published in the store's index; the previous generation is never touched before the new
+  one is committed. Writing happens on a worker thread — recording never waits for it.
+- Hosted plugin state is captured into the snapshot only while the transport is stopped; the
+  Recording window and `File › Recover Autosave…` show how old that capture is.
+- `File › Recover Autosave…` lists every recovery point (session, generation, time) and every
+  unfinished take found beside the session or in the temp capture folder. Opening a recovery
+  point gives an unsaved session (choose File › Save As); recovering a take keeps every
+  journaled frame and reports what was after the last durable checkpoint. Nothing in that
+  window deletes or overwrites a file.
+- If the program did not close properly, the next start says so in the status bar.
+- Limits: an abrupt process kill is the tested failure model; after a power loss the newest
+  generation may be missing but an older committed one survives. The explicit File › Save is
+  separate from autosave.
+
+## 1b. Plugin scanning (isolated)
+- At start the app scans for CLAP/VST3 plugins in separate worker processes, one bundle at a
+  time. A plugin that crashes or hangs (20 s) while loading is **quarantined** with the reason and
+  skipped on later scans; it never takes the app down. Results are cached by file size and
+  modification time, so only new or changed plugins are scanned again. Rescan and re-enable are
+  in Setup › Plugins (quarantine list). Hosting for playback still runs the plugin inside the
+  app (see §10 for the risks); only scanning is isolated.
+
+## 1c. Safe Open
+- If the app will not start or a plugin misbehaves: start it with `--safe`. Hosted plugins are
+  not loaded or scanned for that run; their slots pass audio through and keep their state and
+  settings, so the session is unchanged — restart without `--safe` to load them again.
+- `--reset-prefs` additionally sets the UI/theme preferences aside as a timestamped backup
+  (`ui.json.backup-<time>` in the settings folder); rename it back to restore.
+- After an unclean exit the status bar suggests `--safe`.
 
 ## 2. Nudge
 The **NUDGE** group in the edit toolbar is separate from Grid:

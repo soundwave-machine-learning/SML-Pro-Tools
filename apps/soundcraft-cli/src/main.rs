@@ -73,6 +73,56 @@ fn main() -> ExitCode {
         "app" => app(&rest),
         "mcp" => mcp(&rest),
         "parity" => parity(&rest),
+        // Isolated plugin-scan worker (R07): loads ONE bundle in this process and prints its
+        // descriptors as JSON; a crash takes only this process down.
+        "scan-plugin" | "--scan-plugin" => {
+            let Some(path) = rest.first() else {
+                eprintln!("usage: soundcraft-cli scan-plugin <bundle>");
+                return ExitCode::FAILURE;
+            };
+            let code = soundcraft_mix::scan_isolated::worker_main(std::path::Path::new(path));
+            return if code == 0 { ExitCode::SUCCESS } else { ExitCode::from(u8::try_from(code).unwrap_or(1)) };
+        }
+        // E03 experiment worker: a minimal out-of-process "plugin" (gain) over stdin/stdout.
+        // Protocol: 4-byte little-endian frame count N, then N f32 samples; replies the same.
+        // `--hang-after K` stops answering after K blocks; `--crash-after K` exits with SIGABRT.
+        "plugin-worker-probe" => {
+            let hang_after = rest.iter().position(|a| a == "--hang-after").and_then(|i| rest.get(i + 1)).and_then(|v| v.parse::<u64>().ok());
+            let crash_after = rest.iter().position(|a| a == "--crash-after").and_then(|i| rest.get(i + 1)).and_then(|v| v.parse::<u64>().ok());
+            use std::io::{Read, Write};
+            let stdin = std::io::stdin();
+            let stdout = std::io::stdout();
+            let (mut inp, mut out) = (stdin.lock(), stdout.lock());
+            let mut head = [0u8; 4];
+            let mut blocks = 0u64;
+            loop {
+                if inp.read_exact(&mut head).is_err() {
+                    return ExitCode::SUCCESS;
+                }
+                let n = u32::from_le_bytes(head) as usize;
+                if n > 65_536 {
+                    return ExitCode::FAILURE;
+                }
+                let mut buf = vec![0u8; n * 4];
+                if inp.read_exact(&mut buf).is_err() {
+                    return ExitCode::SUCCESS;
+                }
+                blocks += 1;
+                if hang_after.is_some_and(|k| blocks > k) {
+                    std::thread::sleep(std::time::Duration::from_secs(3600));
+                }
+                if crash_after.is_some_and(|k| blocks > k) {
+                    std::process::abort();
+                }
+                for s in buf.chunks_exact_mut(4) {
+                    let v = f32::from_le_bytes([s[0], s[1], s[2], s[3]]) * 0.5;
+                    s.copy_from_slice(&v.to_le_bytes());
+                }
+                if out.write_all(&head).is_err() || out.write_all(&buf).is_err() || out.flush().is_err() {
+                    return ExitCode::SUCCESS;
+                }
+            }
+        }
         "plugins" => {
             for p in soundcraft_dsp::catalogue() {
                 outln!("{:<20} {:<22} {:?}{}", p.id, p.name, p.category, if p.is_instrument { " (instrument)" } else { "" });

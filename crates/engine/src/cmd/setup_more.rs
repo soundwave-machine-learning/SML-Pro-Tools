@@ -20,7 +20,10 @@ const MIDI_FILTER_KINDS: [&str; 8] = ["notes", "pitch_bend", "mono_aftertouch", 
 
 pub fn specs() -> Vec<CommandSpec> {
     vec![
-        option!("options.destructive_punch", "DestructivePunch", "options.destructive_punch"),
+        // B04: registered, disabled with a reason; the stored flag is kept for legacy sessions.
+        cmd!(noundo "options.destructive_punch", "DestructivePunch", ["Options"], None, "{value?: bool} — DISABLED: not implemented", record_mode_unavailable, |_, _| {
+            Err(bad("options.destructive_punch", RECORD_MODE_UNAVAILABLE))
+        }),
         option!("options.transport_online", "Transport Online", "options.transport_online"),
         option!("options.dynamic_transport", "Dynamic Transport", "options.dynamic_transport"),
         option!(

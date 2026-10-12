@@ -3421,6 +3421,7 @@ dependencies = [
  "rfd",
  "serde_json",
  "soundcraft-engine",
+ "soundcraft-mix",
  "soundcraft-playback",
  "soundcraft-ui-egui",
  "winresource",
@@ -3479,6 +3480,7 @@ dependencies = [
  "soundcraft-automation",
  "soundcraft-dsp",
  "soundcraft-engine",
+ "soundcraft-mix",
 ]
 
 [[package]]
@@ -3529,6 +3531,8 @@ version = "0.5.0"
 dependencies = [
  "log",
  "rayon",
+ "serde",
+ "serde_json",
  "soundcraft-au-host",
  "soundcraft-audio-io",
  "soundcraft-clap-host",

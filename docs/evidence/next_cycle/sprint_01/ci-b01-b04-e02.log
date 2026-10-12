@@ -1,0 +1,51 @@
+# ci 2026-10-12T00:07:34Z after B01/B04/E02 (commit pending)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.11s
+     Running `target/debug/xtask ci`
+    Checking soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+error: unnecessary use of `clone` to create a slice from a reference
+   --> crates/playback/src/capture.rs:969:47
+    |
+969 |         let found = discover_unfinished_takes(&[d.clone()]);
+    |                                               ^^^^^^^^^^^^ help: try: `std::slice::from_ref(&d)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#cloned_ref_to_slice_refs
+    = note: `-D clippy::cloned-ref-to-slice-refs` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::cloned_ref_to_slice_refs)]`
+
+error: unnecessary use of `clone` to create a slice from a reference
+   --> crates/playback/src/capture.rs:980:43
+    |
+980 |         assert!(discover_unfinished_takes(&[d.clone()]).is_empty(), "recovered takes are not listed again");
+    |                                           ^^^^^^^^^^^^ help: try: `std::slice::from_ref(&d)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#cloned_ref_to_slice_refs
+
+error: could not compile `soundcraft-playback` (lib test) due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: consider using `sort_by_key`
+   --> crates/engine/src/autosave.rs:269:9
+    |
+269 |         files.sort_by(|a, b| b.0.cmp(&a.0));
+    |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#unnecessary_sort_by
+    = note: `-D clippy::unnecessary-sort-by` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::unnecessary_sort_by)]`
+help: try
+    |
+269 -         files.sort_by(|a, b| b.0.cmp(&a.0));
+269 +         files.sort_by_key(|b| std::cmp::Reverse(b.0));
+    |
+
+error: could not compile `soundcraft-engine` (lib) due to 1 previous error
+error: could not compile `soundcraft-engine` (lib test) due to 1 previous error
+ok    fmt
+FAIL  clippy
+xtask: cargo clippy --workspace --all-targets -- -D warnings failed
+
+real	0m6.690s
+user	0m10.400s
+sys	0m1.036s
+EXIT: 1

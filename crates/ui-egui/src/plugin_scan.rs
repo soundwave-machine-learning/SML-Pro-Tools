@@ -4,9 +4,11 @@
 //! between formats (a single format's scan runs to completion once begun). Results land in the
 //! host crates' own caches; menus read them only after the scan finished.
 //!
-//! Known limit: plugin libraries are loaded on the worker thread for scanning; a plugin that
-//! insists on main-thread scanning may misbehave there (in-process hosting has no crash
-//! containment — see the user guide).
+//! Scanning is isolated (R07): with a cache path configured, each bundle is loaded by a separate
+//! worker process (`soundcraft --scan-plugin`), so a plugin that crashes or hangs while loading
+//! is quarantined instead of taking the app down. Without a cache path (agents' test runs, the
+//! CLI) the in-process scan is used — a documented compatibility mode, not containment.
+//! Hosting for playback is in-process either way (runtime containment: E03).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
@@ -26,6 +28,12 @@ pub struct Scanner {
     cancel: Arc<AtomicBool>,
     /// Formats finished so far (0..=3), for progress display.
     progress: Arc<AtomicU8>,
+    /// Scan cache file; `Some` enables the isolated (out-of-process) scan.
+    pub cache_path: Option<std::path::PathBuf>,
+    /// Quarantined bundles of the last isolated scan (path, reason), for the UI.
+    pub quarantined: Arc<std::sync::Mutex<Vec<(std::path::PathBuf, String)>>>,
+    /// True while the last scan used worker processes.
+    pub isolated: Arc<AtomicBool>,
 }
 
 impl Scanner {
@@ -43,12 +51,63 @@ impl Scanner {
     }
 
     /// Starts a scan unless one is running/done or `recording` is true. Returns whether started.
+    /// Isolated when a cache path is set and this program can act as its own worker.
     pub fn start(&self, recording: bool) -> bool {
+        if soundcraft_mix::hosted_plugins_disabled() {
+            return false;
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(cache_path) = self.cache_path.clone()
+            && let Some(worker) = soundcraft_mix::scan_isolated::Worker::this_program()
+        {
+            let quarantined = Arc::clone(&self.quarantined);
+            let isolated = Arc::clone(&self.isolated);
+            isolated.store(true, Ordering::Release);
+            let job: Box<dyn FnOnce() + Send> = Box::new(move || {
+                let mut cache = soundcraft_mix::scan_isolated::Cache::load(&cache_path);
+                let dirs = soundcraft_mix::scan_isolated::default_dirs();
+                let report = soundcraft_mix::scan_isolated::scan_dirs(&worker, &dirs, &mut cache, Some(&cache_path), false);
+                soundcraft_mix::scan_isolated::adopt(&report);
+                if let Ok(mut q) = quarantined.lock() {
+                    *q = report.quarantined.iter().map(|(p, q)| (p.clone(), q.to_string())).collect();
+                }
+                log::info!(
+                    "isolated plugin scan: {} CLAP, {} VST3, {} scanned, {} cached, {} quarantined",
+                    report.clap.len(),
+                    report.vst3.len(),
+                    report.scanned,
+                    report.cached,
+                    report.quarantined.len()
+                );
+            });
+            return self.start_jobs(recording, vec![job]);
+        }
+        self.isolated.store(false, Ordering::Release);
         self.start_with(recording, default_formats())
+    }
+
+    /// Clears the quarantine of `path` in the cache so the next scan retries it.
+    pub fn re_enable(&self, path: &std::path::Path) -> bool {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(cache_path) = &self.cache_path {
+            let mut cache = soundcraft_mix::scan_isolated::Cache::load(cache_path);
+            let removed = cache.forget(path);
+            let _ = cache.save(cache_path);
+            if let Ok(mut q) = self.quarantined.lock() {
+                q.retain(|(p, _)| p != path);
+            }
+            return removed;
+        }
+        false
     }
 
     /// Starts scanning `formats` (each a blocking scan function) on a worker thread.
     pub fn start_with(&self, recording: bool, formats: Vec<fn()>) -> bool {
+        let jobs: Vec<Box<dyn FnOnce() + Send>> = formats.into_iter().map(|f| Box::new(f) as Box<dyn FnOnce() + Send>).collect();
+        self.start_jobs(recording, jobs)
+    }
+
+    fn start_jobs(&self, recording: bool, formats: Vec<Box<dyn FnOnce() + Send>>) -> bool {
         if recording || matches!(self.phase(), Phase::Running | Phase::Done) {
             return false;
         }
@@ -76,6 +135,16 @@ impl Scanner {
 
     pub fn cancel(&self) {
         self.cancel.store(true, Ordering::Release);
+    }
+
+    /// Runs the scan again (not while one is running): new or changed bundles are scanned,
+    /// cached ones reused, quarantines kept unless re-enabled.
+    pub fn rescan(&self) -> bool {
+        if self.phase() == Phase::Running {
+            return false;
+        }
+        self.phase.store(0, Ordering::Release);
+        self.start(false)
     }
 }
 

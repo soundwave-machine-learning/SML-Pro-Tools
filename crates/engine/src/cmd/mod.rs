@@ -24,6 +24,7 @@ mod mix;
 mod more_util;
 mod nudge;
 mod options;
+mod paint;
 mod plugin_state;
 mod query;
 mod setup_more;
@@ -132,6 +133,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(bus::specs());
         v.extend(snapshot::specs());
         v.extend(slots::specs());
+        v.extend(paint::specs());
         v
     })
 }
@@ -144,6 +146,17 @@ pub fn find_command(id: &str) -> Option<&'static CommandSpec> {
 
 pub fn always(_: &Engine) -> std::result::Result<(), String> {
     Ok(())
+}
+
+/// B04: recording modes this build does not implement. The commands stay registered (legacy
+/// sessions keep their flags; ids stay stable) but are disabled with this reason everywhere —
+/// menus, shortcuts, the control channel, the remote and the assistant — instead of silently
+/// storing a setting that changes nothing.
+pub const RECORD_MODE_UNAVAILABLE: &str =
+    "not implemented in this build: SML Studio records non-destructively; QuickPunch, TrackPunch and Destructive modes have no behaviour yet";
+
+pub fn record_mode_unavailable(_: &Engine) -> std::result::Result<(), String> {
+    Err(RECORD_MODE_UNAVAILABLE.into())
 }
 
 pub fn has_tracks(e: &Engine) -> std::result::Result<(), String> {

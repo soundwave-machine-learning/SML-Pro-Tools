@@ -65,6 +65,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.midi_ops", "MIDI Operations", "", None),
     ("window.rtp", "MIDI Real-Time Properties", "", None),
     ("window.playback_engine", "Playback Engine", "", None),
+    ("window.recover", "Recover Autosave…", "File > Recover Autosave...", None),
     ("window.io_setup", "I/O Setup", "", None),
     ("window.shortcuts", "Keyboard Shortcuts", "", None),
     ("view.mix_section", "Mix Window View", "", None),
@@ -265,7 +266,14 @@ fn menu_node(app: &mut SoundApp, ui: &mut egui::Ui, n: &MenuNode, extra: &[(&str
     let label = if checked { format!("✔ {}", n.label) } else { n.label.clone() };
     let shortcut = id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| c.shortcut).unwrap_or("");
     let btn = egui::Button::new(label).shortcut_text(crate::shortcuts::shortcut_label(shortcut, ui.ctx().os().is_mac()));
-    if ui.add_enabled(enabled, btn).clicked()
+    // A disabled item says why (e.g. "not implemented in this build"), never a silent grey entry.
+    let reason = if enabled { None } else { id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| (c.enabled)(&app.engine).err()) };
+    let resp = ui.add_enabled(enabled, btn);
+    let resp = match reason {
+        Some(r) => resp.on_disabled_hover_text(r),
+        None => resp,
+    };
+    if resp.clicked()
         && let Some(id) = id
     {
         invoke_menu(app, &id, &n.path);
@@ -487,6 +495,7 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         "window.midi_ops" => toggle(&mut app.ui.show_midi_ops),
         "window.rtp" => toggle(&mut app.ui.show_rtp),
         "window.playback_engine" => toggle(&mut app.ui.show_playback_engine),
+        "window.recover" => toggle(&mut app.ui.show_recover),
         "window.io_setup" => toggle(&mut app.ui.show_io_setup),
         "window.shortcuts" => toggle(&mut app.ui.show_shortcuts),
         "window.color_palette" => toggle(&mut app.ui.show_color_palette),

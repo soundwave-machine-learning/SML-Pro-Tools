@@ -1,0 +1,47 @@
+# ci 2026-10-11T23:59:39Z after B01/B04 (commit pending)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/xtask ci`
+    Checking soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+error[E0063]: missing field `params` in initializer of `InstanceSpec`
+    --> crates/mix/src/lib.rs:2994:32
+     |
+2994 |         assert_eq!(specs, vec![InstanceSpec { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, state: None }]);
+     |                                ^^^^^^^^^^^^ missing `params`
+
+error[E0063]: missing field `applied` in initializer of `PreparedInstance`
+    --> crates/mix/src/lib.rs:3007:24
+     |
+3007 |         eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 2, plugin: Box::new(wrong) }]);
+     |                        ^^^^^^^^^^^^^^^^ missing `applied`
+
+error[E0063]: missing field `applied` in initializer of `PreparedInstance`
+    --> crates/mix/src/lib.rs:3010:24
+     |
+3010 |         eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "clap:test.fake".into(), ch: 1, plugin: Box::new(fake) }]);
+     |                        ^^^^^^^^^^^^^^^^ missing `applied`
+
+error[E0063]: missing field `applied` in initializer of `PreparedInstance`
+    --> crates/mix/src/lib.rs:3025:24
+     |
+3025 | ...   eng.adopt(vec![PreparedInstance { track: t, slot: 3, id: "clap:x".into(), ch: 1, plugin: test_providers::create("test:gain:0...
+     |                      ^^^^^^^^^^^^^^^^ missing `applied`
+
+error[E0063]: missing field `applied` in initializer of `PreparedInstance`
+    --> crates/mix/src/lib.rs:3043:24
+     |
+3043 | ...   eng.adopt(vec![PreparedInstance { track: t, slot: 0, id: "vst3:00000000000000000000000000000001".into(), ch: 1, plugin: Box:...
+     |                      ^^^^^^^^^^^^^^^^ missing `applied`
+
+For more information about this error, try `rustc --explain E0063`.
+error: could not compile `soundcraft-mix` (lib test) due to 5 previous errors
+warning: build failed, waiting for other jobs to finish...
+ok    fmt
+FAIL  clippy
+xtask: cargo clippy --workspace --all-targets -- -D warnings failed
+
+real	0m7.146s
+user	0m9.948s
+sys	0m0.891s
+EXIT: 1

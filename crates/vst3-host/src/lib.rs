@@ -76,7 +76,7 @@ pub fn parse_id(id: &str) -> Option<[u8; 16]> {
 }
 
 /// One plugin found by a scan.
-#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Vst3Descriptor {
     /// SoundCraft id: `vst3:<class_id>`.
     pub id: String,
@@ -126,6 +126,9 @@ mod api {
     pub fn scan_paths(dirs: &[PathBuf]) -> Vec<Vst3Descriptor> {
         registry::scan_paths(dirs)
     }
+    pub fn adopt_scanned(descriptors: Vec<Vst3Descriptor>) {
+        registry::adopt_scanned(descriptors)
+    }
     pub fn load_bundle(path: &Path) -> Result<Vec<Vst3Descriptor>, Vst3Error> {
         registry::load_bundle(path)
     }
@@ -156,6 +159,7 @@ mod api {
     pub fn scan_paths(_dirs: &[PathBuf]) -> Vec<Vst3Descriptor> {
         Vec::new()
     }
+    pub fn adopt_scanned(_descriptors: Vec<Vst3Descriptor>) {}
     pub fn load_bundle(_path: &Path) -> Result<Vec<Vst3Descriptor>, Vst3Error> {
         Err(Vst3Error::Unsupported)
     }
@@ -203,6 +207,12 @@ pub fn shutdown() {
 /// The audio module classes in one `.vst3` bundle or file.
 pub fn load_bundle(path: &Path) -> Result<Vec<Vst3Descriptor>, Vst3Error> {
     api::load_bundle(path)
+}
+
+/// Adopts descriptors found by an out-of-process scan (see `soundcraft_mix::scan_isolated`):
+/// `scan()` then returns them without loading any bundle in this process.
+pub fn adopt_scanned(descriptors: Vec<Vst3Descriptor>) {
+    api::adopt_scanned(descriptors)
 }
 
 /// Creates a plugin by `vst3:<class id>`, prepared for 48 kHz stereo with 1024-frame blocks (like

@@ -1,6 +1,6 @@
 //! SoundCraft desktop app.
 //!
-//! Usage: `soundcraft [--demo] [--control <port>] [--no-audio] [session.scraft | audio files…]`
+//! Usage: `soundcraft [--demo] [--control <port>] [--no-audio] [--safe] [--reset-prefs] [session.scraft | audio files…]`
 //!
 //! `--control <port>` (or `SOUNDCRAFT_CONTROL_PORT`) starts a localhost JSON-lines control server
 //! (`0` picks a free port and prints it): `{"id":1,"method":"ui.inspect","params":{}}` →
@@ -71,6 +71,7 @@ impl eframe::App for App {
     }
     fn on_exit(&mut self) {
         save_prefs(&self.0.ui);
+        self.0.mark_clean_exit();
         if let Some(logger) = self.1 {
             logger.report_audio_thread();
         }
@@ -179,6 +180,31 @@ fn main() -> eframe::Result {
         println!("SoundCraft {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
+    // Isolated plugin-scan worker (R07): this process loads ONE bundle, prints JSON and exits;
+    // a plugin crash during scanning never reaches the running app.
+    if let Some(i) = args.iter().position(|a| a == "--scan-plugin")
+        && let Some(path) = args.get(i + 1)
+    {
+        std::process::exit(soundcraft_mix::scan_isolated::worker_main(std::path::Path::new(path)));
+    }
+    // Safe Open (R05): external plugins disabled (placeholders keep their state), no plugin scan;
+    // `--reset-prefs` additionally sets the UI/theme preferences aside (restorable backup).
+    let safe = args.iter().any(|a| a == "--safe");
+    if safe {
+        soundcraft_mix::set_hosted_plugins_disabled(true);
+        log::warn!("SAFE OPEN: hosted plugins disabled and not scanned for this run");
+    }
+    if args.iter().any(|a| a == "--reset-prefs")
+        && let Some(p) = prefs_path()
+        && p.exists()
+    {
+        let stamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map_or(0, |d| d.as_secs());
+        let backup = p.with_extension(format!("json.backup-{stamp}"));
+        match std::fs::rename(&p, &backup) {
+            Ok(()) => log::warn!("preferences set aside: restore by renaming {} back to {}", backup.display(), p.display()),
+            Err(e) => log::warn!("could not set preferences aside: {e}"),
+        }
+    }
     let demo = args.iter().any(|a| a == "--demo" || a == "--sample");
     let no_audio = args.iter().any(|a| a == "--no-audio");
     let control_port: Option<u16> = args
@@ -235,6 +261,14 @@ fn main() -> eframe::Result {
             let player = if no_audio { None } else { Some(soundcraft_playback::Player::new(Arc::new(engine.session().clone()))) };
             let mut app = SoundApp::new(engine, player, services());
             app.autosave_dir = prefs_path().and_then(|p| p.parent().map(|d| d.join("Autosave")));
+            let unclean = app.mark_running();
+            if safe {
+                app.ui.status = "SAFE OPEN: hosted plugins are disabled for this run (their slots pass audio through and keep their state); restart without --safe to load them.".into();
+            } else if unclean {
+                app.ui.status.push_str(" If a plugin caused it, start with --safe.");
+            }
+            // Isolated plugin scanning (R07): worker processes + fingerprint cache + quarantine.
+            app.plugin_scan.cache_path = prefs_path().and_then(|p| p.parent().map(|d| d.join("plugin-scan-cache.json")));
             app.preset_dir = prefs_path().and_then(|p| p.parent().map(|d| d.join("Presets")));
             if let Some(ui) = load_prefs() {
                 app.ui = ui;

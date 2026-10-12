@@ -127,6 +127,35 @@ pub struct UiState {
     pub input_devices: Vec<soundcraft_playback::device::DeviceCaps>,
     #[serde(skip)]
     pub input_request: Option<soundcraft_playback::device::DeviceRequest>,
+    /// File › Recover Autosave… window.
+    #[serde(skip)]
+    pub show_recover: bool,
+}
+
+/// Autosave status shown in the Recording window and the status bar.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct AutosaveState {
+    pub last_ok_unix: Option<u64>,
+    pub last_generation: Option<u64>,
+    pub last_error: Option<String>,
+    pub plugin_state_age_s: Option<u64>,
+    pub pending: bool,
+}
+
+/// A session's newest autosave generation, from its store index.
+#[derive(Debug, Clone)]
+pub struct RecoveryPoint {
+    pub store: soundcraft_engine::autosave::Store,
+    pub session_name: String,
+    pub generation: u64,
+    pub unix_time: u64,
+    pub plugin_state_age_s: Option<u64>,
+}
+
+/// `HH:MM:SS` (UTC) of a Unix time.
+pub fn unix_hms(t: u64) -> String {
+    let s = t % 86_400;
+    format!("{:02}:{:02}:{:02} UTC", s / 3600, (s / 60) % 60, s % 60)
 }
 
 impl Default for UiState {
@@ -187,6 +216,7 @@ impl Default for UiState {
             buffer_choice: 0,
             input_devices: Vec::new(),
             input_request: None,
+            show_recover: false,
         }
     }
 }
@@ -255,6 +285,13 @@ pub struct SoundApp {
     /// Folder for user plugin presets (native apps set it).
     pub preset_dir: Option<std::path::PathBuf>,
     last_autosave: f64,
+    /// Autosave worker (R04): one job in flight, never on the UI or audio thread.
+    autosave_job: Option<std::thread::JoinHandle<Result<soundcraft_engine::autosave::Committed, String>>>,
+    pub autosave_state: AutosaveState,
+    /// Engine revision of the last snapshot handed to the worker (nothing to save when unchanged).
+    last_snapshot_revision: Option<u64>,
+    /// When third-party plugin state was last captured into the session (`now` clock).
+    last_plugin_capture: Option<f64>,
     pub dialogs: dialogs::Dialogs,
     pub meters: HashMap<TrackId, MeterDisplay>,
     pub main_meter: MeterDisplay,
@@ -315,6 +352,10 @@ impl SoundApp {
             services,
             native_menu_bar: false,
             autosave_dir: None,
+            autosave_job: None,
+            autosave_state: AutosaveState::default(),
+            last_snapshot_revision: None,
+            last_plugin_capture: None,
             preset_dir: None,
             last_autosave: 0.0,
             dialogs: dialogs::Dialogs::default(),
@@ -554,44 +595,166 @@ impl SoundApp {
         }
     }
 
-    /// Every two minutes, copy a modified session to the autosave folder (not while recording).
+    /// Autosave (R04): every `autosave::DEFAULT_INTERVAL_S` seconds a modified session is
+    /// snapshotted into its rolling-generation store on a worker thread (recording included: the
+    /// callback never waits for it). Hosted plugin state is captured only while the transport is
+    /// stopped (asking the audio thread is not realtime-safe), and the snapshot records how old
+    /// that capture is.
     fn autosave(&mut self, now: f64) {
+        // Collect a finished job first.
+        if self.autosave_job.as_ref().is_some_and(|j| j.is_finished())
+            && let Some(j) = self.autosave_job.take()
+        {
+            match j.join() {
+                Ok(Ok(c)) => {
+                    self.autosave_state.last_ok_unix = Some(c.generation.unix_time);
+                    self.autosave_state.last_generation = Some(c.generation.number);
+                    self.autosave_state.last_error = None;
+                    self.autosave_state.plugin_state_age_s = c.generation.plugin_state_age_s;
+                }
+                Ok(Err(e)) => self.autosave_state.last_error = Some(e),
+                Err(_) => self.autosave_state.last_error = Some("autosave worker panicked".into()),
+            }
+        }
         let Some(dir) = self.autosave_dir.clone() else { return };
         if self.last_autosave == 0.0 {
             self.last_autosave = now;
         }
-        if now - self.last_autosave < 120.0 || !self.engine.is_dirty() || self.engine.transport.recording {
+        if self.autosave_job.is_some() || now - self.last_autosave < soundcraft_engine::autosave::DEFAULT_INTERVAL_S || !self.engine.is_dirty() {
+            return;
+        }
+        if self.last_snapshot_revision == Some(self.engine.revision) {
             return;
         }
         self.last_autosave = now;
-        self.capture_plugin_states();
-        let name = soundcraft_engine::io::sanitize_name(&self.engine.session().name);
-        let path = dir.join(&name).join(format!("{name}.scraft"));
-        if let Some(parent) = path.parent() {
-            let _ = std::fs::create_dir_all(parent);
+        if !self.is_playing() && !self.engine.transport.recording {
+            self.capture_plugin_states();
+            self.last_plugin_capture = Some(now);
         }
-        match soundcraft_engine::io::save_copy(&self.engine, &path.to_string_lossy()) {
-            Ok(_) => log::info!("autosaved to {}", path.display()),
-            Err(e) => log::warn!("autosave failed: {e}"),
+        let plugin_state_age_s = self.last_plugin_capture.map(|t| (now - t).max(0.0) as u64);
+        let req =
+            soundcraft_engine::autosave::SnapshotRequest { session: self.engine.session_arc(), revision: self.engine.revision, plugin_state_age_s };
+        self.last_snapshot_revision = Some(self.engine.revision);
+        let store = soundcraft_engine::autosave::Store::for_session(&dir, &self.engine.session().name);
+        self.autosave_state.pending = true;
+        let spawned = std::thread::Builder::new().name("sml-autosave".into()).spawn(move || store.snapshot(&req).map_err(|e| e.to_string()));
+        match spawned {
+            Ok(j) => self.autosave_job = Some(j),
+            Err(e) => self.autosave_state.last_error = Some(format!("autosave thread: {e}")),
+        }
+        self.autosave_state.pending = self.autosave_job.is_some();
+    }
+
+    /// One line for the status areas: last successful recovery point, lag, failure.
+    pub fn autosave_summary(&self) -> String {
+        let s = &self.autosave_state;
+        let mut out = match s.last_generation {
+            Some(g) => format!("Autosave: generation {g} committed{}", s.last_ok_unix.map_or(String::new(), |t| format!(" at {}", unix_hms(t)))),
+            None if self.autosave_dir.is_some() => "Autosave: no recovery point yet in this run".to_string(),
+            None => "Autosave: off (no settings folder)".to_string(),
+        };
+        if let Some(age) = s.plugin_state_age_s.filter(|a| *a > 0) {
+            out.push_str(&format!(" · plugin state {age} s older"));
+        }
+        if s.pending {
+            out.push_str(" · writing…");
+        }
+        if let Some(e) = &s.last_error {
+            out.push_str(&format!(" · FAILED: {e}"));
+        }
+        out
+    }
+
+    /// Marks this run as running (R05): a marker in the autosave folder that a clean exit
+    /// removes. Finding it at start means the previous run did not close properly, so the
+    /// recovery window is pointed out. Call once after `autosave_dir` is set.
+    pub fn mark_running(&mut self) -> bool {
+        let Some(dir) = &self.autosave_dir else { return false };
+        let marker = dir.join("running.lock");
+        let unclean = marker.exists();
+        let _ = std::fs::create_dir_all(dir);
+        let _ = std::fs::write(&marker, format!("{}\n", std::process::id()));
+        if unclean {
+            self.ui.status =
+                "The previous run did not close properly. File › Recover Autosave… lists the recovery points and unfinished takes.".into();
+        }
+        unclean
+    }
+
+    /// Clean exit: removes the running marker.
+    pub fn mark_clean_exit(&self) {
+        if let Some(dir) = &self.autosave_dir {
+            let _ = std::fs::remove_file(dir.join("running.lock"));
         }
     }
 
-    /// The most recent autosave, if any.
-    pub fn latest_autosave(&self) -> Option<std::path::PathBuf> {
-        let dir = self.autosave_dir.as_ref()?;
-        let mut best: Option<(std::time::SystemTime, std::path::PathBuf)> = None;
-        for d in std::fs::read_dir(dir).ok()?.flatten() {
-            for f in std::fs::read_dir(d.path()).into_iter().flatten().flatten() {
-                let p = f.path();
-                if p.extension().and_then(|x| x.to_str()) == Some("scraft")
-                    && let Ok(m) = f.metadata().and_then(|m| m.modified())
-                    && best.as_ref().is_none_or(|(t, _)| m > *t)
-                {
-                    best = Some((m, p));
-                }
+    /// Every session store under the autosave folder with its newest generation (index only;
+    /// nothing is parsed until the user recovers it).
+    pub fn recovery_points(&self) -> Vec<RecoveryPoint> {
+        let Some(dir) = &self.autosave_dir else { return Vec::new() };
+        let mut out = Vec::new();
+        for d in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+            if !d.path().is_dir() {
+                continue;
+            }
+            let store = soundcraft_engine::autosave::Store::new(d.path());
+            if let Some(g) = store.index().generations.first() {
+                out.push(RecoveryPoint {
+                    store,
+                    session_name: g.session_name.clone(),
+                    generation: g.number,
+                    unix_time: g.unix_time,
+                    plugin_state_age_s: g.plugin_state_age_s,
+                });
             }
         }
-        best.map(|(_, p)| p)
+        out.sort_by_key(|p| std::cmp::Reverse(p.unix_time));
+        out
+    }
+
+    /// Unfinished takes (capture journals still "recording") beside the open session and in the
+    /// temp capture folder.
+    pub fn unfinished_takes(&self) -> Vec<soundcraft_playback::capture::UnfinishedTake> {
+        let mut dirs = vec![std::env::temp_dir().join("sml-recording")];
+        if let Some(p) = &self.engine.path
+            && let Some(d) = std::path::Path::new(p).parent()
+        {
+            dirs.push(d.join("Audio Files"));
+        }
+        soundcraft_playback::capture::discover_unfinished_takes(&dirs)
+    }
+
+    /// Opens a recovery point (the newest valid generation of its store) as an unsaved session.
+    pub fn open_recovery_point(&mut self, point: &RecoveryPoint) -> Result<(), String> {
+        let r = point.store.recover().ok_or("no valid generation in this store")?;
+        if let Some(p) = &self.player {
+            p.stop();
+        }
+        self.engine.transport.playing = false;
+        self.engine.transport.recording = false;
+        let missing = soundcraft_engine::autosave::open_recovered(&mut self.engine, r).map_err(|e| e.to_string())?;
+        self.recorder = None;
+        self.recorder_failed = false;
+        self.ui.status = if missing.is_empty() {
+            format!("Recovered {} (unsaved — choose File › Save As)", point.session_name)
+        } else {
+            format!("Recovered {} with {} missing media file(s)", point.session_name, missing.len())
+        };
+        Ok(())
+    }
+
+    /// Recovers an unfinished take to its durable frames and imports it on a new track at 0.
+    pub fn recover_take(&mut self, take: &soundcraft_playback::capture::UnfinishedTake) -> Result<(), String> {
+        let rep = soundcraft_playback::capture::recover(&take.media).map_err(|e| e.to_string())?;
+        let r = self.run("file.import_audio", json!({"path": take.media.to_string_lossy(), "at": 0}));
+        r.map_err(|e| e.to_string())?;
+        self.ui.status = format!(
+            "Recovered take {}: {} frames kept ({} unjournaled frames discarded); placed at the session start on a new track",
+            take.media.display(),
+            rep.kept_frames,
+            rep.discarded_unjournaled_frames
+        );
+        Ok(())
     }
 
     /// Open the input device once (for recording and input monitoring) and feed the player.
@@ -1123,6 +1286,47 @@ mod tests {
             assert!(app.is_playing());
             assert_eq!(app.position(), insertion + i64::from(app.engine.session().sample_rate.hz()) / 4);
         }
+    }
+
+    /// R04: the autosave worker commits a generation of a modified session into its store;
+    /// an unchanged revision is not snapshotted again; the running marker reports an unclean exit.
+    #[test]
+    fn autosave_worker_commits_generations_and_marks_unclean_exit() {
+        let dir = std::env::temp_dir().join(format!("sml-ui-autosave-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let mut app = SoundApp::new(soundcraft_engine::demo::demo_engine(), None, Services::default());
+        app.autosave_dir = Some(dir.clone());
+        assert!(!app.mark_running(), "first run: no stale marker");
+        app.run("mix.volume", json!({"track": "Kick", "db": -4.0})).unwrap();
+        app.autosave(1.0);
+        app.autosave(1.0 + soundcraft_engine::autosave::DEFAULT_INTERVAL_S + 1.0);
+        assert!(app.autosave_job.is_some() || app.autosave_state.last_generation.is_some(), "a job was started");
+        for _ in 0..600 {
+            app.autosave(1000.0);
+            if app.autosave_state.last_generation.is_some() || app.autosave_state.last_error.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+        assert_eq!(app.autosave_state.last_error, None);
+        assert_eq!(app.autosave_state.last_generation, Some(1));
+        assert!(app.autosave_summary().contains("generation 1"));
+        // Same revision: no second generation even after the interval.
+        app.autosave(2000.0 + soundcraft_engine::autosave::DEFAULT_INTERVAL_S);
+        assert!(app.autosave_job.is_none());
+        let points = app.recovery_points();
+        assert_eq!(points.len(), 1);
+        assert_eq!(points[0].generation, 1);
+        // A second "run" finds the marker: unclean exit reported; a clean exit removes it.
+        assert!(app.mark_running(), "marker from the unfinished run");
+        app.mark_clean_exit();
+        assert!(!dir.join("running.lock").exists());
+        // Recovery opens the generation as an unsaved session.
+        let mut fresh = SoundApp::new(soundcraft_engine::Engine::default(), None, Services::default());
+        fresh.open_recovery_point(&points[0]).unwrap();
+        assert!(fresh.engine.path.is_none() && fresh.engine.is_dirty());
+        assert_eq!(fresh.engine.session().track_by_name("Kick").map(|t| t.mixer.volume_db), Some(-4.0));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
