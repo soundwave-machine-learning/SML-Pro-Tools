@@ -1,6 +1,7 @@
 # Execution state — next cycle (revision 2.2)
 
-Updated: 2026-10-12T06:30Z. Branch `fable/recording-core`. Base checkpoint
+Updated: 2026-10-12T07:00Z. Branch `fable/recording-core` (pushed). Base checkpoint
+`396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 `396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 `396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 
@@ -13,9 +14,9 @@ Updated: 2026-10-12T06:30Z. Branch `fable/recording-core`. Base checkpoint
 | G2 (host/parameter/render interfaces) | portable PASS: warp render service, listen mask, envelope clients, capability matrix, sidechain and render report interfaces | ledgers |
 | G3 (generic host/parameter/state/PDC/render) | portable PASS on deterministic fixtures and the CLAP/VST3 test plugins; real native plugins pending | `docs/evidence/next_cycle/sprint_03/` |
 | Next Sprint 3 | PARTIAL — capability matrix, sidechain, PDC fixtures + bypass compensation, offline tail/export guard, versions, sandboxed mode (E03 follow-up), Bend reopen re-render, W1 hosted control; CI exit 0 (673 tests); milestone commit `feat: harden SML Studio plugin hosting and integration` (`f176366`); seven SML plugins AWAITING_EXTERNAL_PLUGIN; native pending | `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md` |
-| Next Sprint 4 | NOT STARTED | — |
+| Next Sprint 4 | PARTIAL — assistant (rules, E06 BLOCKED for generation), typed phone assistant, monitor-only speech/reference path, mastering workspace + E07 meters + verified exports, portable E08 scenario, handoff docs; milestone commit `feat: complete assisted SML Studio mastering workflow` (SHA below); native gates pending | `docs/sprint_reports/NEXT_SPRINT_04_REPORT.md` |
 
-Current module: Sprint 4 (assisted studio) per SPRINT_04_DESIGN.md — assistant service first.
+Current module: cycle complete in P; next is the native gauntlet (see NEXT_CYCLE_FINAL_HANDOFF.md).
 
 Target-pending ledger: H1–H4, CL-T6/7, N07 physical, B03 physical keypad, power-loss (E02),
 real plugins through the isolated scanner, ASIO (B06), V14 owner review, listening, phone M,

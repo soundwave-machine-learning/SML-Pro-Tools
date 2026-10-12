@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 crate::io::import_video_bytes(e, &path, bytes, at)
             }
         ),
-        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, acknowledge_missing?: false} — refuses when a plugin is missing or failed to load unless acknowledged", always, bounce),
+        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, rate?: Hz, metadata?: {description, originator}, report?: true|path, overwrite?: false, acknowledge_missing?: false} — refuses an existing file, a missing or failed plugin unless acknowledged; adds no limiter/normaliser/dither of its own", always, bounce),
         cmd!(noundo "file.bounce_stems", "Bounce Stems...", [], None, "{dir, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, fold_down?: stereo}", has_tracks, |e, p| {
             let dir = str_param(p, "dir").ok_or_else(|| bad("file.bounce_stems", "`dir` required"))?.to_string();
             missing_plugin_guard(e, "file.bounce_stems", p)?;
@@ -259,7 +259,11 @@ fn bounce_guard(e: &Engine, cmd: &str, p: &Value) -> Result<crate::io::BounceGua
             soundcraft_mix::Tail::Samples(e.session().sample_rate.samples(secs).max(0) as usize)
         }
     };
-    Ok(crate::io::BounceGuard { tail, accept_substituted: p.get("acknowledge_missing").and_then(Value::as_bool) == Some(true) })
+    let rate = match p.get("rate") {
+        None | Some(Value::Null) => None,
+        Some(v) => Some(v.as_u64().filter(|r| (8_000..=384_000).contains(r)).ok_or_else(|| bad(cmd, "`rate` must be 8000..384000"))? as u32),
+    };
+    Ok(crate::io::BounceGuard { tail, accept_substituted: p.get("acknowledge_missing").and_then(Value::as_bool) == Some(true), rate })
 }
 
 fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
@@ -277,15 +281,52 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
         Some("32") | Some("32f") => soundcraft_audio_io::BitDepth::Float32,
         _ => soundcraft_audio_io::BitDepth::Int24,
     };
-    let opts = soundcraft_audio_io::EncodeOptions { format, bit_depth, dither: bool_or(p, "dither", true), bwf: None };
+    let bwf = p.get("metadata").and_then(Value::as_object).map(|m| soundcraft_audio_io::BwfInfo {
+        description: m.get("description").and_then(Value::as_str).unwrap_or("").chars().take(256).collect(),
+        originator: m.get("originator").and_then(Value::as_str).unwrap_or("SML Studio").chars().take(32).collect(),
+        ..soundcraft_audio_io::BwfInfo::default()
+    });
+    let opts = soundcraft_audio_io::EncodeOptions { format, bit_depth, dither: bool_or(p, "dither", true), bwf };
     let normalize = bool_or(p, "normalize", false);
     let fold = fold_down_param(p, "file.bounce_mix")?;
     let guard = bounce_guard(e, "file.bounce_mix", p)?;
+    if std::path::Path::new(&path).exists() && !bool_or(p, "overwrite", false) {
+        return Err(bad("file.bounce_mix", format!("`{path}` exists; pass overwrite: true to replace it")));
+    }
     let (bytes, stats) = crate::io::bounce_bytes_checked(e, r, &opts, normalize, fold, &guard)?;
     std::fs::write(&path, &bytes).map_err(|err| EngineError::Io(format!("{path}: {err}")))?;
-    Ok(
-        json!({"path": path, "bytes": bytes.len(), "seconds": e.session().sample_rate.seconds(r.len()), "peak_db": stats.0, "lufs": stats.1, "true_peak_db": stats.2}),
-    )
+    let verified = crate::io::verify_export(&bytes, &ext, &stats);
+    let mut out = json!({"path": path, "bytes": bytes.len(), "seconds": e.session().sample_rate.seconds(r.len()), "peak_db": stats.peak_db, "lufs": stats.integrated_lufs, "true_peak_db": stats.true_peak_db, "loudness_range_lu": stats.loudness_range_lu, "rate": stats.rate, "tail_samples": stats.tail_samples, "verified": verified});
+    // Export report (R34): settings, revision, plugins and measured facts, next to the file.
+    let want_report = p.get("report").is_some_and(|v| v.as_bool().unwrap_or(v.is_string()));
+    if want_report {
+        let rpath = p.get("report").and_then(Value::as_str).map(str::to_string).unwrap_or_else(|| format!("{path}.report.json"));
+        let s = e.session();
+        let plugins: Vec<Value> = s
+            .tracks
+            .iter()
+            .flat_map(|t| {
+                t.mixer.inserts.iter().enumerate().filter_map(move |(i, x)| {
+                    x.as_ref().map(|x| json!({"track": t.name, "slot": i, "plugin": x.plugin, "version": x.plugin_version, "bypass": x.bypass, "state_fnv": x.state.as_ref().map(|st| crate::autosave::fnv1a64(st.as_bytes()))}))
+                })
+            })
+            .collect();
+        let report = json!({
+            "sml_build": env!("CARGO_PKG_VERSION"),
+            "session": {"name": s.name, "revision": e.revision, "sample_rate": s.sample_rate.hz(), "mastering_note": s.mastering.revision_note, "program": s.mastering.program.map(|x| x.0)},
+            "export": {"path": path, "format": format_name, "bit_depth": format!("{bit_depth:?}"), "dither": opts.dither, "rate": stats.rate, "channels": stats.channels, "range": [r.start, r.end], "tail_samples": stats.tail_samples, "normalize": normalize, "fold_down": fold},
+            "plugins": plugins,
+            "pending_bend_renders": e.warp.is_busy(),
+            "measured": stats,
+            "verified": out["verified"],
+            "excluded": ["monitor volume/dim/mono", "reference", "cue", "assistant speech"],
+            "note": "nothing was normalised, limited or dithered beyond the settings above",
+        });
+        std::fs::write(&rpath, serde_json::to_string_pretty(&report).unwrap_or_default())
+            .map_err(|err| EngineError::Io(format!("{rpath}: {err}")))?;
+        out["report"] = json!(rpath);
+    }
+    Ok(out)
 }
 
 /// Write the score of the chosen MIDI tracks as MusicXML (or SVG when `svg`).

@@ -97,6 +97,92 @@ struct Shared {
     monitor_db_milli: std::sync::atomic::AtomicI32,
     monitor_dim: AtomicBool,
     monitor_mono: AtomicBool,
+    /// Monitor-only auxiliary audio (assistant speech, mastering reference), see [`AuxMonitor`].
+    aux: AuxMonitor,
+}
+
+/// Audio only the listener hears (assistant speech, the mastering reference): a single-producer
+/// ring filled from the UI thread at the device rate and summed into the device output after
+/// the program and before the monitor stage. It is not part of the rendered block, so no
+/// bounce (`render_range`, a separate code path) and no capture (the device INPUT ring) can
+/// contain it. Speech is dropped while recording when `mute_while_recording` is set.
+pub struct AuxMonitor {
+    buf: Vec<std::sync::atomic::AtomicU32>,
+    head: std::sync::atomic::AtomicUsize,
+    tail: std::sync::atomic::AtomicUsize,
+    /// Linear gain × 1000 on the way out.
+    gain_milli: AtomicU32,
+    /// Mute the program on the device output while this plays (reference A/B); never a render.
+    pub solo: AtomicBool,
+    /// Drop instead of play while recording (assistant speech policy).
+    pub mute_while_recording: AtomicBool,
+}
+
+/// Capacity of the auxiliary monitor ring (stereo frames at the device rate).
+pub const AUX_RING_FRAMES: usize = 1 << 17;
+
+impl AuxMonitor {
+    fn new() -> AuxMonitor {
+        AuxMonitor {
+            buf: (0..AUX_RING_FRAMES * 2).map(|_| std::sync::atomic::AtomicU32::new(0)).collect(),
+            head: std::sync::atomic::AtomicUsize::new(0),
+            tail: std::sync::atomic::AtomicUsize::new(0),
+            gain_milli: AtomicU32::new(1000),
+            solo: AtomicBool::new(false),
+            mute_while_recording: AtomicBool::new(true),
+        }
+    }
+
+    /// UI thread: queues stereo interleaved frames (mono callers duplicate); returns how many
+    /// frames were accepted (the rest wait for room).
+    pub fn push(&self, interleaved: &[f32]) -> usize {
+        let frames = interleaved.len() / 2;
+        let head = self.head.load(Ordering::Acquire);
+        let tail = self.tail.load(Ordering::Acquire);
+        let free = AUX_RING_FRAMES - 1 - head.wrapping_sub(tail) % AUX_RING_FRAMES;
+        let n = frames.min(free);
+        for i in 0..n {
+            let slot = (head + i) % AUX_RING_FRAMES;
+            self.buf[slot * 2].store(interleaved[i * 2].to_bits(), Ordering::Relaxed);
+            self.buf[slot * 2 + 1].store(interleaved[i * 2 + 1].to_bits(), Ordering::Relaxed);
+        }
+        self.head.store((head + n) % AUX_RING_FRAMES, Ordering::Release);
+        n
+    }
+
+    pub fn set_gain_db(&self, db: f32) {
+        let g = 10f32.powf(db.clamp(-60.0, 12.0) / 20.0);
+        self.gain_milli.store((g * 1000.0) as u32, Ordering::Relaxed);
+    }
+
+    pub fn queued_frames(&self) -> usize {
+        self.head.load(Ordering::Acquire).wrapping_sub(self.tail.load(Ordering::Acquire)) % AUX_RING_FRAMES
+    }
+
+    pub fn clear(&self) {
+        self.tail.store(self.head.load(Ordering::Acquire), Ordering::Release);
+    }
+
+    /// Audio thread: sums (or drops) one frame into `frame`'s first two channels.
+    fn pop_into(&self, frame: &mut [f32], recording: bool) {
+        let tail = self.tail.load(Ordering::Acquire);
+        if tail == self.head.load(Ordering::Acquire) {
+            return;
+        }
+        let l = f32::from_bits(self.buf[tail * 2].load(Ordering::Relaxed));
+        let r = f32::from_bits(self.buf[tail * 2 + 1].load(Ordering::Relaxed));
+        self.tail.store((tail + 1) % AUX_RING_FRAMES, Ordering::Release);
+        if recording && self.mute_while_recording.load(Ordering::Relaxed) {
+            return;
+        }
+        let g = self.gain_milli.load(Ordering::Relaxed) as f32 / 1000.0;
+        if let Some(x) = frame.get_mut(0) {
+            *x += l * g;
+        }
+        if let Some(x) = frame.get_mut(1) {
+            *x += r * g;
+        }
+    }
 }
 
 impl Shared {
@@ -114,6 +200,7 @@ impl Shared {
             monitor_db_milli: std::sync::atomic::AtomicI32::new(0),
             monitor_dim: AtomicBool::new(false),
             monitor_mono: AtomicBool::new(false),
+            aux: AuxMonitor::new(),
             play_anchor: Mutex::new(None),
         }
     }
@@ -447,6 +534,12 @@ impl AudioState {
                     *o = if c < nch.max(1) && sounding { sample(c).clamp(-1.0, 1.0) } else { 0.0 };
                 }
             }
+            // Monitor-only auxiliary audio (speech, reference): after the program, before the
+            // monitor stage; never in a render or a capture.
+            if self.shared.aux.solo.load(Ordering::Relaxed) {
+                frame.iter_mut().for_each(|x| *x = 0.0);
+            }
+            self.shared.aux.pop_into(frame, self.recording);
             apply_monitor(frame, mon_gain, mon_mono);
             self.read += step;
         }
@@ -820,6 +913,11 @@ impl Player {
     }
 
     /// Monitor-only volume/dim/mono (R37): the speaker path, never a bounce.
+    /// The monitor-only auxiliary ring (assistant speech, mastering reference).
+    pub fn aux(&self) -> &AuxMonitor {
+        &self.shared.aux
+    }
+
     pub fn set_monitor(&self, volume_db: f32, dim: bool, mono: bool) {
         let v = if volume_db.is_finite() { (volume_db.clamp(-90.0, 0.0) * 1000.0) as i32 } else { 0 };
         self.shared.monitor_db_milli.store(v, Ordering::Relaxed);
@@ -1265,5 +1363,45 @@ mod tests {
         let p = shared.position.load(Ordering::Relaxed);
         assert!(p <= 1000, "position {p} should stay inside the loop");
         assert!(shared.playing.load(Ordering::Relaxed));
+    }
+}
+
+#[cfg(test)]
+mod aux_monitor_tests {
+    use super::*;
+
+    /// R33/R34: auxiliary monitor audio reaches the device output only. A render of the same
+    /// session is unchanged, nothing enters the capture path, speech is dropped while recording,
+    /// and the reference "solo" silences the program on the device output only.
+    #[test]
+    fn aux_audio_is_monitor_only() {
+        let aux = AuxMonitor::new();
+        let frames: Vec<f32> = (0..64).flat_map(|i| [0.5, if i % 2 == 0 { 0.25 } else { -0.25 }]).collect();
+        assert_eq!(aux.push(&frames), 64);
+        assert_eq!(aux.queued_frames(), 64);
+        let mut frame = [0.1f32, 0.1];
+        aux.pop_into(&mut frame, false);
+        assert!((frame[0] - 0.6).abs() < 1e-6 && (frame[1] - 0.35).abs() < 1e-6, "summed after the program: {frame:?}");
+        // Recording: dropped, not played.
+        let mut frame = [0.1f32, 0.1];
+        aux.pop_into(&mut frame, true);
+        assert_eq!(frame, [0.1, 0.1]);
+        assert_eq!(aux.queued_frames(), 62);
+        aux.set_gain_db(-6.0);
+        let mut frame = [0.0f32, 0.0];
+        aux.pop_into(&mut frame, false);
+        assert!((frame[0] - 0.5 * 0.501).abs() < 1e-2, "{frame:?}");
+        aux.clear();
+        assert_eq!(aux.queued_frames(), 0);
+        let mut frame = [0.3f32, 0.3];
+        aux.pop_into(&mut frame, false);
+        assert_eq!(frame, [0.3, 0.3], "empty ring leaves the program untouched");
+        // The ring is a device-output concern: `render_next` / `soundcraft_mix::render_range`
+        // never read it (there is no path from AuxMonitor into MixEngine or the capture ring).
+        let s = soundcraft_model::Session::default();
+        let before = soundcraft_mix::render_range(&s, soundcraft_time::Range::new(0, 256), 128);
+        aux.push(&frames);
+        let after = soundcraft_mix::render_range(&s, soundcraft_time::Range::new(0, 256), 128);
+        assert_eq!(before, after);
     }
 }

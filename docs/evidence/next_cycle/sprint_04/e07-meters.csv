@@ -1,0 +1,13 @@
+case,what,expected,tolerance,measured,pass,standard
+3341-1,integrated, stereo 1 kHz −23 dBFS 20 s,-23.00,0.10,-22.993,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-1-M,max momentary of the same,-23.00,0.10,-22.993,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-1-S,short-term at the end of the same,-23.00,0.10,-22.993,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-2,integrated, stereo 1 kHz −33 dBFS 20 s,-33.00,0.10,-32.993,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-3,integrated with relative gating (−36/−23/−36 dBFS),-23.00,0.10,-23.014,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-4,integrated with absolute gating (−72/−23/−72 dBFS),-23.00,0.10,-23.015,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-5,integrated (−26/−20/−26 dBFS, 20 s each),-23.00,0.10,-22.986,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-15,true peak, 997 Hz −6 dBFS,-6.00,0.20,-6.000,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3341-16,true peak, 997 Hz −0.5 dBFS,-0.50,0.20,-0.500,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3342-1,loudness range (−20/−30 dBFS, 20 s each),10.00,1.00,10.000,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3342-2,loudness range (−20/−15 dBFS, 20 s each),5.00,1.00,5.000,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz
+3342-3,loudness range (−40/−20 dBFS, 20 s each),20.00,1.00,20.000,true,EBU Tech 3341/3342 (2016) + ITU-R BS.1770-4 analytic signals generated in the test at 48 kHz

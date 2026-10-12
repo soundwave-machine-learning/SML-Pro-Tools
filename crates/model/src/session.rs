@@ -411,6 +411,9 @@ pub struct Session {
     /// A/B/C mix snapshots (VM05).
     #[serde(default)]
     pub mix_snapshots: std::collections::BTreeMap<String, crate::MixSnapshot>,
+    /// Mastering workspace (R34): program source, monitor-only reference, revision note.
+    #[serde(default)]
+    pub mastering: MasteringSetup,
     /// Temporary audition bypass (never saved; exports ignore it).
     #[serde(skip)]
     pub audition: crate::AuditionBypass,
@@ -458,6 +461,7 @@ impl Session {
             // New sessions use the current (SL02) graph; legacy files load as version 1.
             mix_profile: crate::MixProfile { graph_version: crate::GRAPH_VERSION, ..crate::MixProfile::default() },
             mix_snapshots: std::collections::BTreeMap::new(),
+            mastering: MasteringSetup::default(),
             audition: crate::AuditionBypass::default(),
             listen: crate::ListenState::default(),
             tracking_off: std::collections::BTreeSet::new(),
@@ -769,4 +773,32 @@ mod tests {
         assert_eq!(tr.mixer.volume_db, 0.0);
         assert!(s.next_id > t.0);
     }
+}
+
+/// Mastering workspace (R34): what the Master layout works on. The chain is the Master track's
+/// user inserts (applied exactly once: the export path IS the main mix); the reference is a
+/// monitor-only source that bypasses the chain and can never reach a bounce.
+#[derive(Debug, Clone, PartialEq, Default, serde::Serialize, serde::Deserialize)]
+pub struct MasteringSetup {
+    /// `None` = the session's mix; `Some(source)` = an imported stereo program analysed and
+    /// exported in place of the mix (the source must be in the pool).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub program: Option<SourceId>,
+    /// Reference track for A/B (monitor-only, chain bypassed, excluded from exports).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference: Option<Reference>,
+    /// Revision note of the current master (free text shown in the export report).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub revision_note: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Reference {
+    pub source: SourceId,
+    /// Audition gain (dB): the level-match result when asked; never an export setting.
+    #[serde(default)]
+    pub gain_db: f32,
+    /// The listener hears the reference instead of the program (A/B).
+    #[serde(default)]
+    pub listening: bool,
 }

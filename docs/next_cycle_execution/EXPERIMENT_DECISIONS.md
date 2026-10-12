@@ -252,3 +252,29 @@ one-block lead hides from the callback (0–1 late block in 2000). Output parity
 hosting holds to 1e-5 after PDC removes the lead. Native callback deadline misses, editor
 attachment and memory on the target machine remain pending; the mode ships labelled as
 compatibility mode, never default, with no containment claim for in-process plugins.
+
+## E06 — assistant model / STT / TTS (Sprint 4) — BLOCKED for generative parts; boundary DONE
+The product assistant ships as a grounded rule engine behind `assistant::Provider`; the only
+implementation is `Unavailable` (no licensed local model, no product credential, no speech
+runtime in P). `assistant.provider` reports it; push-to-talk and spoken replies are wired and
+report unavailable. Configuring a provider later does not change the action boundary (plans
+are validated envelopes regardless of who proposed them). Evaluation set results:
+`docs/evidence/next_cycle/sprint_04/assistant-eval-results.csv` (20/20).
+
+## E07 — meters and export (Sprint 4) — DECIDED: in-house BS.1770-4 / R128 / Tech 3342
+Standard pinned: ITU-R BS.1770-4 (K-weighting, absolute −70 LUFS / relative −10 LU gate, 4×
+oversampled true peak), EBU R128 / Tech 3341 (2016) test cases, Tech 3342 loudness range.
+Vectors: the analytically specified Tech 3341/3342 signals are generated in
+`crates/dsp/tests/e07_meter_vectors.rs` (sine levels, gating sequences, LRA pairs) and compared
+with the documents' tolerances (±0.1 LU, ±0.2 dB TP, ±1 LU LRA): 12/12 pass
+(`sprint_04/e07-meters.csv`). Not done: the official downloadable files and any
+third-party cross-check — the meters are "checked against the standard's analytic cases", not
+certified. Export verification decodes the written file and compares frames/rate/channels.
+
+## E08 — integrated soak and fault recovery (Sprint 4) — portable scenario DONE, native PENDING
+`crates/engine/tests/e08_scenario.rs` runs recover/open → record lead + double (autosave during
+capture) → split/nudge/strip silence → vocal bus → remote envelope with a duplicate → assistant
+explain + reversible action + undo + unavailable speech → monitor-only reference excluded from
+the render → export with report → reopen, all steps passing (`sprint_04/e08-scenario.json`).
+The 30-minute W1 recordings, the 2-hour endurance and 8-hour soak runs, and observed crash
+rates require the target machine and are PENDING, never shortened.

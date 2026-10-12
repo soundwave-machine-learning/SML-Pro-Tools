@@ -83,3 +83,16 @@ New command ids this sprint: `engine.plugin_capabilities`, `engine.host_faults`,
 `mix.insert_sidechain` (engine); `file.bounce_mix`/`file.bounce_stems` gained `tail` and the
 failed-plugin refusal; plugin ids accept the `sandbox:` prefix; worker entry points
 `soundcraft --plugin-worker <id> [dirs…]` / `soundcraft-cli plugin-worker <id> [dirs…]`.
+
+## Sprint 4 additions (discovered/created 2026-10-12)
+
+| Purpose | Exact command | Source | Notes |
+|---|---|---|---|
+| Assistant evaluation set (R32) | `SML_ASSISTANT_EVAL_CSV=<csv> cargo test -p soundcraft-engine --lib -- assistant::` | this cycle | `assistant-eval.json` cases: factual, unsupported, operate (clarify/reject/stale/duplicate/authorization), injected marker text, engineer |
+| Speech/reference monitor-only path (R33/R34) | `cargo test -p soundcraft-playback --lib -- aux_monitor` | this cycle | summed on the device output only; dropped while recording; renders unchanged |
+| E07 meter conformance (R34) | `SML_E07_CSV=<csv> cargo test -p soundcraft-dsp --test e07_meter_vectors` | this cycle | analytic Tech 3341/3342 + BS.1770-4 signals; integrated/momentary/short-term/true peak/LRA |
+| E08 portable scenario (R35) | `SML_E08_JSON=<json> cargo test -p soundcraft-engine --test e08_scenario` | this cycle | recover→record→edit→bus→remote→assistant→master→export→reopen with fault injection; durations PENDING |
+
+New command ids this sprint: `assistant.ask/execute/provider/transcribe/speak`,
+`mastering.program/reference/level_match/meters/status` (engine); `window.assistant` (UI);
+`file.bounce_mix` gained `rate`, `metadata`, `report`, `overwrite`.

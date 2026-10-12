@@ -27,10 +27,10 @@ Committed as `feat: harden SML Studio plugin hosting and integration` (`f176366`
 `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (673 tests). Report
 `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_03/`.
 
-## Sprint 4 state (2026-10-12)
-Design decided in `docs/next_cycle_execution/SPRINT_04_DESIGN.md`; drafts of the assistant
-service, assistant/mastering commands, E07 meter cases, E08 scenario and UI windows were
-prepared in the agent scratchpad and are being integrated. Evidence root
-`docs/evidence/next_cycle/sprint_04/` (eval set `assistant-eval.json` already there). Milestone
-commit `feat: complete assisted SML Studio mastering workflow`. If resuming mid-sprint:
-`CARGO_INCREMENTAL=0 cargo xtask ci` first.
+## Sprint 4 state (2026-10-12) — CLOSED (PARTIAL, portable)
+Committed as `feat: complete assisted SML Studio mastering workflow` (SHA in STATE.md) after
+`CARGO_INCREMENTAL=0 cargo xtask ci` exit 0. Report `docs/sprint_reports/NEXT_SPRINT_04_REPORT.md`;
+final handoff `docs/sprint_reports/NEXT_CYCLE_FINAL_HANDOFF.md`; evidence
+`docs/evidence/next_cycle/sprint_04/`. Nothing further runs in P without new inputs: the next
+steps need the target machine (native gauntlet), a licensed assistant/speech provider (E06) or
+supplied SML plugin artifacts (R23–R29).

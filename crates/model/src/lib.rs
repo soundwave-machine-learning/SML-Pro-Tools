@@ -25,7 +25,9 @@ pub use mixer::{
     Bus, ChannelFormat, INSERT_SLOTS, Insert, Mixer, OutputPath, Route, SEND_SLOTS, SendSlot, Speaker, SurroundPan, fader_db_to_pos, fader_pos_to_db,
 };
 pub use nudge::{NUDGE_PRESETS, NudgeAnchor, NudgePanel, NudgeTarget, NudgeUnit};
-pub use session::{BitDepthSetting, EditMode, EditState, SESSION_EXTENSION, Session, SessionError, Tool, TrackView, ZoomState};
+pub use session::{
+    BitDepthSetting, EditMode, EditState, MasteringSetup, Reference, SESSION_EXTENSION, Session, SessionError, Tool, TrackView, ZoomState,
+};
 pub use slots::{
     AuditionBypass, ChannelSlots, DedicatedSlot, GRAPH_VERSION, ListenMask, ListenState, MixProfile, MixSnapshot, ProfileKind, SlotKind,
     SnapshotChannel, StereoPanMode, TapePosition,

@@ -95,6 +95,17 @@ pub struct UiState {
     pub show_help: bool,
     #[serde(skip)]
     pub help_query: String,
+    /// Window › Assistant (R32/R33).
+    #[serde(default)]
+    pub show_assistant: bool,
+    #[serde(skip)]
+    pub assistant_input: String,
+    /// (request, response) pairs of this session; an executed plan carries `executed`.
+    #[serde(skip)]
+    pub assistant_log: Vec<(String, serde_json::Value)>,
+    /// Last offline meter analysis shown by the Master layout.
+    #[serde(skip)]
+    pub master_meters: Option<serde_json::Value>,
     pub show_audio_health: bool,
     pub show_about: bool,
     pub show_midi_editor: bool,
@@ -225,6 +236,10 @@ impl Default for UiState {
             show_remote: false,
             show_help: false,
             help_query: String::new(),
+            show_assistant: false,
+            assistant_input: String::new(),
+            assistant_log: Vec::new(),
+            master_meters: None,
             show_audio_health: false,
             show_about: false,
             show_midi_editor: false,

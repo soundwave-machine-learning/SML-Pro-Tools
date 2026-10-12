@@ -215,7 +215,8 @@ mod tests {
         assert_eq!(buf.channels.len(), 8);
         assert!((buf.channels[2][1000] - 0.25).abs() < 1e-5, "front centre lands on C");
         // ITU stereo fold-down.
-        e.execute("file.bounce_mix", &json!({"path": ps, "start": 0, "end": 4800, "bit_depth": "32f", "fold_down": "stereo"})).unwrap();
+        e.execute("file.bounce_mix", &json!({"path": ps, "start": 0, "end": 4800, "bit_depth": "32f", "fold_down": "stereo", "overwrite": true}))
+            .unwrap();
         let (_, buf) = soundcraft_audio_io::decode(&std::fs::read(&path).unwrap(), Some("wav")).unwrap();
         assert_eq!(buf.channels.len(), 2);
         assert!((buf.channels[0][1000] - 0.25 * std::f32::consts::FRAC_1_SQRT_2).abs() < 1e-4);

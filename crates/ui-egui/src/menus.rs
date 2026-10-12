@@ -26,6 +26,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.master", "Master Layout", "Window > Master Layout", None),
     ("window.remote", "SML Remote", "Window > SML Remote", None),
     ("window.help", "Command Help", "Help > Command Help", Some("F1")),
+    ("window.assistant", "Assistant", "Help > Assistant", None),
     ("remote.start", "Start SML Remote", "", None),
     ("remote.stop", "Stop SML Remote", "", None),
     ("remote.pair", "Open Remote Pairing", "", None),
@@ -351,6 +352,7 @@ fn checked_state(app: &SoundApp, path: &str, id: Option<&str>) -> bool {
         Some("window.master") => app.ui.window == MainWindow::Master,
         Some("window.remote") => app.ui.show_remote,
         Some("window.help") => app.ui.show_help,
+        Some("window.assistant") => app.ui.show_assistant,
         Some("window.track_list") => app.ui.show_tracks_list,
         Some("window.clip_list_view") | Some("window.clip_list") => app.ui.show_clip_list,
         Some("window.narrow_mix") => app.ui.narrow_mix,
@@ -507,6 +509,7 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         }
         "window.remote" => toggle(&mut app.ui.show_remote),
         "window.help" => toggle(&mut app.ui.show_help),
+        "window.assistant" => toggle(&mut app.ui.show_assistant),
         "remote.start" => match app.remote_start(p.get("bind").and_then(Value::as_str)) {
             Ok(v) => v,
             Err(e) => return Some(Err(e)),

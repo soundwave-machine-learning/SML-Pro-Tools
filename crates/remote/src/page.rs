@@ -48,6 +48,10 @@ small{color:#999}
   <span id="rating"></span></div>
  <h3 style="margin:12px 0 4px">Tracks</h3>
  <div id="tracks"></div>
+ <h3 style="margin:12px 0 4px">Ask</h3>
+ <div class="row"><input id="ask" placeholder="ask, or say what to do (typed; no speech configured)" maxlength="200" style="flex:1"><button id="askbtn">Ask</button></div>
+ <pre id="answer" style="white-space:pre-wrap;font-size:12px;margin:4px 0"></pre>
+ <button id="runplan" style="display:none">Run plan (one undo step)</button>
  <h3 style="margin:12px 0 4px">Monitor (speaker path only, never export)</h3>
  <div class="row"><button id="dim">Dim</button><button id="mono">Mono</button><input id="monvol" type="range" min="-60" max="0" step="1" value="0" style="width:50%"><span id="monv">0 dB</span></div>
  <div id="cue"><small>Headphone/cue: unavailable (no dedicated cue path in I/O setup)</small></div>
@@ -146,6 +150,19 @@ $('loop').onclick=()=>cmd('options.loop_playback'); $('preroll').onclick=()=>cmd
 $('marker').onclick=()=>cmd('markers.add'); $('audition').onclick=()=>cmd('transport.play_selection');
 $('dim').onclick=()=>cmd('monitor.dim'); $('mono').onclick=()=>cmd('monitor.mono');
 $('monvol').onchange=e=>cmd('monitor.volume',{db:+e.target.value});
+let lastPlan=null;
+$('askbtn').onclick=async()=>{
+  const text=$('ask').value.trim(); if(!text) return;
+  const rc=await cmd('assistant.ask',{text}); if(!rc||!rc.accepted) return;
+  const a=rc.applied||{}; lastPlan=(a.plan&&a.plan.length)?{plan:a.plan,revision:a.revision}:null;
+  $('answer').textContent='['+a.mode+'] '+a.answer+(a.citations&&a.citations.length?'\ncites: '+a.citations.join(', '):'');
+  $('runplan').style.display=lastPlan?'':'none';
+};
+$('runplan').onclick=async()=>{
+  if(!lastPlan) return; const rc=await cmd('assistant.execute',{plan:lastPlan.plan,revision:lastPlan.revision,request_id:newId()});
+  if(rc&&rc.applied){ $('answer').textContent+='\n'+(rc.applied.accepted?'done':'not applied: '+JSON.stringify(rc.applied.reason)); }
+  lastPlan=null; $('runplan').style.display='none';
+};
 $('logout').onclick=async()=>{ await api('POST','/logout'); showPair(); };
 api('GET','/state').then(r=>{ if(r.ok){ showApp(); } else { showPair(); } });
 })();

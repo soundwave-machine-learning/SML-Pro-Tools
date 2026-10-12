@@ -313,6 +313,50 @@ slots, routing, trims and automation are not part of snapshots.
   until an artifact is supplied they are AWAITING_EXTERNAL_PLUGIN in the matrix, and the Vocal
   Editor's integration mechanism (insert vs clip-linked) is undetermined.
 
+## 10a. Assistant (Explain, Operate, Engineer)
+
+- **Where.** Help › Assistant (desktop) and the phone page's Ask box. Typed requests only: no
+  language model, speech recognition or synthesis is configured in this build
+  (`assistant.provider` says so); answers come from the command registry, this guide and
+  measurements, and every answer cites the command ids / guide sections it is grounded in.
+- **Explain** names the command, its menu location, the active profile's shortcut, parameters,
+  status (including DISABLED rows) and known limits. A tool that is not in this build is
+  reported as unavailable (ARA, wake word, QuickPunch, the SML plugins until supplied).
+- **Operate** turns "mute Kick", "set the Vox fader to −6 dB", "rename Lead to Lead Vox" into a
+  previewed plan of validated commands at the current revision. *Run plan* executes it as one
+  undo step; if the document changed meanwhile, or any step is rejected, nothing is applied.
+  Two tracks with the same name make it ask which; a missing track is refused; deleting files,
+  sending, publishing or purchasing need your own authorization (the assistant never plans
+  them). Marker, clip and transcript text is quoted as data, never followed as instructions.
+- **Engineer** measures the selected range (sample peak, 4× true peak, integrated loudness,
+  noise floor, full-scale samples) and labels every statement measured / inference /
+  preference: clipping locations, a gate threshold from the noise floor (using only a plugin
+  you have registered), a vocal-bus plan, a level balance between two tracks with a fader
+  proposal to preview and undo. It never claims to have heard material it did not measure.
+- **Speech.** The push-to-talk button is present but disabled until a speech provider exists;
+  when one does, spoken replies go to the monitor path only (never a bounce or capture) and
+  stay silent while recording.
+
+## 10b. Mastering workspace and export
+
+- **Layout.** The Master layout shows the real Master strip: its user inserts are the mastering
+  chain, applied exactly once (the export path is the main mix). `mastering.program` can set an
+  imported stereo file as the program instead of the mix.
+- **Reference.** `mastering.reference {source}` plays a monitor-only reference; *A/B* mutes the
+  program on the speakers (not in any export); *Level match* measures both integrated
+  loudnesses and sets an audition gain. Nothing of the reference can reach a bounce.
+- **Meters.** *Measure* runs the standard meters offline over the program: sample peak, true
+  peak (BS.1770-4, 4×), momentary/short-term maxima, integrated (−70 absolute / −10 relative
+  gate), loudness range (EBU Tech 3342), correlation and mono-sum peak. They are checked against
+  the analytic EBU Tech 3341/3342 signals (`e07-meters.csv`); that is conformance evidence for
+  those cases, not a certification.
+- **Export.** File › Bounce Mix… writes exactly the settings you choose: format, bit depth
+  (TPDF dither only on integer depths and only when chosen), sample rate (windowed-sinc
+  conversion when it differs), tail, metadata; it refuses an existing file unless `overwrite`,
+  a missing or failed plugin unless acknowledged, and adds no limiter or normaliser of its own.
+  `report: true` writes `<file>.report.json` with the settings, revision, plugin ids/versions,
+  measured levels and the decoded-file verification (frames, rate, channels, content hash).
+
 ## 11. Not supported in this build
 ASIO (WASAPI/ALSA/CoreAudio via the default hosts only), aggregate-device clock correction, ARA /
 note-level pitch editing, native analog summing/tape models (deferred), VCAs beyond the existing

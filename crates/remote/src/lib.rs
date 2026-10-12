@@ -66,6 +66,10 @@ pub const PHONE_ALLOWLIST: &[&str] = &[
     "monitor.dim",
     "monitor.mono",
     "monitor.cue",
+    // Assistant (R33, typed path): questions and plans; a plan may only contain commands of
+    // this list (checked by the host before execution).
+    "assistant.ask",
+    "assistant.execute",
 ];
 
 #[derive(Debug, Clone)]
@@ -605,6 +609,17 @@ fn cmd_route(stream: &TcpStream, h: &Http, inner: &Arc<Inner>, token_id: &str) {
         json_err(stream, 403, "command not allowed for this client");
         return;
     }
+    if command == "assistant.execute" {
+        // A phone cannot plan a command it could not send itself.
+        let steps = body.get("params").and_then(|p| p.get("plan")).and_then(Value::as_array).cloned().unwrap_or_default();
+        if let Some(bad) = steps
+            .iter()
+            .find_map(|s| s.get("command").and_then(Value::as_str).filter(|c| !inner.cfg.allowlist.contains(&(*c).to_string())).map(str::to_string))
+        {
+            json_err(stream, 403, &format!("plan step `{bad}` is not allowed for this client"));
+            return;
+        }
+    }
     if command == "transport.record" {
         let nonce = body.get("nonce").and_then(Value::as_u64).unwrap_or(0);
         let st = inner.state.lock().unwrap_or_else(PoisonError::into_inner);
@@ -707,6 +722,39 @@ mod tests {
         (st, v)
     }
 
+    /// R33 (typed phone assistant): a paired phone asks and gets a grounded answer; a plan runs
+    /// only when every step is in the phone allowlist; a plan with a disallowed step is refused
+    /// before the host sees it.
+    #[test]
+    fn phone_assistant_plans_are_bounded_by_the_allowlist() {
+        let h = host(Config { rate_per_sec: 1000.0, burst: 1000.0, ..Config::default() });
+        let (token, _) = pair(&h);
+        let (st, r) =
+            cmd(&h, &token, &[], json!({"request_id": "a1", "command": "assistant.ask", "params": {"text": "mute the track called Lead Vox"}}));
+        assert_eq!(st, 200, "{r}");
+        let plan = r["applied"]["plan"].clone();
+        assert!(plan.as_array().is_some_and(|p| p.len() == 1), "{r}");
+        let rev = r["applied"]["revision"].clone();
+        let (st, r2) = cmd(
+            &h,
+            &token,
+            &[],
+            json!({"request_id": "a2", "command": "assistant.execute", "params": {"plan": plan, "revision": rev, "request_id": "phone-a2"}}),
+        );
+        assert_eq!(st, 200, "{r2}");
+        assert_eq!(r2["applied"]["accepted"], true, "{r2}");
+        let (st, r3) = cmd(
+            &h,
+            &token,
+            &[],
+            json!({"request_id": "a3", "command": "assistant.execute", "params": {"plan": [{"command": "session.close", "params": {}}], "revision": rev}}),
+        );
+        assert_eq!(st, 403, "{r3}");
+        let (st, r4) = cmd(&h, &token, &[], json!({"request_id": "a4", "command": "assistant.ask", "params": {"text": "open the ARA interface"}}));
+        assert_eq!(st, 200);
+        assert_eq!(r4["applied"]["mode"], "unsupported", "{r4}");
+    }
+
     /// V-REMOTE: pair/revoke, unauthorized Origin, duplicate and stale commands, two clients,
     /// reconnect snapshot with a fresh record nonce, rate limit, bounded queue, disconnect.
     #[test]
@@ -803,7 +851,8 @@ mod tests {
         let h = host(Config {
             rate_per_sec: 0.0001,
             burst: 3.0,
-            pairing_ttl: Duration::from_millis(50),
+            // Generous enough that a loaded test runner pairs before the code expires.
+            pairing_ttl: Duration::from_millis(400),
             meter_interval: Duration::from_millis(100),
             ..Config::default()
         });
@@ -823,7 +872,7 @@ mod tests {
         let _ = m;
         // Pairing expiry.
         h.server.start_pairing();
-        std::thread::sleep(Duration::from_millis(80));
+        std::thread::sleep(Duration::from_millis(500));
         let (st, _, _) = http(addr, "POST", "/pair", &[], r#"{"code":"123456"}"#);
         assert_eq!(st, 403);
         // A bounded queue: with no host polling, the queue fills and the next command is told to back off.

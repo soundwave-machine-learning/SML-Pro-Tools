@@ -154,6 +154,9 @@ pub struct LoudnessMeter {
     tp_hist: Vec<[f32; TP_TAPS]>,
     true_peak: f32,
     max_momentary: f32,
+    /// Short-term (3 s) loudness distribution for the loudness range (EBU Tech 3342).
+    st_hist_count: Vec<u64>,
+    st_hist_energy: Vec<f64>,
 }
 
 /// Loudness from mean-square energy (BS.1770 eq. 2).
@@ -228,6 +231,8 @@ impl LoudnessMeter {
             tp_coefs,
             tp_hist: vec![[0.0; TP_TAPS]; channels],
             true_peak: 0.0,
+            st_hist_count: vec![0; HIST_BINS],
+            st_hist_energy: vec![0.0; HIST_BINS],
             max_momentary: MIN_DB,
         }
     }
@@ -257,6 +262,8 @@ impl LoudnessMeter {
         self.hist_energy.iter_mut().for_each(|v| *v = 0.0);
         self.tp_hist.iter_mut().for_each(|h| *h = [0.0; TP_TAPS]);
         self.true_peak = 0.0;
+        self.st_hist_count.iter_mut().for_each(|c| *c = 0);
+        self.st_hist_energy.iter_mut().for_each(|e| *e = 0.0);
         self.max_momentary = MIN_DB;
     }
 
@@ -321,6 +328,56 @@ impl LoudnessMeter {
                 }
             }
         }
+        if self.sub_filled >= SUB_BLOCKS {
+            // Loudness range: short-term values every 100 ms once the 3 s window is full.
+            let z = self.recent_energy(SUB_BLOCKS);
+            let l = lufs(z);
+            if l > HIST_MIN {
+                let bin = (((l - HIST_MIN) / HIST_STEP) as usize).min(HIST_BINS - 1);
+                if let (Some(c), Some(e)) = (self.st_hist_count.get_mut(bin), self.st_hist_energy.get_mut(bin)) {
+                    *c += 1;
+                    *e += z;
+                }
+            }
+        }
+    }
+
+    /// Loudness range (EBU Tech 3342), LU: short-term loudness distribution gated at −70 LUFS
+    /// absolute and 20 LU below its gated mean, 10th to 95th percentile. 0 until enough 3 s
+    /// windows exist.
+    pub fn loudness_range_lu(&self) -> f32 {
+        let (mut n, mut e) = (0u64, 0.0f64);
+        for (c, s) in self.st_hist_count.iter().zip(&self.st_hist_energy) {
+            n += c;
+            e += s;
+        }
+        if n < 2 {
+            return 0.0;
+        }
+        let gate = lufs(e / n as f64) - 20.0;
+        let mut kept: Vec<(f32, u64)> = Vec::new();
+        for (i, c) in self.st_hist_count.iter().enumerate() {
+            let center = HIST_MIN + (i as f32 + 0.5) * HIST_STEP;
+            if *c > 0 && center > gate {
+                kept.push((center, *c));
+            }
+        }
+        let total: u64 = kept.iter().map(|k| k.1).sum();
+        if total < 2 {
+            return 0.0;
+        }
+        let pct = |p: f64| -> f32 {
+            let target = (p * total as f64).ceil().max(1.0) as u64;
+            let mut acc = 0u64;
+            for (v, c) in &kept {
+                acc += c;
+                if acc >= target {
+                    return *v;
+                }
+            }
+            kept.last().map_or(0.0, |k| k.0)
+        };
+        (pct(0.95) - pct(0.10)).max(0.0)
     }
 
     /// Mean energy of the last `n` completed 100 ms sub-blocks.

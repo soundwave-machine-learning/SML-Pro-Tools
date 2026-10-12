@@ -6,6 +6,7 @@ use soundcraft_model::{ClipId, TrackId};
 use soundcraft_time::{Range, Samples};
 use std::sync::OnceLock;
 
+mod assistant;
 mod audio_midi;
 mod audiosuite;
 pub mod audition;
@@ -21,9 +22,10 @@ mod event;
 mod event_more;
 mod file;
 mod health;
-mod help;
+pub mod help;
 pub mod host;
 mod instrument;
+mod mastering;
 mod midi;
 mod mix;
 mod more_util;
@@ -145,6 +147,8 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(bend::specs());
         v.extend(help::specs());
         v.extend(host::specs());
+        v.extend(assistant::specs());
+        v.extend(mastering::specs());
         v
     })
 }

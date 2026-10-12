@@ -91,11 +91,11 @@ pub struct Dedup {
 }
 
 impl Dedup {
-    fn find(&self, id: &str) -> Option<&Receipt> {
+    pub(crate) fn find(&self, id: &str) -> Option<&Receipt> {
         self.recent.iter().rev().find(|(k, _)| k == id).map(|(_, r)| r)
     }
 
-    fn remember(&mut self, r: &Receipt) {
+    pub(crate) fn remember(&mut self, r: &Receipt) {
         if r.request_id.is_empty() {
             return;
         }

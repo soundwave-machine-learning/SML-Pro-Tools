@@ -1,7 +1,7 @@
 //! Secondary floating windows (Window menu).
 
 use crate::SoundApp;
-use crate::theme::{Tokens, mono, rgb};
+use crate::theme::{Tokens, mono, regular, rgb};
 use egui::{Color32, Sense, vec2};
 use serde_json::json;
 use soundcraft_model::{AutomationMode, ClipContent};
@@ -26,6 +26,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     #[cfg(not(target_arch = "wasm32"))]
     remote_window(app, ctx);
     help_window(app, ctx);
+    assistant_window(app, ctx);
 }
 
 /// Window › Command Help (R22): build-versioned, searchable knowledge over the real registry
@@ -997,6 +998,94 @@ pub fn clip_effects(app: &mut SoundApp, ctx: &egui::Context) {
         });
     });
     app.ui.show_clip_effects = open;
+}
+
+/// Window › Assistant (R32/R33): typed requests (push-to-talk shows the provider state honestly),
+/// grounded answers with citations, plan preview with Run (one undo step) and the transcript.
+fn assistant_window(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_assistant;
+    let t = Tokens::current();
+    win(ctx, &mut open, "Assistant", vec2(760.0, 560.0), |ui| {
+        ui.horizontal(|ui| {
+            let r = ui.add(
+                egui::TextEdit::singleline(&mut app.ui.assistant_input)
+                    .desired_width(420.0)
+                    .hint_text("ask, or say what to do (e.g. \"mute Kick\", \"is the lead clipping?\")"),
+            );
+            let go = ui.button("Ask").clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+            let _ = ui
+                .add_enabled(false, egui::Button::new("🎤 Push to talk"))
+                .on_disabled_hover_text("no speech recognition is configured (E06): type the request");
+            if go && !app.ui.assistant_input.trim().is_empty() {
+                let text = app.ui.assistant_input.trim().to_string();
+                let shortcuts: serde_json::Map<String, serde_json::Value> = app
+                    .engine
+                    .command_ids()
+                    .into_iter()
+                    .filter_map(|id| app.shortcut_for(&id, None).map(|c| (id, json!(crate::shortcuts::shortcut_label(&c, ctx.os().is_mac())))))
+                    .collect();
+                let r = app
+                    .engine
+                    .execute("assistant.ask", &json!({"text": text, "shortcuts": shortcuts}))
+                    .unwrap_or_else(|e| json!({"mode": "reject", "answer": e.to_string()}));
+                app.ui.assistant_log.push((text, r));
+                app.ui.assistant_input.clear();
+            }
+        });
+        ui.label(egui::RichText::new("Answers come from this build's command registry, guide and measurements; no language model, speech recognition or synthesis is configured (assistant.provider).").small().color(t.text_dim));
+        egui::ScrollArea::vertical().show(ui, |ui| {
+            let mut run: Option<(usize, serde_json::Value)> = None;
+            for (i, (q, r)) in app.ui.assistant_log.iter().enumerate().rev() {
+                ui.group(|ui| {
+                    ui.label(egui::RichText::new(format!("You: {q}")).strong());
+                    ui.label(
+                        egui::RichText::new(format!("[{}] {}", r["mode"].as_str().unwrap_or(""), r["answer"].as_str().unwrap_or("")))
+                            .font(regular(12.0)),
+                    );
+                    if let Some(c) = r["citations"].as_array().filter(|c| !c.is_empty()) {
+                        ui.label(
+                            egui::RichText::new(format!("cites: {}", c.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(", ")))
+                                .small()
+                                .color(t.text_dim),
+                        );
+                    }
+                    if let Some(l) = r["labels"].as_array().filter(|l| !l.is_empty()) {
+                        ui.label(egui::RichText::new(l.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>().join(" · ")).small().color(t.text_dim));
+                    }
+                    if let Some(plan) = r["plan"].as_array().filter(|p| !p.is_empty()) {
+                        ui.label(egui::RichText::new("Plan (one undo step):").strong());
+                        for s in plan {
+                            ui.label(format!(
+                                "• {} — {} ({})",
+                                s["describe"].as_str().unwrap_or(""),
+                                s["command"].as_str().unwrap_or(""),
+                                s["risk"].as_str().unwrap_or("")
+                            ));
+                        }
+                        let stale = r["revision"].as_u64() != Some(app.engine.revision);
+                        let done = r.get("executed").is_some();
+                        if ui
+                            .add_enabled(!stale && !done, egui::Button::new("Run plan"))
+                            .on_disabled_hover_text(if done { "already run" } else { "the document changed since this plan was built: ask again" })
+                            .clicked()
+                        {
+                            run = Some((i, r.clone()));
+                        }
+                    }
+                });
+            }
+            if let Some((i, r)) = run {
+                let res = app
+                    .engine
+                    .execute("assistant.execute", &json!({"plan": r["plan"], "revision": r["revision"], "request_id": format!("ui:{}", i)}))
+                    .unwrap_or_else(|e| json!({"accepted": false, "reason": e.to_string()}));
+                if let Some((_, entry)) = app.ui.assistant_log.get_mut(i) {
+                    entry["executed"] = res;
+                }
+            }
+        });
+    });
+    app.ui.show_assistant = open;
 }
 
 #[cfg(test)]

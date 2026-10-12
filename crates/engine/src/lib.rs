@@ -5,6 +5,7 @@
 //! The engine owns the [`Session`] behind an `Arc` (copy-on-write), so undo snapshots are cheap.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod assistant;
 pub mod autosave;
 pub mod catalog;
 pub mod catalog_more;
@@ -235,6 +236,38 @@ impl Engine {
     /// Number of undo steps available.
     pub fn undo_depth(&self) -> usize {
         self.undo.len()
+    }
+
+    /// Puts a previously taken document back (plan rollback); bumps the revision.
+    pub(crate) fn restore_document(&mut self, doc: Arc<Session>) {
+        if !Arc::ptr_eq(&doc, &self.doc) {
+            self.doc = doc;
+            self.revision = self.revision.wrapping_add(1);
+            self.dirty = true;
+        }
+    }
+
+    pub(crate) fn dedup_lookup(&self, id: &str) -> Option<envelope::Receipt> {
+        self.dedup.find(id).cloned()
+    }
+
+    pub(crate) fn dedup_remember(&mut self, id: &str, accepted: bool) {
+        if id.is_empty() {
+            return;
+        }
+        self.dedup.remember(&envelope::Receipt {
+            request_id: id.into(),
+            accepted,
+            duplicate: false,
+            applied: Value::Null,
+            rejection: None,
+            revision: self.revision,
+        });
+    }
+
+    /// Every registered command id (hosts attach the active shortcuts to an assistant request).
+    pub fn command_ids(&self) -> Vec<String> {
+        command_specs().iter().map(|c| c.id.to_string()).collect()
     }
 
     /// Record an undo point manually (for interactive gestures committed by the UI).

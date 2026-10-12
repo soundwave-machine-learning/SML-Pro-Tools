@@ -214,7 +214,8 @@ pub fn bounce_bytes(e: &Engine, r: Range, opts: &EncodeOptions, normalize: bool)
 /// Render the main mix in its own format (every main channel, SMPTE/WAV order, with the WAV
 /// speaker mask of the main format), or an ITU stereo fold-down when `fold_stereo`.
 pub fn bounce_bytes_with(e: &Engine, r: Range, opts: &EncodeOptions, normalize: bool, fold_stereo: bool) -> Result<(Vec<u8>, (f32, f32, f32))> {
-    bounce_bytes_checked(e, r, opts, normalize, fold_stereo, &BounceGuard::default())
+    let (bytes, st) = bounce_bytes_checked(e, r, opts, normalize, fold_stereo, &BounceGuard::default())?;
+    Ok((bytes, (st.peak_db, st.integrated_lufs, st.true_peak_db)))
 }
 
 /// What an export may do when the render is not the mix the user hears (R31).
@@ -224,6 +225,22 @@ pub struct BounceGuard {
     pub tail: soundcraft_mix::Tail,
     /// The user explicitly accepts an export in which a plugin that failed to load is bypassed.
     pub accept_substituted: bool,
+    /// Output sample rate when it differs from the session's (windowed-sinc conversion).
+    pub rate: Option<u32>,
+}
+
+/// Measured facts about an export (never targets: nothing is normalised or limited unless asked).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Serialize)]
+pub struct ExportStats {
+    pub peak_db: f32,
+    pub integrated_lufs: f32,
+    pub true_peak_db: f32,
+    pub loudness_range_lu: f32,
+    pub max_momentary_lufs: f32,
+    pub rate: u32,
+    pub channels: usize,
+    pub frames: usize,
+    pub tail_samples: usize,
 }
 
 /// Refuses a render in which a hosted plugin failed to load, unless the user accepted that.
@@ -249,26 +266,58 @@ pub fn bounce_bytes_checked(
     normalize: bool,
     fold_stereo: bool,
     guard: &BounceGuard,
-) -> Result<(Vec<u8>, (f32, f32, f32))> {
+) -> Result<(Vec<u8>, ExportStats)> {
     let s = e.session();
     if r.len() > s.sample_rate.samples(4.0 * 3600.0) {
         return Err(EngineError::BadParams("file.bounce_mix".into(), "bounces are limited to 4 hours".into()));
     }
-    let report = soundcraft_mix::render_range_report(s, r, 1024, guard.tail);
+    let report = if let Some(src) = s.mastering.program.and_then(|id| s.pool.get(id)) {
+        // Mastering an imported program: it plays in place of the mix through the Master chain.
+        soundcraft_mix::render_program_report(s, &src.buffer.channels, r, 1024, guard.tail)
+    } else {
+        soundcraft_mix::render_range_report(s, r, 1024, guard.tail)
+    };
     substituted_guard("file.bounce_mix", &report, guard)?;
     let (mut ch, fmt) = main_format_of(s, report.audio, fold_stereo);
     if normalize {
         soundcraft_dsp::offline::normalize(&mut ch, -0.1, false);
     }
+    let mut rate = s.sample_rate.hz();
+    if let Some(target) = guard.rate.filter(|t| *t != rate && *t > 0) {
+        ch = soundcraft_dsp::offline::resample(&ch, rate, target);
+        rate = target;
+    }
     let peak = soundcraft_dsp::offline::peak_db(&ch);
-    let mut lm = soundcraft_dsp::meter::LoudnessMeter::new(s.sample_rate.as_f64() as f32, ch.len());
+    let mut lm = soundcraft_dsp::meter::LoudnessMeter::new(rate as f32, ch.len());
     let frames = ch.first().map_or(0, Vec::len);
     lm.process(&ch, frames);
-    let lufs = lm.integrated_lufs();
-    let true_peak = lm.true_peak_db();
-    let buf = AudioBuffer { sample_rate: s.sample_rate.hz(), channels: ch };
+    let stats = ExportStats {
+        peak_db: peak,
+        integrated_lufs: lm.integrated_lufs(),
+        true_peak_db: lm.true_peak_db(),
+        loudness_range_lu: lm.loudness_range_lu(),
+        max_momentary_lufs: lm.max_momentary_lufs(),
+        rate,
+        channels: ch.len(),
+        frames,
+        tail_samples: report.tail_samples,
+    };
+    let buf = AudioBuffer { sample_rate: rate, channels: ch };
     let bytes = soundcraft_audio_io::encode_with_channel_mask(&buf, opts, fmt.channel_mask()).map_err(|err| EngineError::Io(err.to_string()))?;
-    Ok((bytes, (peak, lufs, true_peak)))
+    Ok((bytes, stats))
+}
+
+/// Decodes an export back and checks it against what was intended (R34 file verification).
+pub fn verify_export(bytes: &[u8], ext: &str, stats: &ExportStats) -> Value {
+    match soundcraft_audio_io::decode(bytes, Some(ext)) {
+        Ok((_, buf)) => {
+            let frames = buf.channels.first().map_or(0, Vec::len);
+            let peak = soundcraft_dsp::offline::peak_db(&buf.channels);
+            let ok = frames == stats.frames && buf.sample_rate == stats.rate && buf.channels.len() == stats.channels;
+            json!({"header_ok": ok, "decoded_frames": frames, "decoded_rate": buf.sample_rate, "decoded_channels": buf.channels.len(), "decoded_peak_db": peak, "expected": {"frames": stats.frames, "rate": stats.rate, "channels": stats.channels}, "content_fnv": crate::autosave::fnv1a64(bytes)})
+        }
+        Err(e) => json!({"header_ok": false, "error": e.to_string()}),
+    }
 }
 
 /// The main mix's format (folded to stereo on request).

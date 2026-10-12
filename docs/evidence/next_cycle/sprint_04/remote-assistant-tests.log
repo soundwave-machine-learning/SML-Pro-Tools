@@ -1,0 +1,16 @@
+# utc: 2026-10-12T06:25:02Z P
+test tests::phone_assistant_plans_are_bounded_by_the_allowlist ... ok
+test tests::rate_limit_queue_bound_meters_and_pairing_expiry ... FAILED
+test tests::pairing_auth_origin_replay_and_two_clients ... ok
+
+failures:
+
+--
+thread 'tests::rate_limit_queue_bound_meters_and_pairing_expiry' (25123) panicked at crates/remote/src/lib.rs:710:9:
+assertion `left == right` failed: {"error":"pairing code expired"}
+  left: 403
+ right: 200
+--
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.93s
+
+error: test failed, to rerun pass `-p soundcraft-remote --lib`

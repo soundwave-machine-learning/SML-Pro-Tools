@@ -2814,6 +2814,36 @@ pub struct RenderReport {
     pub latency_samples: usize,
 }
 
+/// Mastering an imported program (R34): `program` (planar, session rate) replaces the mix as the
+/// main sum and passes through the Master track's chain exactly once; tracks are not rendered.
+pub fn render_program_report(s: &Session, program: &[Vec<f32>], range: Range, block: usize, tail: Tail) -> RenderReport {
+    let mut solo = s.clone();
+    for t in &mut solo.tracks {
+        if t.kind != TrackKind::Master {
+            t.inactive = true;
+        }
+    }
+    let n = program.first().map_or(0, Vec::len);
+    let src = soundcraft_model::SourceId(u64::MAX - 1);
+    solo.pool.insert(
+        src,
+        std::sync::Arc::new(soundcraft_model::SourceAudio::new(soundcraft_audio_io::AudioBuffer {
+            sample_rate: s.sample_rate.hz(),
+            channels: program.to_vec(),
+        })),
+    );
+    let fmt = if program.len() == 1 { ChannelFormat::Mono } else { ChannelFormat::Stereo };
+    let t = solo.add_track(TrackKind::Audio, fmt, Some("Program"));
+    let id = solo.new_clip_id();
+    if let Some(pl) = solo.track_mut(t).and_then(|t| t.playlist_mut()) {
+        pl.clips.push(Clip::audio(id, "program", src, 0, 0, n as i64));
+    }
+    if let Some(tr) = solo.track_mut(t) {
+        tr.mixer.pan = if program.len() == 1 { vec![0.0] } else { vec![-1.0, 1.0] };
+    }
+    render_range_report(&solo, range, block, tail)
+}
+
 /// [`render_range`] with tail handling and the instantiation report (R31 offline evidence).
 pub fn render_range_report(s: &Session, range: Range, block: usize, tail: Tail) -> RenderReport {
     let nch = main_channels(s);

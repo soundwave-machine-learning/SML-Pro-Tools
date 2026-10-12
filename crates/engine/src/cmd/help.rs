@@ -88,23 +88,33 @@ fn score(k: &envelope::Knowledge, q: &str) -> i32 {
 fn search(e: &mut Engine, p: &Value) -> Result<Value> {
     let q = str_param(p, "query").unwrap_or("").trim().to_string();
     let limit = p.get("limit").and_then(Value::as_u64).unwrap_or(20).clamp(1, 200) as usize;
+    let (total, results) = search_rows_total(e, &q, limit);
+    Ok(json!({"build": env!("CARGO_PKG_VERSION"), "query": q, "total": total, "results": results}))
+}
+
+/// The best `limit` knowledge rows for `q` (the assistant's Explain grounding).
+pub fn search_rows(e: &Engine, q: &str, limit: usize) -> Vec<Value> {
+    search_rows_total(e, q, limit).1
+}
+
+fn search_rows_total(e: &Engine, q: &str, limit: usize) -> (usize, Vec<Value>) {
     let mut rows: Vec<(i32, Value)> = envelope::knowledge(e)
         .into_iter()
         .filter_map(|k| {
-            let s = if q.is_empty() { 1 } else { score(&k, &q) };
+            let s = if q.is_empty() { 1 } else { score(&k, q) };
             (s > 0).then(|| {
                 let status = match k.status {
                     Status::Implemented => "implemented",
                     Status::DisabledNotImplemented => "DISABLED: not implemented",
                 };
-                (s, json!({"id": k.id, "label": k.label, "menu": k.menu, "params": k.params, "undoable": k.undoable, "risk": k.risk, "status": status, "disabled_reason": k.disabled_reason, "limits": limits_for(k.id)}))
+                (s, json!({"id": k.id, "label": k.label, "menu": k.menu, "shortcut": k.shortcut, "params": k.params, "undoable": k.undoable, "risk": k.risk, "status": status, "disabled_reason": k.disabled_reason, "limits": limits_for(k.id)}))
             })
         })
         .collect();
     rows.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1["id"].as_str().cmp(&b.1["id"].as_str())));
     let total = rows.len();
     let results: Vec<Value> = rows.into_iter().take(limit).map(|(_, v)| v).collect();
-    Ok(json!({"build": env!("CARGO_PKG_VERSION"), "query": q, "total": total, "results": results}))
+    (total, results)
 }
 
 #[cfg(test)]
