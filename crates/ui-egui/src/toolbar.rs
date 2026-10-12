@@ -68,14 +68,14 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
                 counters(app, ui);
                 grid_nudge(app, ui);
                 // Exactly its natural width, so the scrolling groups keep the rest of the row.
-            let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
-            layout.nudge = ui
-                .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                    ui.set_max_width(nw);
-                    nudge_panel(app, ui);
-                })
-                .response
-                .rect;
+                let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
+                layout.nudge = ui
+                    .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
+                        ui.set_max_width(nw);
+                        nudge_panel(app, ui);
+                    })
+                    .response
+                    .rect;
                 layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
                 tempo_meter(app, ui);
                 output_meter(app, ui);
@@ -635,7 +635,11 @@ mod tests {
                 assert_eq!(l.compact, compact, "{w}x{h}: compact layout {l:?}");
                 for (name, r) in [("transport", l.transport), ("nudge", l.nudge)] {
                     assert!(r.width() > 20.0 && r.height() > 20.0, "{w}x{h} {name} drawn: {r:?}");
-                    assert!(r.min.x >= 0.0 && r.max.x <= w + 0.5 && r.max.y <= HEIGHT + 0.5, "{w}x{h} {name} on screen: {r:?} (visible {:?})", l.visible);
+                    assert!(
+                        r.min.x >= 0.0 && r.max.x <= w + 0.5 && r.max.y <= HEIGHT + 0.5,
+                        "{w}x{h} {name} on screen: {r:?} (visible {:?})",
+                        l.visible
+                    );
                 }
                 assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}x{h}: transport and Nudge do not overlap");
                 if compact {

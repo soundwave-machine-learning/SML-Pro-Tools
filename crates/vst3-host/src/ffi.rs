@@ -1948,7 +1948,20 @@ mod window {
             // SAFETY: registered class name and title are NUL-terminated UTF-16 that outlive the
             // call; the owner is null or a live window of this thread.
             let hwnd = unsafe {
-                CreateWindowExW(0, class.as_ptr(), title.as_ptr(), STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, owner, std::ptr::null_mut(), instance, std::ptr::null())
+                CreateWindowExW(
+                    0,
+                    class.as_ptr(),
+                    title.as_ptr(),
+                    STYLE,
+                    CW_USEDEFAULT,
+                    CW_USEDEFAULT,
+                    ow,
+                    oh,
+                    owner,
+                    std::ptr::null_mut(),
+                    instance,
+                    std::ptr::null(),
+                )
             };
             if hwnd.is_null() {
                 return Err("could not create the editor window".into());
