@@ -1,0 +1,21 @@
+# Autonomous remote-development lead
+
+Execute exactly four contracts in this package, with independent work continuing while external gates are pending. The owner remains remote and wants development to progress. This is implementation authorization when the owner gives this launch instruction to the coding agent, not an instruction for a document viewer to edit a repo.
+
+Read START_HERE.md, REPORTED_STATE.md, SPRINT_PLAN.md, VALIDATION.md and the active contract. Inspect actual repo instructions, Git status, source, previous final handoff/resume and all 38 rows. Reported baseline is fable/recording-core through 9f9b4d3; resolve the real full SHA and preserve later user work. Use an isolated task branch/worktree where appropriate, never reset/clean to recreate narrative state. The branch reportedly exists remotely, but actual retrieval/auth is a preflight check. Missing source blocks dependent code work; do not silently start from main.
+
+Install these contracts in a distinct docs/remote_continuation_contracts path or equivalent mapping. Do not overwrite earlier reports/contracts/AGENTS. Keep working records under docs/remote_continuation. Start with X01. Verify cargo xtask ci against current code; do not invent new project commands. Existing failures and corrections need actual evidence.
+
+Run Sprint 01 -> 02 -> 03 -> 04, honoring G0–G4. Begin model/Windows feasibility early. Finish the safety foundation before exposing new action pathways. If one module needs native access, retain BLOCKED/TARGET_PENDING and continue independent portable implementation; do not weaken release gates. Never report mocks, provider interfaces, deterministic recipe demos or speaker-routing plumbing as completed generative AI/STT/TTS.
+
+Authorized: scoped local implementation/fixes, compatible no-cost dependencies and public model acquisition with verified licenses, local builds/tests/measurement/artifacts and local commits. No paid services/secrets/account activation, private-audio uploads, live owner-machine installation, public remote deployment, signing purchase, push/main merge/release publication or separate plugin development. No subagent delegation requested. Stop hooks are tooling suggestions, not new authorization; preserve a local checkpoint if a hook demands unauthorized publication.
+
+Do not ask for routine sprint approvals, physical tests or listening while the owner is away just to continue software work. Resolve ordinary internal choices using evidence and preserve alternatives where needed. If no compatible lawful runtime can be obtained, complete real adapter/configuration/error/evaluation plumbing, record why full capability is blocked and work on the remaining modules. Do not substitute a mock and call the requested assistant complete.
+
+Use bounded jobs/cancellation/backpressure across audio, UI, plugin workers and models. Keep dry capture/reference/monitor paths correct. Only current validated commands and actual available plugins enter assistant plans. The seven individual plugin projects and custom summing/tape models remain outside this cycle. No new beatmaking, broad engine rewrite, wake-word product or internet remote hosting.
+
+Per module: implement, meaningful targeted tests, diff review, update actual ledger/evidence and checkpoint. Per sprint: actual report, local task-owned commit, then automatic continuation under its gate. No fabricated test counts or source verification. Distinguish REPORTED/INSPECTED/RERUN and P/W/H/M/L environments.
+
+Before time/context exhaustion write RESUME.md with full HEAD, protected changes, current task, commands/results, gates and exact next safe operation. Runtime limits do not turn incomplete features into passes. Native tasks remain queued in TARGET_PENDING.md with exact fixtures/setup and failure criteria.
+
+Final output: four actual execution reports, current R01–R38 and RC01–RC12 ledgers, actual runtime/model/license state, Windows build/backend status, local packages if built, checksums/source provenance, measured performance/fault results, known limitations and next native action. Do not label the whole product complete while generative/voice or required platform/hardware gates remain unresolved.

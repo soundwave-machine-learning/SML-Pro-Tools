@@ -1,0 +1,98 @@
+{
+  "revision": "3.0",
+  "date": "2026-10-12",
+  "sprints": 4,
+  "closure_requirements": 12,
+  "reported_baseline": "9f9b4d3",
+  "source_inspected": false,
+  "files": [
+    {
+      "path": "START_HERE.md",
+      "sha256": "4ca5b0e8413083da7443a18a1d60a4b5a0e18ff9def6261566658d24f72812fd",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/AUTONOMOUS_BUILD_PROMPT.md",
+      "sha256": "0ba9c08e23e6e2ac3cf33af4649faee0b14cac96cb316d2fdf82469d902e7078",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/PROJECT_HANDOFF.md",
+      "sha256": "7691b79228ad3398f7815fce4e400752587b894ceb08c076f316790efae6a7d4",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/REPORTED_STATE.md",
+      "sha256": "8cc148146f044e1db7f66fdd77fcde4a240c6f9f98b8ec9a02a4fb75e8b3c5d3",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/SPRINT_PLAN.md",
+      "sha256": "908a6fabe4a1cbf4201ba1dc12b2c28f5a49eed8b05bdb4305c5677dc9fe37ef",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/VALIDATION.md",
+      "sha256": "56e244da43fc45b99ca7a5c729f341c87d2a579e3ea72d578f24f0743b17f411",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_01.md",
+      "sha256": "ecf9d7d16790fc85108fb9f0f648f613719f5fcaf3f1ccf5ca8954c2f6094af9",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_02.md",
+      "sha256": "cc42432cc93ccdeebc1a3c44deb228750a198d409a62e9ad257a462e25cb2030",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_03.md",
+      "sha256": "59ad166921c05580c9234b41667101bbe0cbaf51a5bed0260fdd7aaaeda26f78",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "docs/sprint_prompts/SPRINT_04.md",
+      "sha256": "7cee50d12a43028e2965fa4b5564f76f00c379211531da45b691f3f1591e96a8",
+      "role": "sprint-contract",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    },
+    {
+      "path": "tools/verify_package.py",
+      "sha256": "ed80c9db0a05085385e28243d835037b24ce6de3774efda9e67292e0b2996aab",
+      "role": "planning/evidence-policy",
+      "status": "PLANNING_NOT_IMPLEMENTATION_EVIDENCE",
+      "source": "owner-supplied latest report and prior scope",
+      "update_owner": "implementation lead; preserve issued requirements"
+    }
+  ]
+}

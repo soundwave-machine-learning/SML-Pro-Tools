@@ -1,0 +1,13 @@
+id,sprint,requirement,status,evidence,commit,env,note
+RC01,1,"Verified source identity, evidence-backed 38-row gap ledger and real commands",NOT STARTED,,,,
+RC02,1,Safe structural mutation/callback/lifetime policy and honest overrun status,NOT STARTED,,,,
+RC03,1,"Sandbox latency/fault behavior, keypad assessment and unavailable-toggle honesty",NOT STARTED,,,,
+RC04,2,Actual licensed conversational runtime through existing checked command service,NOT STARTED,,,,
+RC05,2,"Real STT/TTS push-to-talk pipeline, bounded/cancelable workers and monitor-only routing",NOT STARTED,,,,
+RC06,2,Grounded unseen-request/action/voice evaluations and accurate partial status,NOT STARTED,,,,
+RC07,3,Reproducible Windows build/package/backend matrix and genuine artifact provenance,NOT STARTED,,,,
+RC08,3,"Desktop/phone usability, secure-origin pairing and recording-safe reconnect",NOT STARTED,,,,
+RC09,3,Accessible numpad fallback and always-reachable transport/Nudge at small sizes,NOT STARTED,,,,
+RC10,4,Independent mastering-meter/export verification and durability fault cases,NOT STARTED,,,,
+RC11,4,Integrated stress/backpressure/cancel/worker failure and measured resource behavior,NOT STARTED,,,,
+RC12,4,"Reviewable candidate, artifacts/rebuild commands, real reports and native-test handoff",NOT STARTED,,,,
