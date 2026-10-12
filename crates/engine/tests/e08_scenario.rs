@@ -117,8 +117,17 @@ fn record_to_master_with_faults() {
         a["mode"] == "explain" && run["accepted"] == true && muted && !e.session().track(dbl).unwrap().mixer.mute && e.revision != before,
         format!("{}", run),
     );
-    let speech = e.execute("assistant.transcribe", &json!({"pcm16": [], "sample_rate": 16000}));
-    step("model/speech unavailable is honest", speech.is_err(), speech.err().map(|x| x.to_string()).unwrap_or_default());
+    // Remote Continuation RC05: speech is real now; with no enrolled phrase nothing is invented,
+    // and the provider report says the language model is off.
+    let speech = exec(&mut e, "assistant.transcribe", json!({"pcm16": [], "sample_rate": 16000}));
+    let provider = exec(&mut e, "assistant.provider", json!({}));
+    step(
+        "model/speech status is honest",
+        speech["transcript"].is_null()
+            && speech["reason"].as_str().is_some_and(|r| r.contains("no phrases"))
+            && provider["language_model"].as_str().is_some_and(|m| m.starts_with("off")),
+        format!("{speech} / {}", provider["language_model"]),
+    );
 
     // 7. Master: chain on the Master track inserts? (fixture plugin optional) + reference excluded.
     let master = e

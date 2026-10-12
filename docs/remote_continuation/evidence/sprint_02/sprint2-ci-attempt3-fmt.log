@@ -1,0 +1,17 @@
+# Sprint 2 gate (attempt 3; attempt 1 disk full, attempt 2 failed e08 step asserting speech unavailable — updated): utc 2026-10-12T21:29:27Z base HEAD 48e58b6578d7be34a8ef914dde1fbe1820f0f382 + working tree (4 changed paths) env P rustc 1.97.0; CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only
+    Finished `dev` profile [optimized + debuginfo] target(s) in 0.15s
+     Running `target/debug/xtask ci`
+Diff in /home/user/SML-Pro-Tools/crates/engine/tests/e08_scenario.rs:123:
+     let provider = exec(&mut e, "assistant.provider", json!({}));
+     step(
+         "model/speech status is honest",
+[31m-        speech["transcript"].is_null() && speech["reason"].as_str().is_some_and(|r| r.contains("no phrases")) && provider["language_model"].as_str().is_some_and(|m| m.starts_with("off")),
+[m[32m+        speech["transcript"].is_null()
+[m[32m+            && speech["reason"].as_str().is_some_and(|r| r.contains("no phrases"))
+[m[32m+            && provider["language_model"].as_str().is_some_and(|m| m.starts_with("off")),
+[m         format!("{speech} / {}", provider["language_model"]),
+     );
+ 
+FAIL  fmt
+xtask: cargo fmt --all -- --check failed
+EXIT: 1
