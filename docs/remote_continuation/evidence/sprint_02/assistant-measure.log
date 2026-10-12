@@ -1,0 +1,12 @@
+# RC05/RC06 measurement: utc 2026-10-12T21:00:55Z base HEAD 51f72ff + Sprint 2 working tree; env P (Linux x86_64 container, 4 vCPU, release build, no other load: load average: 2.64, 2.51, 2.04)
+rule answer time: n 200 p50 1.145 p99 29.270 max 32.287 ms
+model prompt build time: n 8 p50 0.569 p99 0.608 max 0.608 ms
+model prompt size: n 8 p50 2669.000 p99 2685.000 max 2685.000 chars
+speech synthesis time: n 20 p50 2.682 p99 3.530 max 3.530 ms
+speech synthesis real-time factor: n 20 p50 0.001 p99 0.001 max 0.001 x
+recognition time (8 phrases): n 10 p50 1.457 p99 1.644 max 1.644 ms
+recognition time (64 phrases): n 10 p50 8.535 p99 8.894 max 8.894 ms
+mixer block compute (idle assistant): n 4000 p50 54.739 p99 126.519 max 2278.938 us
+mixer block compute (recognition + synthesis looping on another thread): n 4000 p50 54.796 p99 105.534 max 1353.916 us
+peak RSS 42148 KiB; background loops 182
+EXIT: 0

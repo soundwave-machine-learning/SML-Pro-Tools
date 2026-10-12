@@ -1,0 +1,12 @@
+measure,n,p50,p99,max,unit,note
+rule answer time,200,1.145,29.270,32.287,ms,8 varied requests x 25 on a 16-track session (includes Engineer measurements)
+model prompt build time,8,0.569,0.608,0.608,ms,system prompt with session summary and retrieved help
+model prompt size,8,2669.000,2685.000,2685.000,chars,about 4 characters per token for English text
+speech synthesis time,20,2.682,3.530,3.530,ms,one 72-character sentence
+speech synthesis real-time factor,20,0.001,0.001,0.001,x,compute time / audio duration (lower is faster)
+recognition time (8 phrases),10,1.457,1.644,1.644,ms,one 1.2 s utterance; runs on its own thread in the desktop app
+recognition time (64 phrases),10,8.535,8.894,8.894,ms,one 1.2 s utterance; runs on its own thread in the desktop app
+mixer block compute (idle assistant),4000,54.739,126.519,2278.938,us,256-frame mixer block (budget 5333 us); same process
+mixer block compute (recognition + synthesis looping on another thread),4000,54.796,105.534,1353.916,us,256-frame mixer block (budget 5333 us); same process
+background speech loops during the run,182,,,,count,
+peak resident memory,1,42148,,,KiB,whole process incl. the 16-track session

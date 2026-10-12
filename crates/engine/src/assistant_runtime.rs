@@ -24,10 +24,13 @@ use crate::Engine;
 use crate::assistant::{Mode, Response, Step};
 use crate::envelope::{Risk, risk_of};
 use serde_json::{Value, json};
+use soundcraft_speech::recog::{Recognition, Recognizer};
+use soundcraft_speech::synth::Voice;
+use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TryRecvError, sync_channel};
+use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
@@ -137,7 +140,9 @@ pub fn loopback_addrs(url: &str) -> Result<(Vec<SocketAddr>, String, String), Ch
     let (host, port, path) = split_url(url)?;
     let named_loopback = host.eq_ignore_ascii_case("localhost") || host.parse::<std::net::IpAddr>().is_ok_and(|ip| ip.is_loopback());
     if !named_loopback {
-        return Err(ChatError::Refused(format!("`{host}` is not this machine: the assistant only talks to a local model server (127.0.0.1, ::1 or localhost)")));
+        return Err(ChatError::Refused(format!(
+            "`{host}` is not this machine: the assistant only talks to a local model server (127.0.0.1, ::1 or localhost)"
+        )));
     }
     let addrs: Vec<SocketAddr> = (host.as_str(), port).to_socket_addrs().map_err(|e| ChatError::NotReachable(e.to_string()))?.collect();
     if addrs.is_empty() || addrs.iter().any(|a| !a.ip().is_loopback()) {
@@ -277,7 +282,8 @@ fn dechunk(mut b: &[u8]) -> Result<Vec<u8>, ChatError> {
     loop {
         let line_end = find(b, b"\r\n").ok_or_else(|| ChatError::Malformed("bad chunk".into()))?;
         let size_text = String::from_utf8_lossy(b.get(..line_end).unwrap_or(&[])).to_string();
-        let size = usize::from_str_radix(size_text.split(';').next().unwrap_or("").trim(), 16).map_err(|_| ChatError::Malformed("bad chunk size".into()))?;
+        let size =
+            usize::from_str_radix(size_text.split(';').next().unwrap_or("").trim(), 16).map_err(|_| ChatError::Malformed("bad chunk size".into()))?;
         b = b.get(line_end + 2..).unwrap_or(&[]);
         if size == 0 {
             return Ok(out);
@@ -380,10 +386,7 @@ impl ChatWorker {
 
     /// A finished request, if any (non-blocking).
     pub fn poll(&self) -> Option<ChatDone> {
-        match self.done.try_recv() {
-            Ok(d) => Some(d),
-            Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
-        }
+        self.done.try_recv().ok()
     }
 }
 
@@ -472,7 +475,8 @@ impl Engine {
         };
         // The deterministic safety rules still decide unsupported and destructive requests.
         if crate::assistant::refusal(question).is_some() {
-            let mut rules = self.assistant_ask(&crate::assistant::Request { text: question.into(), ..Default::default() }, &crate::assistant::Unavailable);
+            let mut rules =
+                self.assistant_ask(&crate::assistant::Request { text: question.into(), ..Default::default() }, &crate::assistant::Unavailable);
             rules.labels.push("answered by the built-in rules: the model is not consulted for this".into());
             return rules;
         }
@@ -560,9 +564,27 @@ impl Engine {
             "mix.mute" | "mix.solo" | "mix.record_arm" => {
                 let v = bool_of("value")?;
                 let verb = match command {
-                    "mix.mute" => if v { "mute" } else { "unmute" },
-                    "mix.solo" => if v { "solo" } else { "unsolo" },
-                    _ => if v { "record-arm" } else { "disarm" },
+                    "mix.mute" => {
+                        if v {
+                            "mute"
+                        } else {
+                            "unmute"
+                        }
+                    }
+                    "mix.solo" => {
+                        if v {
+                            "solo"
+                        } else {
+                            "unsolo"
+                        }
+                    }
+                    _ => {
+                        if v {
+                            "record-arm"
+                        } else {
+                            "disarm"
+                        }
+                    }
                 };
                 (json!({"tracks": [t.id.0], "value": v}), format!("{verb} {}", t.name))
             }
@@ -582,15 +604,109 @@ impl Engine {
                 }
             }
             "mix.pan" => {
-                let v = p["pan"].as_f64().filter(|v| (-1.0..=1.0).contains(v)).ok_or_else(|| (Mode::Reject, "mix.pan needs `pan` in -1..1".to_string()))?;
+                let v = p["pan"]
+                    .as_f64()
+                    .filter(|v| (-1.0..=1.0).contains(v))
+                    .ok_or_else(|| (Mode::Reject, "mix.pan needs `pan` in -1..1".to_string()))?;
                 (json!({"tracks": [t.id.0], "pan": v}), format!("pan {} to {v:+.2}", t.name))
             }
             "track.rename" => {
-                let name = p["name"].as_str().map(str::trim).filter(|n| !n.is_empty() && n.len() <= 128).ok_or_else(|| (Mode::Reject, "track.rename needs a `name` (1-128 characters)".to_string()))?;
+                let name = p["name"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|n| !n.is_empty() && n.len() <= 128)
+                    .ok_or_else(|| (Mode::Reject, "track.rename needs a `name` (1-128 characters)".to_string()))?;
                 (json!({"track": t.id.0, "name": name}), format!("rename {} to {name}", t.name))
             }
             _ => return Err((Mode::Reject, format!("`{command}` has no validator"))),
         };
         Ok(Step { command: command.into(), params, describe, risk: risk_of(command, true) })
+    }
+}
+
+/// Speech utterances waiting for the host's monitor output (oldest dropped beyond this).
+pub const SPEECH_OUTBOX: usize = 4;
+/// Longest text spoken at once (characters).
+pub const MAX_SPOKEN_CHARS: usize = 600;
+
+/// Assistant speech and model settings held by the engine. The host persists them (the enrolled
+/// phrases are cepstral features, never audio) and drains [`VoiceState::take_speech`] into the
+/// monitor-only output ring: speech never enters a render, a bounce or the capture path.
+#[derive(Debug, Clone, Default)]
+pub struct VoiceState {
+    pub recognizer: Recognizer,
+    pub voice: Voice,
+    /// Speak assistant answers aloud (off by default).
+    pub speak_replies: bool,
+    outbox: VecDeque<Vec<f32>>,
+    /// The local model server, when the user turned the model on.
+    pub model: Option<EndpointConfig>,
+}
+
+impl VoiceState {
+    /// Synthesizes `text` (trimmed to [`MAX_SPOKEN_CHARS`]) and queues it; returns its length in
+    /// samples at [`soundcraft_speech::SPEECH_RATE`].
+    pub fn say(&mut self, text: &str) -> usize {
+        let text: String = text.chars().take(MAX_SPOKEN_CHARS).collect();
+        let pcm = soundcraft_speech::synth::synthesize(&text, self.voice);
+        let n = pcm.len();
+        if n > 0 {
+            if self.outbox.len() >= SPEECH_OUTBOX {
+                self.outbox.pop_front();
+            }
+            self.outbox.push_back(pcm);
+        }
+        n
+    }
+
+    /// The next queued utterance (mono, [`soundcraft_speech::SPEECH_RATE`]).
+    pub fn take_speech(&mut self) -> Option<Vec<f32>> {
+        self.outbox.pop_front()
+    }
+
+    /// Drops queued speech (cancel / stop).
+    pub fn clear_speech(&mut self) {
+        self.outbox.clear();
+    }
+
+    pub fn queued_speech(&self) -> usize {
+        self.outbox.len()
+    }
+}
+
+/// A push-to-talk turn's result: what was heard and, when a phrase was recognised, the answer to
+/// it exactly as if it had been typed (a plan is only previewed; nothing runs here).
+#[derive(Debug, Clone, PartialEq, serde::Serialize)]
+pub struct Heard {
+    pub transcript: Option<String>,
+    pub reason: String,
+    /// Up to three closest phrases with their distances.
+    pub candidates: Vec<(String, f32)>,
+    pub threshold: f32,
+    pub response: Option<Response>,
+}
+
+impl Heard {
+    fn from(rec: Recognition, response: Option<Response>) -> Heard {
+        Heard {
+            transcript: rec.phrase,
+            reason: rec.reason,
+            candidates: rec.ranking.into_iter().take(3).collect(),
+            threshold: rec.threshold,
+            response,
+        }
+    }
+}
+
+impl Engine {
+    /// Push-to-talk: recognise `pcm` against the enrolled phrases, then answer the transcript with
+    /// the grounded rules (`assistant_ask`). Runs on the caller's thread.
+    pub fn assistant_hear(&mut self, pcm: &[f32], rate: u32) -> Heard {
+        let rec = self.voice.recognizer.recognize(pcm, rate);
+        let response = rec
+            .phrase
+            .clone()
+            .map(|t| self.assistant_ask(&crate::assistant::Request { text: t, ..Default::default() }, &crate::assistant::Unavailable));
+        Heard::from(rec, response)
     }
 }

@@ -1,0 +1,21 @@
+DEV snr40: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("solo", 142.7222))) | 
+DEV snr35: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("solo", 142.02867))) |
+DEV snr30: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("loop", 145.60297))) |
+DEV clean: 8/8 
+DEV pitch150: 8/8 
+DEV rate0.9: 8/8 
+DEV snr25: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("loop", 143.92397))) |
+DEV snr15: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("loop", 145.05621))) |
+DEV snr8: 0/8 solo->None(not close enough to any enrolled phrase; best Some(("loop", 144.98512))) | 
+DEV enroll rewind at 20 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV enroll loop at 20 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV enroll redo at 20 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV matched-noise enroll+test at 20 dB: 0/8 recognised, 0/4 OOV wrongly accepted
+DEV enroll rewind at 10 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV enroll loop at 10 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV enroll redo at 10 dB: no speech found in the recording (too quiet, too short or only noise)
+DEV matched-noise enroll+test at 10 dB: 0/8 recognised, 0/4 OOV wrongly accepted
+DEV oov apple: None best Some(("zoom in", 175.31575)) thr 57.3
+DEV oov window: None best Some(("metronome", 130.21184)) thr 67.1
+DEV oov seven: None best Some(("zoom in", 145.67369)) thr 57.3
+DEV oov turn it up: None best Some(("redo", 144.30421)) thr 67.4

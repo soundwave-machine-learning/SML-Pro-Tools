@@ -3509,6 +3509,7 @@ dependencies = [
  "soundcraft-midi",
  "soundcraft-mix",
  "soundcraft-model",
+ "soundcraft-speech",
  "soundcraft-time",
  "soundcraft-video",
  "soundcraft-vst3-host",
@@ -3570,6 +3571,7 @@ dependencies = [
  "soundcraft-dsp",
  "soundcraft-mix",
  "soundcraft-model",
+ "soundcraft-speech",
  "soundcraft-time",
 ]
 
@@ -3624,6 +3626,7 @@ dependencies = [
  "soundcraft-model",
  "soundcraft-playback",
  "soundcraft-remote",
+ "soundcraft-speech",
  "soundcraft-time",
  "soundcraft-video",
  "soundcraft-vst3-host",

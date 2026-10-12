@@ -287,6 +287,9 @@ fn main() -> eframe::Result {
             if let Some(ui) = load_prefs() {
                 app.ui = ui;
             }
+            // Assistant voice phrases (features, not audio), spoken-reply and local-model settings.
+            app.assistant.store = prefs_path().and_then(|p| p.parent().map(|d| d.join("assistant.json")));
+            app.assistant_load();
             if let Some(port) = control_port {
                 let rx = control_server::start(port, cc.egui_ctx.clone());
                 app = app.with_control(rx);

@@ -32,7 +32,7 @@ pub const LIMITS: &[(&str, &str)] = &[
     ),
     (
         "assistant.",
-        "rule-based and grounded: no language model, speech recognition or synthesis is configured (E06); plans run only as validated commands at the current revision",
+        "grounded rules by default; an optional LOCAL language model server (none ships; loopback only) may propose actions that are validated before preview; speech is a built-in enrolled-phrase recognizer (quiet rooms; not dictation) and a robotic formant voice on the monitor output only; plans run only as validated commands at the current revision",
     ),
     (
         "mastering.",

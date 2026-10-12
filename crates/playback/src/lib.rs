@@ -25,6 +25,7 @@
 pub mod capture;
 pub mod clock;
 pub mod device;
+pub mod ptt;
 pub mod record;
 
 use soundcraft_dsp::{Plugin, PluginEditor};
@@ -148,6 +149,16 @@ impl AuxMonitor {
         }
         self.head.store((head + n) % AUX_RING_FRAMES, Ordering::Release);
         n
+    }
+
+    /// UI thread: queues mono speech at `rate` for the device running at `device_rate`
+    /// (windowed-sinc conversion, both channels); returns the frames accepted. Assistant speech
+    /// takes this path only, so it is heard and never rendered, bounced or captured.
+    pub fn push_speech(&self, mono: &[f32], rate: u32, device_rate: u32) -> usize {
+        let converted = soundcraft_dsp::offline::resample(&[mono.to_vec()], rate, device_rate);
+        let ch = converted.into_iter().next().unwrap_or_default();
+        let interleaved: Vec<f32> = ch.iter().flat_map(|&x| [x, x]).collect();
+        self.push(&interleaved)
     }
 
     pub fn set_gain_db(&self, db: f32) {
@@ -1403,5 +1414,33 @@ mod aux_monitor_tests {
         aux.push(&frames);
         let after = soundcraft_mix::render_range(&s, soundcraft_time::Range::new(0, 256), 128);
         assert_eq!(before, after);
+    }
+
+    /// RC05 / T02: assistant speech (the built-in synthesizer, 16 kHz) is converted to the device
+    /// rate and queued on the monitor ring only: its length matches the rate change, a render is
+    /// unchanged, and it is dropped (not played, not delayed) while recording.
+    #[test]
+    fn assistant_speech_goes_to_the_monitor_ring_only() {
+        let aux = AuxMonitor::new();
+        let speech = soundcraft_speech::synth::synthesize("kick muted", soundcraft_speech::synth::Voice::default());
+        let n = aux.push_speech(&speech, soundcraft_speech::SPEECH_RATE, 48_000);
+        let want = speech.len() * 3;
+        assert!(n.abs_diff(want) <= 4, "{n} vs {want}");
+        assert_eq!(aux.queued_frames(), n);
+        let s = soundcraft_model::Session::default();
+        let r = soundcraft_mix::render_range(&s, soundcraft_time::Range::new(0, 4_096), 512);
+        assert!(r.iter().flatten().all(|x| *x == 0.0), "a render never contains assistant speech");
+        let mut heard = 0.0f32;
+        for _ in 0..n {
+            let mut frame = [0.0f32, 0.0];
+            aux.pop_into(&mut frame, true);
+            heard = heard.max(frame[0].abs());
+        }
+        assert_eq!(heard, 0.0, "silent while recording");
+        assert_eq!(aux.queued_frames(), 0, "dropped, not kept for later");
+        // T03: cancelling queued speech clears it.
+        aux.push_speech(&speech, soundcraft_speech::SPEECH_RATE, 44_100);
+        aux.clear();
+        assert_eq!(aux.queued_frames(), 0);
     }
 }

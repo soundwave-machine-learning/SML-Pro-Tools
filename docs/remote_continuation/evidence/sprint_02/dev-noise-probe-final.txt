@@ -1,0 +1,15 @@
+DEV snr40: 8/8 
+DEV snr35: 8/8 
+DEV snr30: 7/8 loop->None(not close enough to any enrolled phrase; best Some(("loop", 28.687841)))
+DEV clean: 8/8 
+DEV pitch150: 8/8 
+DEV rate0.9: 8/8 
+DEV snr25: 7/8 loop->None(not close enough to any enrolled phrase; best Some(("loop", 36.442467)))
+DEV snr15: 1/8 solo->None(not close enough to any enrolled phrase; best Some(("solo", 34.733173))) | rewind->None(not cl
+DEV snr8: 0/8 solo->None(no speech found; best None) | rewind->None(no speech found; best None) | bounce->None(not close
+DEV matched-noise enroll+test at 20 dB: 5/8 recognised, 0/4 OOV wrongly accepted
+DEV matched-noise enroll+test at 10 dB: 0/8 recognised, 0/4 OOV wrongly accepted
+DEV oov apple: None best Some(("zoom in", 97.562386)) thr 21.1
+DEV oov window: None best Some(("rewind", 63.179527)) thr 21.1
+DEV oov seven: None best Some(("zoom in", 63.034668)) thr 21.1
+DEV oov turn it up: None best Some(("rewind", 73.40467)) thr 21.1

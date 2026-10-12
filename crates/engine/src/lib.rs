@@ -124,6 +124,9 @@ pub struct Engine {
     pub messages: Vec<String>,
     /// Bend render service (T08): off-thread pitch-preserving renders, polled by the host.
     pub warp: warp::Renderer,
+    /// Assistant speech and model settings (RC04/RC05): enrolled phrases, voice, speech waiting
+    /// for the host's monitor-only output, the local model endpoint.
+    pub voice: assistant_runtime::VoiceState,
 }
 
 impl Default for Engine {
@@ -151,6 +154,7 @@ impl Engine {
             dedup: envelope::Dedup::default(),
             warp: warp::Renderer::default(),
             messages: Vec::new(),
+            voice: assistant_runtime::VoiceState::default(),
         }
     }
 

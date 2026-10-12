@@ -1,8 +1,9 @@
 //! Expert assistant service (R32): Explain, Operate and Engineer over the real command registry,
 //! the build's documentation and measured audio — provider-agnostic. Generative language
 //! models, speech recognition and synthesis go through [`Provider`]; the only implementation in
-//! this build is [`Unavailable`] (E06: no licensed local/provider runtime is configured), so
-//! every answer below comes from deterministic grounded rules and says so.
+//! this module is [`Unavailable`], so every answer below comes from deterministic grounded rules
+//! and says so. The real runtime (an optional local model server, built-in speech) lives in
+//! `assistant_runtime` and `soundcraft-speech`; its answers pass through the same validation.
 //!
 //! Boundaries (ASSISTANT_MASTERING.md): answers cite command ids and guide sections; tools that
 //! do not exist are described as unavailable; Operate builds a plan of validated envelopes with
@@ -126,7 +127,7 @@ const UNSUPPORTED: &[(&[&str], &str)] = &[
     ),
     (
         &["wake", "always listening", "always-listening", "hey"],
-        "an always-listening wake word is not available: this build has push-to-talk only, and no speech recognition is configured (E06)",
+        "an always-listening wake word is not available: this build has push-to-talk only (hold the button; enrolled phrases)",
     ),
     (
         &["quickpunch", "trackpunch", "destructive record"],

@@ -78,16 +78,25 @@ fn heldout_speech_evaluation() {
     let noise = {
         // `noisy` scales to the speech RMS; for pure noise use a fixed level instead.
         let mut s = 5u32;
-        noise.iter().map(|_| {
-            s ^= s << 13;
-            s ^= s >> 17;
-            s ^= s << 5;
-            (s as f32 / u32::MAX as f32 * 2.0 - 1.0) * 0.2
-        }).collect::<Vec<f32>>()
+        noise
+            .iter()
+            .map(|_| {
+                s ^= s << 13;
+                s ^= s >> 17;
+                s ^= s << 5;
+                (s as f32 / u32::MAX as f32 * 2.0 - 1.0) * 0.2
+            })
+            .collect::<Vec<f32>>()
     };
     for (what, x) in [("silence", silence), ("noise", noise)] {
         let rec = r.recognize(&x, SR);
-        rows.push(("S08".into(), what.into(), rec.phrase.clone().unwrap_or_else(|| format!("(rejected: {})", rec.reason)), String::new(), rec.phrase.is_none()));
+        rows.push((
+            "S08".into(),
+            what.into(),
+            rec.phrase.clone().unwrap_or_else(|| format!("(rejected: {})", rec.reason)),
+            String::new(),
+            rec.phrase.is_none(),
+        ));
     }
     for w in &vocab {
         let y = synthesize(w, voice_a);
@@ -114,6 +123,10 @@ fn heldout_speech_evaluation() {
         }
         writeln!(f, "summary,,{},,", summary.join("; ")).unwrap();
     }
-    let gated: Vec<_> = rows.iter().filter(|r| matches!(r.0.as_str(), "S01" | "S07" | "S08" | "T01") && !r.4).map(|r| format!("{} {} -> {}", r.0, r.1, r.2)).collect();
+    let gated: Vec<_> = rows
+        .iter()
+        .filter(|r| matches!(r.0.as_str(), "S01" | "S07" | "S08" | "T01") && !r.4)
+        .map(|r| format!("{} {} -> {}", r.0, r.1, r.2))
+        .collect();
     assert!(gated.is_empty(), "asserted speech cases failed:\n{}", gated.join("\n"));
 }

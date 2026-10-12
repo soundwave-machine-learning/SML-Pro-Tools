@@ -23,6 +23,7 @@ cpal.workspace = true
 cpal = { workspace = true, features = ["wasm-bindgen"] }
 
 [dev-dependencies]
+soundcraft-speech.workspace = true
 soundcraft-mix = { workspace = true, features = ["test-providers"] }
 soundcraft-audio-io.workspace = true
 

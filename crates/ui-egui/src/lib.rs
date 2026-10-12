@@ -4,6 +4,7 @@
 //! executing commands. It can be replaced without touching anything below it.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod assistant_ui;
 pub mod control;
 pub mod credits;
 pub mod dialogs;
@@ -516,6 +517,8 @@ pub struct SoundApp {
     last_frame: Option<f64>,
     /// Movies for the Video window and Video track (decoded in the background).
     pub video: video_track::VideoPool,
+    /// Assistant runtime: local model worker, push-to-talk, speech output (RC04/RC05).
+    pub assistant: assistant_ui::AssistantRuntime,
 }
 
 /// Whether another automation-write pass is due: the transport moved at least
@@ -586,6 +589,7 @@ impl SoundApp {
             frame_ms: 0.0,
             last_frame: None,
             video: video_track::VideoPool::default(),
+            assistant: assistant_ui::AssistantRuntime::default(),
         }
     }
 
@@ -1476,6 +1480,11 @@ impl SoundApp {
         // the button is still held.
         if !pointer_down && matches!(self.gesture, Some(Gesture::Listen { .. })) {
             self.gesture = None;
+        }
+        // RC04/RC05: model answers, recognised speech and queued speech output.
+        self.assistant_poll();
+        if self.assistant.is_busy() || self.assistant.is_recording() {
+            ctx.request_repaint_after(std::time::Duration::from_millis(50));
         }
         // T08: finished Bend renders land here (never on the audio thread); stale ones are dropped.
         if self.engine.warp.is_busy() {

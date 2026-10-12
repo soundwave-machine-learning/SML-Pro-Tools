@@ -42,3 +42,15 @@ registry was used to route around it.
 
 Freeze before scoring (RC06): the held-out evaluation set is written to
 `evidence/sprint_02/heldout-eval.json` before any tuning, and its scores are reported per case.
+
+## Outcome (end of Sprint 2)
+- Language model: the loopback client, worker and validator are implemented and tested against
+  a fixture server (held-out P01–P12 pass; P02/P06 failed on the first attempt because a rule
+  fallback masked the model reply, fixed before the recorded run). Real inference remains
+  **BLOCKED in P**; owner steps in `RUNTIME_MANIFEST.md`, check T06.
+- Speech: synthesizer and recognizer implemented in `crates/speech`. Held-out first run
+  (frozen): same voice 8/8, pitch 180 Hz 8/8, slower 8/8, faster 8/8, 20 dB SNR 0/8, 10 dB 0/8,
+  out-of-vocabulary and silence/noise all rejected, synthesis sanity 8/8. A synthesizer level
+  bug (fricatives ~30 dB louder than vowels) and a missing band-energy floor were then fixed
+  using a separate dev vocabulary; post-hoc (no longer unseen) rerun: 8/8, 8/8, 7/8, 7/8,
+  20 dB 6/8, 10 dB 0/8, rejections all correct.

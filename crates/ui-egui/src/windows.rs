@@ -1000,8 +1000,9 @@ pub fn clip_effects(app: &mut SoundApp, ctx: &egui::Context) {
     app.ui.show_clip_effects = open;
 }
 
-/// Window › Assistant (R32/R33): typed requests (push-to-talk shows the provider state honestly),
-/// grounded answers with citations, plan preview with Run (one undo step) and the transcript.
+/// Window › Assistant (R32/R33, RC04/RC05): typed requests or push-to-talk (enrolled phrases),
+/// grounded answers or a local model's checked proposals with citations, plan preview with Run
+/// (one undo step), cancel/progress, spoken replies on the monitor output and the transcript.
 fn assistant_window(app: &mut SoundApp, ctx: &egui::Context) {
     let mut open = app.ui.show_assistant;
     let t = Tokens::current();
@@ -1009,13 +1010,34 @@ fn assistant_window(app: &mut SoundApp, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut app.ui.assistant_input)
-                    .desired_width(420.0)
+                    .desired_width(380.0)
                     .hint_text("ask, or say what to do (e.g. \"mute Kick\", \"is the lead clipping?\")"),
             );
-            let go = ui.button("Ask").clicked() || (r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
-            let _ = ui
-                .add_enabled(false, egui::Button::new("🎤 Push to talk"))
-                .on_disabled_hover_text("no speech recognition is configured (E06): type the request");
+            let busy = app.assistant.is_busy();
+            let go = ui.add_enabled(!busy, egui::Button::new("Ask")).clicked()
+                || (!busy && r.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter)));
+            if let Some(secs) = app.assistant_pending_secs() {
+                ui.spinner();
+                if ui.button(format!("Cancel ({secs:.0} s)")).clicked() {
+                    app.assistant_cancel();
+                }
+            }
+            // Push-to-talk: held = listening; released = recognised off the UI thread.
+            let recording_take = app.engine.transport.recording;
+            let ptt = ui
+                .add_enabled(
+                    !recording_take && !busy,
+                    egui::Button::new(if app.assistant.is_recording() { "🎤 Listening…" } else { "🎤 Hold to talk" })
+                        .sense(egui::Sense::click_and_drag()),
+                )
+                .on_hover_text("hold while you say an enrolled phrase; release to recognise (never while recording)")
+                .on_disabled_hover_text("off while recording or while an answer is pending");
+            let held = ptt.is_pointer_button_down_on();
+            if held && !app.assistant.is_recording() {
+                app.assistant_ptt_press(crate::assistant_ui::PttPurpose::Ask);
+            } else if !held && app.assistant.is_recording() && app.assistant.enroll_phrase.is_empty() {
+                app.assistant_ptt_release();
+            }
             if go && !app.ui.assistant_input.trim().is_empty() {
                 let text = app.ui.assistant_input.trim().to_string();
                 let shortcuts: serde_json::Map<String, serde_json::Value> = app
@@ -1024,15 +1046,88 @@ fn assistant_window(app: &mut SoundApp, ctx: &egui::Context) {
                     .into_iter()
                     .filter_map(|id| app.shortcut_for(&id, None).map(|c| (id, json!(crate::shortcuts::shortcut_label(&c, ctx.os().is_mac())))))
                     .collect();
-                let r = app
-                    .engine
-                    .execute("assistant.ask", &json!({"text": text, "shortcuts": shortcuts}))
-                    .unwrap_or_else(|e| json!({"mode": "reject", "answer": e.to_string()}));
-                app.ui.assistant_log.push((text, r));
+                app.assistant_ask_text(text, serde_json::Value::Object(shortcuts));
                 app.ui.assistant_input.clear();
             }
         });
-        ui.label(egui::RichText::new("Answers come from this build's command registry, guide and measurements; no language model, speech recognition or synthesis is configured (assistant.provider).").small().color(t.text_dim));
+        let model = match &app.engine.voice.model {
+            Some(c) => format!("local model at {} (answers checked before any action)", c.url),
+            None => "grounded rules (no language model on)".to_string(),
+        };
+        ui.label(
+            egui::RichText::new(format!(
+                "Answers: {model} · speech: {} enrolled phrase(s), built-in robotic voice {} · nothing leaves this machine",
+                app.engine.voice.recognizer.phrases.len(),
+                if app.engine.voice.speak_replies { "on" } else { "off" }
+            ))
+            .small()
+            .color(t.text_dim),
+        );
+        if !app.assistant.status.is_empty() {
+            ui.label(egui::RichText::new(app.assistant.status.clone()).small());
+        }
+        ui.collapsing("Local language model (optional)", |ui| {
+            ui.label(
+                egui::RichText::new("SoundCraft ships no model. Run a local OpenAI-compatible server (llama.cpp llama-server, Ollama, LM Studio) and point this at it; only 127.0.0.1 / ::1 / localhost are accepted. The model can only propose actions; each is checked and shown before it runs.")
+                    .small()
+                    .color(t.text_dim),
+            );
+            let f = &mut app.assistant.form;
+            ui.checkbox(&mut f.enabled, "Use the local model");
+            ui.horizontal(|ui| {
+                ui.label("Endpoint");
+                ui.add(egui::TextEdit::singleline(&mut f.url).desired_width(320.0));
+            });
+            ui.horizontal(|ui| {
+                ui.label("Model");
+                ui.add(egui::TextEdit::singleline(&mut f.model).desired_width(160.0));
+                ui.label("Time limit (s)");
+                ui.add(egui::DragValue::new(&mut f.timeout_s).range(1.0..=600.0));
+            });
+            if ui.button("Apply").clicked() {
+                app.assistant_apply_model();
+            }
+        });
+        ui.collapsing("Voice: spoken replies and push-to-talk phrases", |ui| {
+            let mut speak = app.engine.voice.speak_replies;
+            let mut pitch = app.engine.voice.voice.pitch_hz;
+            let mut changed = ui.checkbox(&mut speak, "Speak replies (monitor output only; silent while recording)").changed();
+            changed |= ui.add(egui::Slider::new(&mut pitch, 70.0..=250.0).text("voice pitch (Hz)")).changed();
+            if changed {
+                let _ = app.engine.execute("assistant.voice", &json!({"speak_replies": speak, "pitch_hz": pitch}));
+                app.assistant_save();
+            }
+            if ui.button("Stop speaking").clicked() {
+                app.assistant_cancel();
+            }
+            ui.separator();
+            ui.label(egui::RichText::new("Push-to-talk recognises only the phrases enrolled here (not dictation). Record each phrase in the room and with the microphone you will use; it needs a quiet room.").small().color(t.text_dim));
+            let mut remove: Option<String> = None;
+            for p in &app.engine.voice.recognizer.phrases {
+                ui.horizontal(|ui| {
+                    ui.label(format!("\"{}\" ({} recording{})", p.text, p.templates.len(), if p.templates.len() == 1 { "" } else { "s" }));
+                    if ui.small_button("Remove").clicked() {
+                        remove = Some(p.text.clone());
+                    }
+                });
+            }
+            if let Some(r) = remove {
+                app.engine.voice.recognizer.remove(&r);
+                app.assistant_save();
+            }
+            ui.horizontal(|ui| {
+                ui.add(egui::TextEdit::singleline(&mut app.assistant.enroll_phrase).desired_width(200.0).hint_text("phrase, e.g. mute kick"));
+                let ok = !app.assistant.enroll_phrase.trim().is_empty() && !app.engine.transport.recording;
+                let b = ui.add_enabled(ok, egui::Button::new(if app.assistant.is_recording() { "Recording…" } else { "Hold to record phrase" }).sense(egui::Sense::click_and_drag()));
+                let held = b.is_pointer_button_down_on();
+                if held && !app.assistant.is_recording() {
+                    let phrase = app.assistant.enroll_phrase.trim().to_string();
+                    app.assistant_ptt_press(crate::assistant_ui::PttPurpose::Enroll(phrase));
+                } else if !held && app.assistant.is_recording() && !app.assistant.enroll_phrase.is_empty() {
+                    app.assistant_ptt_release();
+                }
+            });
+        });
         egui::ScrollArea::vertical().show(ui, |ui| {
             let mut run: Option<(usize, serde_json::Value)> = None;
             for (i, (q, r)) in app.ui.assistant_log.iter().enumerate().rev() {

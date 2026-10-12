@@ -316,10 +316,18 @@ slots, routing, trims and automation are not part of snapshots.
 
 ## 10a. Assistant (Explain, Operate, Engineer)
 
-- **Where.** Help › Assistant (desktop) and the phone page's Ask box. Typed requests only: no
-  language model, speech recognition or synthesis is configured in this build
-  (`assistant.provider` says so); answers come from the command registry, this guide and
-  measurements, and every answer cites the command ids / guide sections it is grounded in.
+- **Where.** Help › Assistant (desktop) and the phone page's Ask box. By default answers come
+  from grounded rules over the command registry, this guide and measurements, and cite the
+  command ids / guide sections they rest on (`assistant.provider` reports what is on).
+- **Local language model (optional, desktop).** SoundCraft ships no model. If you run a local
+  OpenAI-compatible server (llama.cpp `llama-server`, Ollama, LM Studio), turn it on under
+  *Local language model* with its address; only `127.0.0.1`, `::1` or `localhost` are accepted,
+  so nothing leaves the machine. The model receives the session's track list and the command
+  help for your question, answers in its own words and may only *propose* mute, solo, volume,
+  pan, record-arm and rename actions; each proposal is checked against the current tracks and
+  ranges and shown as a plan you run yourself. A slow answer shows its elapsed time and can be
+  cancelled; if the server is down or times out, the grounded rules answer and say why.
+  Unsupported features and destructive requests are still refused by the rules.
 - **Explain** names the command, its menu location, the active profile's shortcut, parameters,
   status (including DISABLED rows) and known limits. A tool that is not in this build is
   reported as unavailable (ARA, wake word, QuickPunch, the SML plugins until supplied).
@@ -334,9 +342,17 @@ slots, routing, trims and automation are not part of snapshots.
   preference: clipping locations, a gate threshold from the noise floor (using only a plugin
   you have registered), a vocal-bus plan, a level balance between two tracks with a fader
   proposal to preview and undo. It never claims to have heard material it did not measure.
-- **Speech.** The push-to-talk button is present but disabled until a speech provider exists;
-  when one does, spoken replies go to the monitor path only (never a bounce or capture) and
-  stay silent while recording.
+- **Speech (desktop).** *Hold to talk* records from the default input while held and recognises
+  one of the phrases you enrolled under *Voice* (record each phrase once or more, in the room
+  and with the microphone you will use). It is a command recogniser, not dictation: anything
+  not close to an enrolled phrase is rejected and nothing happens. A recognised phrase appears
+  as 🎤 text and is answered exactly like typed text (plans still need *Run plan*). It needs a
+  quiet room: on synthetic test speech it was reliable at 30 dB signal-to-noise and failed at
+  10 dB. Push-to-talk is off while recording. *Speak replies* reads the first sentence of each
+  answer in a built-in robotic voice on the monitor output only (never a bounce or a take),
+  silent while recording; *Stop speaking* cancels it. Enrolled phrases are stored as features
+  in `assistant.json`, never as audio. The phone page is typed only (a phone microphone needs
+  an HTTPS page). There is no always-listening mode.
 
 ## 10b. Mastering workspace and export
 

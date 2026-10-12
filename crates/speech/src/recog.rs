@@ -22,6 +22,8 @@ const MELS: usize = 26;
 const CEPS: usize = 12;
 /// Shortest utterance worth matching (frames of 10 ms).
 const MIN_FRAMES: usize = 15;
+/// Band-energy floor under the utterance's strongest band (dB).
+const FLOOR_DB: f32 = -30.0;
 /// Longest utterance kept (frames): 8 s.
 const MAX_FRAMES: usize = 800;
 
@@ -100,7 +102,8 @@ pub fn endpoint(x: &[f32]) -> Option<(usize, usize)> {
 /// Mean-normalised mel-cepstra of the speech in `pcm` (any rate; resampled to 16 kHz).
 /// `None`: no speech found or too short.
 pub fn features(pcm: &[f32], rate: u32) -> Option<Features> {
-    let x: Vec<f32> = crate::resample_linear(pcm, rate, SPEECH_RATE).into_iter().map(|v| if v.is_finite() { v.clamp(-4.0, 4.0) } else { 0.0 }).collect();
+    let x: Vec<f32> =
+        crate::resample_linear(pcm, rate, SPEECH_RATE).into_iter().map(|v| if v.is_finite() { v.clamp(-4.0, 4.0) } else { 0.0 }).collect();
     let (s, e) = endpoint(&x)?;
     let x = x.get(s..e)?;
     let bank = mel_bank();
@@ -109,9 +112,10 @@ pub fn features(pcm: &[f32], rate: u32) -> Option<Features> {
     let hamming: Vec<f32> = (0..FRAME).map(|i| 0.54 - 0.46 * (2.0 * std::f32::consts::PI * i as f32 / (FRAME - 1) as f32).cos()).collect();
     let lifter: Vec<f32> = (1..=CEPS).map(|n| 1.0 + 11.0 * (std::f32::consts::PI * n as f32 / 22.0).sin()).collect();
     let mut out: Features = Vec::new();
+    let mut mel: Vec<[f32; MELS]> = Vec::new();
     let mut buf = vec![Complex::new(0.0f32, 0.0); NFFT];
     let mut start = 0;
-    while start + FRAME <= x.len() && out.len() < MAX_FRAMES {
+    while start + FRAME <= x.len() && mel.len() < MAX_FRAMES {
         for (k, b) in buf.iter_mut().enumerate() {
             *b = if k < FRAME {
                 let cur = x.get(start + k).copied().unwrap_or(0.0);
@@ -122,24 +126,29 @@ pub fn features(pcm: &[f32], rate: u32) -> Option<Features> {
             };
         }
         fft.process(&mut buf);
-        let logmel: Vec<f32> = bank
-            .iter()
-            .map(|(first, w)| {
-                let e: f32 = w.iter().enumerate().map(|(i, wt)| buf.get(first + i).map_or(0.0, |c| c.norm_sqr()) * wt).sum();
-                (e + 1e-10).ln()
-            })
-            .collect();
+        let mut e = [0.0f32; MELS];
+        for (em, (first, w)) in e.iter_mut().zip(&bank) {
+            *em = w.iter().enumerate().map(|(i, wt)| buf.get(first + i).map_or(0.0, |c| c.norm_sqr()) * wt).sum();
+        }
+        mel.push(e);
+        start += HOP;
+    }
+    if mel.len() < MIN_FRAMES {
+        return None;
+    }
+    // Noise masking: every band is floored FLOOR_DB under the utterance's strongest band, so
+    // digital silence and a real room's noise floor look alike.
+    let strongest = mel.iter().flat_map(|f| f.iter().copied()).fold(0.0f32, f32::max);
+    let floor = (strongest * 10f32.powf(FLOOR_DB / 10.0)).max(1e-12);
+    for e in &mel {
         let mut c = [0.0f32; CEPS];
         for (n, cn) in c.iter_mut().enumerate() {
             let q = (n + 1) as f32;
-            *cn = logmel.iter().enumerate().map(|(m, l)| l * (std::f32::consts::PI * q * (m as f32 + 0.5) / MELS as f32).cos()).sum::<f32>()
-                * lifter.get(n).copied().unwrap_or(1.0);
+            *cn =
+                e.iter().enumerate().map(|(m, v)| (v + floor).ln() * (std::f32::consts::PI * q * (m as f32 + 0.5) / MELS as f32).cos()).sum::<f32>()
+                    * lifter.get(n).copied().unwrap_or(1.0);
         }
         out.push(c);
-        start += HOP;
-    }
-    if out.len() < MIN_FRAMES {
-        return None;
     }
     let mut mean = [0.0f32; CEPS];
     for f in &out {
@@ -256,7 +265,12 @@ impl Recognizer {
     /// Acceptance threshold for phrase `i` (enrollment-derived, see the module docs).
     pub fn threshold(&self, i: usize) -> f32 {
         let Some(p) = self.phrases.get(i) else { return 0.0 };
-        let reversed = p.templates.iter().map(|t| t.iter().rev().copied().collect::<Features>()).map(|r| Self::phrase_distance(p, &r)).fold(f32::INFINITY, f32::min);
+        let reversed = p
+            .templates
+            .iter()
+            .map(|t| t.iter().rev().copied().collect::<Features>())
+            .map(|r| Self::phrase_distance(p, &r))
+            .fold(f32::INFINITY, f32::min);
         let others = self
             .phrases
             .iter()
@@ -268,7 +282,8 @@ impl Recognizer {
     }
 
     pub fn recognize(&self, pcm: &[f32], rate: u32) -> Recognition {
-        let reject = |reason: &str, ranking: Vec<(String, f32)>, threshold: f32| Recognition { phrase: None, ranking, threshold, reason: reason.into() };
+        let reject =
+            |reason: &str, ranking: Vec<(String, f32)>, threshold: f32| Recognition { phrase: None, ranking, threshold, reason: reason.into() };
         if self.phrases.is_empty() {
             return reject("no phrases are enrolled", Vec::new(), 0.0);
         }

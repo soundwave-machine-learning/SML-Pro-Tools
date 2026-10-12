@@ -29,7 +29,11 @@ impl Default for Voice {
 impl Voice {
     fn sane(self) -> Voice {
         let ok = |v: f32, lo: f32, hi: f32, d: f32| if v.is_finite() { v.clamp(lo, hi) } else { d };
-        Voice { pitch_hz: ok(self.pitch_hz, 50.0, 400.0, 110.0), rate: ok(self.rate, 0.5, 2.0, 1.0), formant_scale: ok(self.formant_scale, 0.7, 1.4, 1.0) }
+        Voice {
+            pitch_hz: ok(self.pitch_hz, 50.0, 400.0, 110.0),
+            rate: ok(self.rate, 0.5, 2.0, 1.0),
+            formant_scale: ok(self.formant_scale, 0.7, 1.4, 1.0),
+        }
     }
 }
 
@@ -110,7 +114,15 @@ const PHONEMES: &[Ph] = &[
 ];
 
 /// Two-part phonemes (diphthongs and affricates) as their parts.
-const COMPOUND: &[(&str, &[&str])] = &[("EY", &["EH", "IY"]), ("AY", &["AA", "IY"]), ("OW", &["AO", "UW"]), ("AW", &["AA", "UW"]), ("OY", &["AO", "IY"]), ("CH", &["T", "SH"]), ("JH", &["D", "ZH"])];
+const COMPOUND: &[(&str, &[&str])] = &[
+    ("EY", &["EH", "IY"]),
+    ("AY", &["AA", "IY"]),
+    ("OW", &["AO", "UW"]),
+    ("AW", &["AA", "UW"]),
+    ("OY", &["AO", "IY"]),
+    ("CH", &["T", "SH"]),
+    ("JH", &["D", "ZH"]),
+];
 
 fn phoneme(name: &str) -> Option<&'static Ph> {
     PHONEMES.iter().find(|p| p.name == name)
@@ -405,6 +417,12 @@ fn segments(ph: &[String], voice: Voice) -> Vec<Seg> {
     segs
 }
 
+/// Noise levels relative to the voiced source, calibrated with `examples/level_probe.rs` so that
+/// /S/ sits about 10 dB and /HH/ about 15 dB under a sustained /AA/ (as in natural speech, where
+/// vowels are the loudest sounds).
+const FRICATION: f32 = 0.019;
+const ASPIRATION: f32 = 0.0025;
+
 /// Two-pole resonator (gain-normalised at DC for the cascade).
 #[derive(Debug, Clone, Copy, Default)]
 struct Reso {
@@ -422,6 +440,12 @@ impl Reso {
         self.c = -r * r;
         self.b = 2.0 * r * (2.0 * std::f32::consts::PI * f * t).cos();
         self.a = 1.0 - self.b - self.c;
+    }
+    /// Magnitude response at `f` Hz.
+    fn gain_at(&self, f: f32) -> f32 {
+        let w = 2.0 * std::f32::consts::PI * f / SPEECH_RATE as f32;
+        let (re, im) = (1.0 - self.b * w.cos() - self.c * (2.0 * w).cos(), self.b * w.sin() + self.c * (2.0 * w).sin());
+        self.a.abs() / (re * re + im * im).sqrt().max(1e-9)
     }
     fn tick(&mut self, x: f32) -> f32 {
         let y = self.a * x + self.b * self.y1 + self.c * self.y2;
@@ -489,8 +513,11 @@ pub fn synthesize_phonemes(ph: &[String], voice: Voice) -> Vec<f32> {
         r1.set(fp.f[0], 60.0 + fp.f[0] * 0.05);
         r2.set(fp.f[1], 90.0 + fp.f[1] * 0.03);
         r3.set(fp.f[2], 150.0);
+        let mut fric_gain = 1.0;
         if fp.ff > 0.0 {
             rf.set(fp.ff, (fp.ff * 0.35).max(400.0));
+            // Unity gain at the centre: the frication level is set by `FRICATION` alone.
+            fric_gain = 1.0 / rf.gain_at(fp.ff).max(1e-6);
         }
         // Declination: the pitch falls through the utterance.
         let f0 = voice.pitch_hz * (1.1 - 0.25 * k as f32 / n_frames);
@@ -504,10 +531,10 @@ pub fn synthesize_phonemes(ph: &[String], voice: Voice) -> Vec<f32> {
             };
             let g = glot.tick(pulse);
             // Lip radiation: first difference.
-            let src = (g - prev_g) * 40.0 * fp.av + noise() * 0.08 * fp.ah;
+            let src = (g - prev_g) * 40.0 * fp.av + noise() * ASPIRATION * fp.ah;
             prev_g = g;
             let voiced = r5.tick(r4.tick(r3.tick(r2.tick(r1.tick(src)))));
-            let fric = if fp.af > 0.0 { rf.tick(noise()) * fp.af * 0.6 } else { 0.0 };
+            let fric = if fp.af > 0.0 { rf.tick(noise()) * fric_gain * fp.af * FRICATION } else { 0.0 };
             out.push(voiced + fric);
         }
     }
