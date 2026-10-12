@@ -1,0 +1,41 @@
+# Native Windows x64 checks for the Remote Continuation candidate (RC07/RC12): the workspace test
+# suite on Windows (this exercises the VST3 host's HWND editor window and the Windows plugin
+# paths with the test plugins), plus an unsigned portable release build uploaded as an artifact.
+# Manual only: it never runs on push, so nothing here spends runner time unless the owner asks.
+name: Windows native tests
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: 0
+
+jobs:
+  test:
+    name: cargo test (windows-latest, MSVC)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Release build (unsigned portable)
+        run: cargo build --release --locked -p soundcraft -p soundcraft-cli
+      - name: Record the source
+        shell: pwsh
+        run: |
+          git rev-parse HEAD | Out-File -Encoding ascii target/release/SOURCE_COMMIT.txt
+          Get-FileHash target/release/soundcraft.exe, target/release/soundcraft-cli.exe -Algorithm SHA256 | Format-List | Out-File target/release/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: soundcraft-windows-x64-msvc-unsigned
+          path: |
+            target/release/soundcraft.exe
+            target/release/soundcraft-cli.exe
+            target/release/SOURCE_COMMIT.txt
+            target/release/SHA256.txt
