@@ -17,7 +17,7 @@ stay exit 0), then continue the current module named in STATE.md.
 | B09 autosave/media durability, containment | autosave/media: PASS_PORTABLE (E02); runtime containment: E03 decided — feasible, not default; opt-in sandboxed mode designed for Sprint 3 R31 | Sprint 1 |
 
 ## Sprint 2 state (2026-10-12) — CLOSED (PARTIAL, portable)
-Committed as `feat: complete SML Studio editing mixing and remote workflow` (SHA in STATE.md)
+Committed as `feat: complete SML Studio editing mixing and remote workflow` (`79c419f`)
 after `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (661 tests). Report:
 `docs/sprint_reports/NEXT_SPRINT_02_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_02/`.
 Native gaps stay TARGET_PENDING in REQUIREMENT_STATUS.csv.
