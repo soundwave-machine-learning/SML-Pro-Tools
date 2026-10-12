@@ -1,0 +1,34 @@
+{
+  "frozen": "2026-10-12, before any comparison was run (committed on its own)",
+  "independent_implementation": {
+    "name": "FFmpeg libavfilter ebur128 filter",
+    "version": "ffmpeg version 6.1.1-3ubuntu5 (Ubuntu system package already installed in the build environment; not downloaded)",
+    "options": "ebur128=metadata=1:peak=true, values read from lavfi.r128.* frame metadata (3 decimals); true peak from the maximum of lavfi.r128.true_peaks_chN (linear)",
+    "independence": "separate code base and authors from SoundCraft's meter; both implement ITU-R BS.1770-4 / EBU R128 / Tech 3342; neither is a certified reference",
+    "not_used": "official EBU test WAV files (not reachable from this environment); signals are generated from the published case descriptions"
+  },
+  "tolerances": {
+    "integrated_lufs": 0.1,
+    "max_momentary_lufs": 0.1,
+    "loudness_range_lu": 1.0,
+    "true_peak_db": 0.3,
+    "basis": "agreement between the two implementations: EBU Tech 3341 ±0.1 LU for I/M, Tech 3342 ±1 LU for LRA; true peak ±0.3 dB because oversampling filters legitimately differ (BS.1770-4 allows +0.2/−0.4 dB against the analytic value). Where the analytic value is known each implementation is also checked against it with the same tolerances."
+  },
+  "cases": [
+    {"id": "X01", "signal": "stereo 1 kHz sine, −23 dBFS per channel, 20 s, 48 kHz", "analytic": {"integrated_lufs": -23.0, "max_momentary_lufs": -23.0}},
+    {"id": "X02", "signal": "stereo 1 kHz, −33 dBFS, 20 s, 48 kHz", "analytic": {"integrated_lufs": -33.0}},
+    {"id": "X03", "signal": "stereo 1 kHz −36 / −23 / −36 dBFS for 10 / 60 / 10 s (relative gate)", "analytic": {"integrated_lufs": -23.0}},
+    {"id": "X04", "signal": "stereo 1 kHz −72 / −23 / −72 dBFS for 10 / 20 / 10 s (absolute gate)", "analytic": {"integrated_lufs": -23.0}},
+    {"id": "X05", "signal": "stereo 1 kHz −26 / −20 / −26 dBFS, 20 s each", "analytic": {"integrated_lufs": -23.0}},
+    {"id": "X06", "signal": "5.1 (L R C LFE Ls Rs), 1 kHz −30 dBFS in every channel, 20 s: channel weights 1,1,1,0,1.41,1.41", "analytic": {"integrated_lufs": -23.0}},
+    {"id": "X07", "signal": "stereo 997 Hz, −6 dBFS, 20 s", "analytic": {"true_peak_db": -6.0}},
+    {"id": "X08", "signal": "stereo sine at fs/4 (12 kHz), amplitude 0.99, phase 45°: samples at ±0.70, true peak −0.09 dBFS (inter-sample)", "analytic": {"true_peak_db": -0.087}},
+    {"id": "X09", "signal": "stereo 1 kHz −20 / −30 dBFS, 20 s each", "analytic": {"loudness_range_lu": 10.0}},
+    {"id": "X10", "signal": "stereo 1 kHz −40 / −20 dBFS, 20 s each", "analytic": {"loudness_range_lu": 20.0}},
+    {"id": "X11", "signal": "stereo noise bursts (fixed seed, low-passed), 0.5–2 s at −12…−30 dBFS separated by silence, 60 s", "analytic": {}},
+    {"id": "X12", "signal": "stereo log sine sweep 20 Hz–20 kHz, −12 dBFS, 30 s, 48 kHz (K-weighting across the band)", "analytic": {}},
+    {"id": "X13", "signal": "X01 at 44.1 kHz", "analytic": {"integrated_lufs": -23.0}},
+    {"id": "X14", "signal": "X12 at 44.1 kHz", "analytic": {}}
+  ],
+  "compared_separately": ["integrated (gating)", "max momentary", "loudness range", "true peak", "channel weights (X06)"]
+}
