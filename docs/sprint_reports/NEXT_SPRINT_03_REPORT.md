@@ -42,7 +42,7 @@ native pending).
   A debug-build control, not the native W1 target (callback, GUI, device absent).
 
 ## Files / commits
-Milestone commit `feat: harden SML Studio plugin hosting and integration` (SHA in STATE.md).
+Milestone commit `feat: harden SML Studio plugin hosting and integration` (`f176366`).
 New: `crates/mix/src/sandbox.rs`, `crates/engine/src/cmd/host.rs`, tests
 `crates/engine/tests/{sandbox.rs (harness-less), w1_hosted_load.rs}`, `SPRINT_03_DESIGN.md`,
 evidence under `docs/evidence/next_cycle/sprint_03/`. Changed: dsp (`HostCapabilities`,

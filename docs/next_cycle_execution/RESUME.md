@@ -23,7 +23,7 @@ after `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (661 tests). Report:
 Native gaps stay TARGET_PENDING in REQUIREMENT_STATUS.csv.
 
 ## Sprint 3 state (2026-10-12) — CLOSED (PARTIAL, portable)
-Committed as `feat: harden SML Studio plugin hosting and integration` (SHA in STATE.md) after
+Committed as `feat: harden SML Studio plugin hosting and integration` (`f176366`) after
 `CARGO_INCREMENTAL=0 cargo xtask ci` exit 0 (673 tests). Report
 `docs/sprint_reports/NEXT_SPRINT_03_REPORT.md`; evidence `docs/evidence/next_cycle/sprint_03/`.
 
