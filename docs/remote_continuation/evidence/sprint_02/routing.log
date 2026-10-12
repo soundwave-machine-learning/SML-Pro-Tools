@@ -1,0 +1,6 @@
+# RC05 routing: utc 2026-10-12T21:37:27Z source b91462b9d6fa06acffac583f31377ae572cb11f0; env P
+test aux_monitor_tests::aux_audio_is_monitor_only ... ok
+test ptt::tests::no_device_is_an_error ... ok
+test ptt::tests::the_buffer_mixes_to_mono_and_never_grows ... ok
+test aux_monitor_tests::assistant_speech_goes_to_the_monitor_ring_only ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 38 filtered out; finished in 0.05s

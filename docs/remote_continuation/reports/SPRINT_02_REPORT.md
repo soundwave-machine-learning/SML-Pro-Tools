@@ -7,8 +7,8 @@ Evidence: `docs/remote_continuation/evidence/sprint_02/`.
 ## Source
 Base `37e676a` (Sprint 1). Local commits this sprint, in order: `0c0da65` froze the held-out
 evaluation before any runtime code; `51f72ff` recorded the first-run scores with the code that
-produced them; the milestone `feat: integrate actual grounded assistant and voice runtime`
-(hash in RESUME.md). No push.
+produced them; the milestone `b77e151` `feat: integrate actual grounded assistant and voice runtime`, then
+`b91462b` (e08 step update after gate attempt 2) and a closing evidence commit. No push.
 
 ## What is real, what is not (no mock counted)
 
@@ -87,7 +87,15 @@ speed is unmeasured (no model).
 `cargo run -p soundcraft-speech --example dev_noise_probe|level_probe`,
 `cargo build --release -p soundcraft-engine --example assistant_measure` + run,
 unit tests of speech/playback/ui-egui/engine, and the gate
-`CARGO_INCREMENTAL=0 cargo xtask ci` → GATE_RESULT (`sprint2-ci.log`).
+`CARGO_INCREMENTAL=0 cargo xtask ci`: attempt 1 ran out of disk while compiling tests
+(`sprint2-ci-attempt1-disk-full.log`); attempt 2 (with `CARGO_PROFILE_DEV_DEBUG=line-tables-only`,
+smaller debug info only) failed one step of the earlier-cycle e08 scenario that still asserted
+"speech unavailable" — updated to assert the honest new status (no transcript without enrolled
+phrases; language model reported off) (`sprint2-ci-attempt2-e08-stale-assert.log`); attempt 3
+failed rustfmt on that edit (`sprint2-ci-attempt3-fmt.log`); **attempt 4: fmt, clippy, test,
+assets, layers, wasm all ok; 698 passed / 0 failed / 1 ignored in 71 suites; EXIT 0**
+(`sprint2-ci.log`). Evidence logs: `model-smoke.log` (fixture, inference BLOCKED),
+`action-eval.json`, `voice-smoke.log`, `routing.log`.
 
 ## Not done / external gates
 T06 real local model (H), T07 microphone push-to-talk (H), T08 listening to the voice (L), T09

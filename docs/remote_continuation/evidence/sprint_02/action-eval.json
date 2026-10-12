@@ -1,0 +1,77 @@
+{
+  "note": "Provider-boundary cases against a loopback fixture server: protocol/validation evidence, NOT model quality (real inference BLOCKED in P).",
+  "cases": [
+    {
+      "id": "P01",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=operate plan=1 answer: Muting Kick.  plan (one undo step  at revision 1): mute Kick"
+    },
+    {
+      "id": "P02",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=reject plan=0 answer: ok  Not planned: `mix.explode` is not a command in this build (allowed: mix.mute  mix.solo  mix.volume  mix.pan  mix.record_arm  track.rename)"
+    },
+    {
+      "id": "P03",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=needs_authorization plan=0 answer: closing  Not planned: `session.close` is not an action the assistant may propose (allowed: mix.mute  mix.solo  mix.volume  mix.pan  mix.record_arm  track.rename)"
+    },
+    {
+      "id": "P04",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=explain plan=0 answer: Sure! I'll mute the kick for you."
+    },
+    {
+      "id": "P05",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=reject plan=0 answer: ok  Not planned: mix.mute: no track \"Snare\" in this session"
+    },
+    {
+      "id": "P06",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "mode=reject plan=0 answer: running  Not planned: `shell` is not a command in this build (allowed: mix.mute  mix.solo  mix.volume  mix.pan  mix.record_arm  track.rename)"
+    },
+    {
+      "id": "P07",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "the local model server is not reachable (Connection refused (os error 111)); start it or turn the model off; fallback mode operate"
+    },
+    {
+      "id": "P08",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "the local model did not answer within the time limit after 838.919526ms (deadline 800 ms)"
+    },
+    {
+      "id": "P09",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "Err(Cancelled) after 20.590934ms"
+    },
+    {
+      "id": "P10",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "second: Err(Busy); first: Ok(\"{\\\"answer\\\":\\\"first\\\" \\\"actions\\\":[]}\")"
+    },
+    {
+      "id": "P11",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "the model's response too large: over the configured limit"
+    },
+    {
+      "id": "P12",
+      "kind": "provider boundary (fixture server)",
+      "result": "PASS",
+      "detail": "refused: `192.168.1.10` is not this machine: the assistant only talks to a local model server (127.0.0.1  ::1 or localhost) / refused: only http:// URLs to a local server are supported"
+    }
+  ]
+}

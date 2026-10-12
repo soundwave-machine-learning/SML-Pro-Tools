@@ -1,0 +1,10 @@
+# RC05 voice smoke: utc 2026-10-12T21:33:26Z source b91462b9d6fa06acffac583f31377ae572cb11f0; env P; synthetic speech from the built-in synthesizer (not a microphone).
+test s09_push_to_talk_pipeline ... ok
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.02s
+thresholds (enrollment-derived): [41.268684, 24.143055, 24.98516, 27.5784, 31.026384, 30.081459, 24.09208, 28.70164]
+summary: S01 8/8, S02 8/8, S03 7/8, S04 7/8, S05 6/8, S06 0/8, S07 3/3, S08 2/2, T01 8/8
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+test assistant_ui::tests::settings_persist_without_audio ... ok
+test assistant_ui::tests::model_answers_become_checked_plans_without_running ... ok
+test assistant_ui::tests::an_unreachable_model_falls_back_to_the_rules ... ok
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 57 filtered out; finished in 0.02s
