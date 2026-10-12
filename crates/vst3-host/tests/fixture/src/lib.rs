@@ -1,4 +1,4 @@
-//! Test-only VST3 plugin for soundcraft-vst3-host (two audio module classes):
+//! Test-only VST3 plugin for soundcraft-vst3-host (three audio module classes):
 //!
 //! - "Fixture Gain" (`Fx`): stereo or mono in → out × gain, with a separate edit controller
 //!   (connected through IConnectionPoint, synced through the component state). Params: 7 "Gain"
@@ -10,6 +10,10 @@
 //! - "Fixture Synth" (`Instrument|Synth`): a single-component instrument (the component is also
 //!   its edit controller). No audio input, one stereo output, one event input; every output
 //!   sample is the velocity of the held note (sample-accurate), 0 when none.
+//! - "Fixture SideGate" (`Fx|Dynamics`): stereo main in → out plus a stereo aux input bus
+//!   ("Sidechain", `kAux`, inactive by default). Passes the main input while the host has
+//!   activated the aux bus and that block of it holds a non-zero sample; silence otherwise. No
+//!   edit controller.
 //!
 //! The module checks the host's module lifecycle the way real plugins depend on it (see "module
 //! lifecycle" below) and aborts the process when it is broken.
@@ -27,6 +31,7 @@ use vst3::{Class, ComRef, ComWrapper, uid};
 const GAIN_CID: TUID = uid(0x5C0A1D00, 0x11112222, 0x33334444, 0x55556666);
 const GAIN_CTRL_CID: TUID = uid(0x5C0A1D01, 0x11112222, 0x33334444, 0x55556666);
 const SYNTH_CID: TUID = uid(0x5C0A1D02, 0x11112222, 0x33334444, 0x55556666);
+const SIDEGATE_CID: TUID = uid(0x5C0A1D03, 0x11112222, 0x33334444, 0x55556666);
 
 fn copy_c8(src: &str, dst: &mut [c_char]) {
     for (d, s) in dst.iter_mut().zip(src.bytes().chain(std::iter::once(0))) {
@@ -587,6 +592,128 @@ impl IEditControllerTrait for Synth {
     }
 }
 
+// ---- side gate -----------------------------------------------------------------------------
+
+/// Stereo main bus in/out plus a stereo aux input bus ("Sidechain", inactive by default):
+/// passes the main input while the aux bus is active and its block has any non-zero sample,
+/// silence otherwise.
+struct SideGate {
+    aux_active: AtomicBool,
+    _live: Live,
+}
+
+impl Class for SideGate {
+    type Interfaces = (IComponent, IAudioProcessor);
+}
+
+impl IPluginBaseTrait for SideGate {
+    unsafe fn initialize(&self, _context: *mut FUnknown) -> tresult {
+        kResultOk
+    }
+    unsafe fn terminate(&self) -> tresult {
+        kResultOk
+    }
+}
+
+impl IComponentTrait for SideGate {
+    unsafe fn getControllerClassId(&self, _class_id: *mut TUID) -> tresult {
+        kNotImplemented
+    }
+    unsafe fn setIoMode(&self, _mode: IoMode) -> tresult {
+        kResultOk
+    }
+    unsafe fn getBusCount(&self, media: MediaType, dir: BusDirection) -> i32 {
+        if media != MediaTypes_::kAudio as MediaType {
+            0
+        } else if dir == BusDirections_::kInput as BusDirection {
+            2
+        } else {
+            1
+        }
+    }
+    unsafe fn getBusInfo(&self, media: MediaType, dir: BusDirection, index: i32, bus: *mut BusInfo) -> tresult {
+        let input = dir == BusDirections_::kInput as BusDirection;
+        if media != MediaTypes_::kAudio as MediaType || !(index == 0 || (input && index == 1)) {
+            return kInvalidArgument;
+        }
+        audio_bus(bus, dir, if index == 0 { "Main" } else { "Sidechain" });
+        if index == 1 {
+            let b = unsafe { &mut *bus };
+            b.busType = BusTypes_::kAux as BusType;
+            b.flags = 0;
+        }
+        kResultOk
+    }
+    unsafe fn getRoutingInfo(&self, _i: *mut RoutingInfo, _o: *mut RoutingInfo) -> tresult {
+        kNotImplemented
+    }
+    unsafe fn activateBus(&self, media: MediaType, dir: BusDirection, index: i32, state: TBool) -> tresult {
+        if media == MediaTypes_::kAudio as MediaType && dir == BusDirections_::kInput as BusDirection && index == 1 {
+            self.aux_active.store(state != 0, Ordering::Relaxed);
+        }
+        kResultOk
+    }
+    unsafe fn setActive(&self, _state: TBool) -> tresult {
+        kResultOk
+    }
+    unsafe fn setState(&self, _state: *mut IBStream) -> tresult {
+        kResultOk
+    }
+    unsafe fn getState(&self, _state: *mut IBStream) -> tresult {
+        kResultOk
+    }
+}
+
+impl IAudioProcessorTrait for SideGate {
+    unsafe fn setBusArrangements(&self, inputs: *mut SpeakerArrangement, n_in: i32, outputs: *mut SpeakerArrangement, n_out: i32) -> tresult {
+        if n_in != 2 || n_out != 1 {
+            return kResultFalse;
+        }
+        let (main, out) = unsafe { (*inputs, *outputs) };
+        if main == out && main == SpeakerArr::kStereo { kResultTrue } else { kResultFalse }
+    }
+    unsafe fn getBusArrangement(&self, dir: BusDirection, index: i32, arr: *mut SpeakerArrangement) -> tresult {
+        let input = dir == BusDirections_::kInput as BusDirection;
+        if !(index == 0 || (input && index == 1)) {
+            return kInvalidArgument;
+        }
+        unsafe { *arr = SpeakerArr::kStereo };
+        kResultOk
+    }
+    unsafe fn canProcessSampleSize(&self, size: i32) -> tresult {
+        if size == SymbolicSampleSizes_::kSample32 as i32 { kResultOk } else { kNotImplemented }
+    }
+    unsafe fn getLatencySamples(&self) -> u32 {
+        0
+    }
+    unsafe fn setupProcessing(&self, _setup: *mut ProcessSetup) -> tresult {
+        kResultOk
+    }
+    unsafe fn setProcessing(&self, _state: TBool) -> tresult {
+        kResultOk
+    }
+    unsafe fn process(&self, data: *mut ProcessData) -> tresult {
+        let d = unsafe { &*data };
+        if d.numInputs != 2 || d.numOutputs != 1 {
+            return kResultOk;
+        }
+        let frames = d.numSamples.max(0) as usize;
+        let buses = unsafe { std::slice::from_raw_parts(d.inputs, 2) };
+        let ins = unsafe { channels(&buses[0], frames) };
+        let open = self.aux_active.load(Ordering::Relaxed) && unsafe { channels(&buses[1], frames) }.iter().any(|c| c.iter().any(|&x| x != 0.0));
+        let outs = unsafe { channels(&*d.outputs, frames) };
+        for (i, o) in ins.iter().zip(outs) {
+            for (x, y) in i.iter().zip(o.iter_mut()) {
+                *y = if open { *x } else { 0.0 };
+            }
+        }
+        kResultOk
+    }
+    unsafe fn getTailSamples(&self) -> u32 {
+        0
+    }
+}
+
 // ---- factory -------------------------------------------------------------------------------
 
 struct Factory {
@@ -597,10 +724,11 @@ impl Class for Factory {
     type Interfaces = (IPluginFactory2,);
 }
 
-const CLASSES: [(TUID, &str, &str, &str); 3] = [
+const CLASSES: [(TUID, &str, &str, &str); 4] = [
     (GAIN_CID, "Audio Module Class", "Fixture Gain", "Fx"),
     (GAIN_CTRL_CID, "Component Controller Class", "Fixture Gain", ""),
     (SYNTH_CID, "Audio Module Class", "Fixture Synth", "Instrument|Synth"),
+    (SIDEGATE_CID, "Audio Module Class", "Fixture SideGate", "Fx|Dynamics"),
 ];
 
 impl IPluginFactoryTrait for Factory {
@@ -643,6 +771,8 @@ impl IPluginFactoryTrait for Factory {
             .to_com_ptr::<FUnknown>()
         } else if cid == SYNTH_CID {
             ComWrapper::new(Synth { level: AtomicU32::new(0), _live: Live::new(&OBJECTS) }).to_com_ptr::<FUnknown>()
+        } else if cid == SIDEGATE_CID {
+            ComWrapper::new(SideGate { aux_active: AtomicBool::new(false), _live: Live::new(&OBJECTS) }).to_com_ptr::<FUnknown>()
         } else {
             None
         };

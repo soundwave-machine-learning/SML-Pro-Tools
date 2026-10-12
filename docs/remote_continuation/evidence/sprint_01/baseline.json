@@ -1,0 +1,44 @@
+{
+  "id": "RC01 X01 baseline",
+  "verified_source": {
+    "branch": "fable/recording-core",
+    "head": "9f9b4d30020680a5a18a23cb0ba1ba09a349b2ff",
+    "equal_to_origin": true,
+    "dirty_paths_outside_package_docs": 0
+  },
+  "environment": "P: Linux x86_64 container, 4 vCPU, 15 GiB RAM, rustc 1.97.0; no audio device, no display, no Windows host",
+  "evidence_class": "RERUN",
+  "commands_discovered": {
+    "gate": "CARGO_INCREMENTAL=0 cargo xtask ci",
+    "gate_steps (xtask/src/main.rs:150-155)": [
+      "cargo fmt --all -- --check",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "cargo test --workspace",
+      "xtask assets (no proprietary assets)",
+      "xtask layers (crate layering)",
+      "xtask wasm (web build check)"
+    ],
+    "linux_package": "packaging/linux/package.sh [--formats tar] (release.yml:193)",
+    "windows_package": "packaging/windows/package.ps1 -Arch <arch> (release.yml:149; native MSVC runner, not available here)",
+    "windows_cross_build": "cargo build --release --target x86_64-pc-windows-gnu (prior cycle; script to be made reproducible in Sprint 3, RC07)",
+    "callback_profile": "cargo build --release -p soundcraft-engine --example sml_profile; ./target/release/examples/sml_profile <callback.csv> <response.csv>",
+    "sandbox_evidence": "SML_SANDBOX_CSV=<abs path> cargo test -p soundcraft-engine --test sandbox"
+  },
+  "result": {
+    "steps": {
+      "fmt": "ok",
+      "clippy": "ok",
+      "test": "ok",
+      "assets": "ok",
+      "layers": "ok",
+      "wasm": "ok"
+    },
+    "exit": 0,
+    "tests_passed": 678,
+    "tests_failed": 0,
+    "tests_ignored": 1,
+    "suites": 67
+  },
+  "log": "evidence/sprint_01/baseline-ci.log",
+  "note": "Test counts are not proof of requirement completion; requirement status lives in GAP_MATRIX.csv with per-row provenance."
+}

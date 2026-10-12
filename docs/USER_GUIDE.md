@@ -132,8 +132,9 @@ edit is available from search, the CLI and the remote, and one gesture is one un
   in time; Alt-click removes it. The clip keeps playing its last render until the new
   pitch-preserving render (in-house WSOLA, off the UI and audio threads) is ready; "rendering…"
   and any error show on the clip. Limits: anchors at least 64 samples apart, each segment
-  stretched by 0.25–4×, segments are joined without a crossfade (an anchor inside a sustained
-  note can click), stereo channels share one map. **Remove Warp** (Clip menu) restores the
+  stretched by 0.25–4×, segments are joined with a 10 ms crossfade at each anchor (an anchor inside a
+  sustained note no longer clicks; where the two sides differ in phase the level can dip
+  briefly), stereo channels share one map. **Remove Warp** (Clip menu) restores the
   original material; the original file is never modified.
 - **Listen**: press and hold to audition the track from the pointer; release, Escape or focus
   loss stops it and restores the cursor (unless another command moved it meanwhile). Listen is

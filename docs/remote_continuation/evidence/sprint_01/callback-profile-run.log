@@ -1,0 +1,16 @@
+# RC02 callback profile: utc 2026-10-12T20:09:33Z base HEAD b774674a60532f2f7c0fd186bb3227948bf295f7 + Sprint 1 working tree; env P (Linux x86_64 container, 4 vCPU, release build, CPU otherwise idle: load average: 0.50, 1.65, 2.12)
+# cmd: ./target/release/examples/sml_profile docs/remote_continuation/evidence/sprint_01/callback-profile.csv docs/remote_continuation/evidence/sprint_01/response-profile.csv
+config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance
+no-work control (paced spin; lateness = scheduler preemption only),64,48000,45000,1333.3,0.0,50.3,13004.1,0.038,9.753,60,headless container release build (not native; no device; single process)
+no-work control (paced spin; lateness = scheduler preemption only),128,48000,22500,2666.7,0.0,114.5,26735.9,0.043,10.026,21,headless container release build (not native; no device; single process)
+no-work control (paced spin; lateness = scheduler preemption only),256,48000,11250,5333.3,0.0,49.4,3923.6,0.009,0.736,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,64,48000,45000,1333.3,26.5,80.1,3657.0,0.060,2.743,8,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,64,48000,45000,1333.3,26.5,78.6,3957.4,0.059,2.968,2,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),64,48000,45000,1333.3,23.7,77.6,3198.9,0.058,2.399,3,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,128,48000,22500,2666.7,45.4,122.4,3207.1,0.046,1.203,1,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,128,48000,22500,2666.7,45.1,94.7,282.5,0.036,0.106,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),128,48000,22500,2666.7,42.1,89.8,888.0,0.034,0.333,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,256,48000,11250,5333.3,78.8,162.3,919.4,0.030,0.172,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,256,48000,11250,5333.3,79.2,167.4,2470.8,0.031,0.463,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),256,48000,11250,5333.3,76.1,156.0,673.9,0.029,0.126,0,headless container release build (not native; no device; single process)
+EXIT: 0

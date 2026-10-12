@@ -709,11 +709,7 @@ mod tests {
         let r = ask(&mut e, "Where is Nudge in the menus?");
         check("F02", r.mode == Mode::Explain && r.citations.iter().any(|c| c.starts_with("nudge.")), r.answer.clone());
         let r = ask(&mut e, "What are the limits of the Bend tool?");
-        check(
-            "F03",
-            r.mode == Mode::Explain && r.citations.iter().any(|c| c == "clip.warp_set") && r.answer.contains("butt-joined"),
-            r.answer.clone(),
-        );
+        check("F03", r.mode == Mode::Explain && r.citations.iter().any(|c| c == "clip.warp_set") && r.answer.contains("crossfade"), r.answer.clone());
         let r = ask(&mut e, "How do I bounce the mix with the reverb tails?");
         check("F04", r.mode == Mode::Explain && r.citations.iter().any(|c| c == "file.bounce_mix") && r.answer.contains("tail"), r.answer.clone());
         let r = ask(&mut e, "Open the ARA interface for Melodyne");

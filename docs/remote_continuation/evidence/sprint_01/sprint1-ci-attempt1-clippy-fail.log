@@ -1,0 +1,45 @@
+# Sprint 1 gate: utc 2026-10-12T20:18:38Z base HEAD b774674a60532f2f7c0fd186bb3227948bf295f7 + working tree (20 changed paths) env P (Linux x86_64 container, 4 vCPU) rustc 1.97.0
+   Compiling xtask v0.5.0 (/home/user/SML-Pro-Tools/xtask)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1.59s
+     Running `target/debug/xtask ci`
+    Checking soundcraft-dsp v0.5.0 (/home/user/SML-Pro-Tools/crates/dsp)
+    Checking soundcraft-vst3-host v0.5.0 (/home/user/SML-Pro-Tools/crates/vst3-host)
+    Checking soundcraft-clap-host v0.5.0 (/home/user/SML-Pro-Tools/crates/clap-host)
+    Checking soundcraft-au-host v0.5.0 (/home/user/SML-Pro-Tools/crates/au-host)
+    Checking soundcraft-mix v0.5.0 (/home/user/SML-Pro-Tools/crates/mix)
+    Checking soundcraft-engine v0.5.0 (/home/user/SML-Pro-Tools/crates/engine)
+    Checking soundcraft-playback v0.5.0 (/home/user/SML-Pro-Tools/crates/playback)
+    Checking soundcraft-remote v0.5.0 (/home/user/SML-Pro-Tools/crates/remote)
+    Checking soundcraft-automation v0.5.0 (/home/user/SML-Pro-Tools/crates/automation)
+    Checking soundcraft-cli v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft-cli)
+    Checking soundcraft-ui-egui v0.5.0 (/home/user/SML-Pro-Tools/crates/ui-egui)
+    Checking soundcraft v0.5.0 (/home/user/SML-Pro-Tools/apps/soundcraft)
+error: method `with_redaction` is never used
+   --> apps/soundcraft/src/logging.rs:483:12
+    |
+477 | impl AppLogger {
+    | -------------- method in this implementation
+...
+483 |     pub fn with_redaction(mut self, redaction: Redaction) -> AppLogger {
+    |            ^^^^^^^^^^^^^^
+    |
+    = note: `-D dead-code` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[expect(dead_code)]` or `#[allow(dead_code)]`
+
+error: this manual char comparison can be written more succinctly
+   --> apps/soundcraft/src/logging.rs:287:24
+    |
+287 |             value.find(|c: char| matches!(c, '\n' | '"' | '\'' | ',' | ';')).unwrap_or(value.len())
+    |                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using an array of `char`: `['\n', '"', '\'', ',', ';']`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.97.0/index.html#manual_pattern_char_comparison
+    = note: `-D clippy::manual-pattern-char-comparison` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::manual_pattern_char_comparison)]`
+
+error: could not compile `soundcraft` (bin "soundcraft") due to 2 previous errors
+warning: build failed, waiting for other jobs to finish...
+error: could not compile `soundcraft` (bin "soundcraft" test) due to 1 previous error
+ok    fmt
+FAIL  clippy
+xtask: cargo clippy --workspace --all-targets -- -D warnings failed
+EXIT: 1

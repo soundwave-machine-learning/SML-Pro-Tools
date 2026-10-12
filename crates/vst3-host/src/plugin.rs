@@ -43,6 +43,8 @@ pub struct Vst3Plugin {
     has_input: bool,
     has_output: bool,
     event_input: bool,
+    /// The input bus fed from the insert's sidechain (`Layout::sidechain`).
+    side_bus: Option<usize>,
     held: [bool; 128],
     channels: usize,
     max_block: usize,
@@ -87,6 +89,7 @@ impl Vst3Plugin {
             has_input: false,
             has_output: false,
             event_input: false,
+            side_bus: None,
             held: [false; 128],
             channels: 2,
             max_block: 0,
@@ -160,7 +163,11 @@ impl Vst3Plugin {
             audio_inputs: self.bus_inputs.clone(),
             audio_outputs: self.bus_outputs.clone(),
             aux_inputs: aux,
-            sidechain: if aux == 0 { "none declared" } else { "declared; this host keeps aux buses inactive (not routed)" },
+            sidechain: match (aux, self.side_bus) {
+                (0, _) => "none declared",
+                (_, Some(_)) => "declared; the insert's sidechain bus is routed into the first aux input bus",
+                (_, None) => "declared; the plugin refused to activate its aux input bus (not routed)",
+            },
             note_input: self.event_input,
             params: self.info.params.len(),
             param_units: units,
@@ -170,7 +177,7 @@ impl Vst3Plugin {
             tail_samples: self.tail,
             probed_at: "48 kHz, 1024-frame blocks, stereo",
             host_notes: vec![
-                "aux buses are kept inactive",
+                "the first aux input bus carries the sidechain; other aux buses stay inactive",
                 "32-bit processing only",
                 "IMessage/IAttributeList are not created by the host",
                 "editor windows are hosted on macOS only",
@@ -190,6 +197,79 @@ impl Vst3Plugin {
             }
         }
         self.pending.clear();
+    }
+
+    /// One `process` call per `max_block` chunk: `io` on the main buses, `side` (mono keys fill
+    /// every channel) on the sidechain bus when there is one, silence there without it.
+    fn run(&mut self, io: &mut [Vec<f32>], side: Option<&[Vec<f32>]>, frames: usize) {
+        if !self.inst.is_active() || self.max_block == 0 {
+            return;
+        }
+        let ch = self.channels.min(io.len());
+        let frames = io.iter().take(ch).map(Vec::len).fold(frames, usize::min);
+        if frames == 0 || ch == 0 {
+            return;
+        }
+        if self.inst.host().latency_changed.swap(false, Ordering::Relaxed) {
+            self.latency = self.inst.latency() as usize;
+        }
+        let last = u32::try_from(frames - 1).unwrap_or(u32::MAX);
+        for e in &mut self.notes {
+            if e.time() > last {
+                e.set_time(last);
+            }
+        }
+        let mut start = 0usize;
+        while start < frames {
+            let n = (frames - start).min(self.max_block);
+            let end = u32::try_from(start + n).unwrap_or(u32::MAX);
+            // Feed the main input bus (mono sources fill every bus channel).
+            if self.has_input {
+                for c in 0..self.inputs.channels(0) {
+                    let src = io.get(c.min(ch - 1)).and_then(|s| s.get(start..start + n));
+                    if let (Some(src), Some(dst)) = (src, self.inputs.channel_mut(0, c).and_then(|d| d.get_mut(..n))) {
+                        dst.copy_from_slice(src);
+                    }
+                }
+            }
+            if let Some(bus) = self.side_bus {
+                for c in 0..self.inputs.channels(bus) {
+                    let Some(dst) = self.inputs.channel_mut(bus, c).and_then(|d| d.get_mut(..n)) else { continue };
+                    let src = side.and_then(|sd| sd.get(c.min(sd.len().saturating_sub(1)))).and_then(|s| s.get(start..start + n));
+                    match src {
+                        Some(src) => dst.copy_from_slice(src),
+                        None => dst.fill(0.0),
+                    }
+                }
+            }
+            let k = self.notes.iter().position(|e| e.time() >= end).unwrap_or(self.notes.len());
+            let offset = u32::try_from(start).unwrap_or(u32::MAX);
+            let notes = self.notes.get(..k).unwrap_or(&[]);
+            let r = self.inst.process(n, &mut self.inputs, &mut self.outputs, &self.pending, notes, offset, self.position);
+            self.pending.clear();
+            self.notes.drain(..k);
+            self.position = self.position.saturating_add(i64::try_from(n).unwrap_or(0));
+            match r {
+                Ok(()) if self.has_output => {
+                    let oc = self.outputs.channels(0);
+                    for (c, dst) in io.iter_mut().take(ch).enumerate() {
+                        let Some(dst) = dst.get_mut(start..start + n) else { continue };
+                        if ch == 1 && oc >= 2 {
+                            if let (Some(l), Some(r)) = (self.outputs.channel(0, 0), self.outputs.channel(0, 1)) {
+                                for ((d, a), b) in dst.iter_mut().zip(l).zip(r) {
+                                    *d = 0.5 * (a + b);
+                                }
+                            }
+                        } else if let Some(src) = self.outputs.channel(0, c.min(oc.saturating_sub(1))).and_then(|s| s.get(..n)) {
+                            dst.copy_from_slice(src);
+                        }
+                    }
+                }
+                Err(e) => log::debug!("{}: {e}", self.info.id),
+                _ => {}
+            }
+            start += n;
+        }
     }
 
     /// Inserts keeping the queue time-sorted; drops the event when the queue is full (never
@@ -213,6 +293,7 @@ impl Plugin for Vst3Plugin {
         let mb = max_block.clamp(1, MAX_BLOCK);
         self.channels = channels.clamp(1, MAX_CHANNELS);
         self.max_block = 0;
+        self.side_bus = None;
         match self.inst.configure(sr, mb, self.channels == 1) {
             Ok(layout) => {
                 self.inputs = BusBuffers::new(&layout.inputs, mb);
@@ -220,6 +301,7 @@ impl Plugin for Vst3Plugin {
                 self.has_input = layout.inputs.first().is_some_and(|&c| c > 0);
                 self.has_output = layout.outputs.first().is_some_and(|&c| c > 0);
                 self.event_input = layout.event_input;
+                self.side_bus = layout.sidechain;
                 self.bus_inputs = layout.inputs.clone();
                 self.bus_outputs = layout.outputs.clone();
                 self.max_block = mb;
@@ -267,64 +349,15 @@ impl Plugin for Vst3Plugin {
     }
 
     fn process(&mut self, io: &mut [Vec<f32>], frames: usize) {
-        if !self.inst.is_active() || self.max_block == 0 {
-            return;
-        }
-        let ch = self.channels.min(io.len());
-        let frames = io.iter().take(ch).map(Vec::len).fold(frames, usize::min);
-        if frames == 0 || ch == 0 {
-            return;
-        }
-        if self.inst.host().latency_changed.swap(false, Ordering::Relaxed) {
-            self.latency = self.inst.latency() as usize;
-        }
-        let last = u32::try_from(frames - 1).unwrap_or(u32::MAX);
-        for e in &mut self.notes {
-            if e.time() > last {
-                e.set_time(last);
-            }
-        }
-        let mut start = 0usize;
-        while start < frames {
-            let n = (frames - start).min(self.max_block);
-            let end = u32::try_from(start + n).unwrap_or(u32::MAX);
-            // Feed the main input bus (mono sources fill every bus channel).
-            if self.has_input {
-                for c in 0..self.inputs.channels(0) {
-                    let src = io.get(c.min(ch - 1)).and_then(|s| s.get(start..start + n));
-                    if let (Some(src), Some(dst)) = (src, self.inputs.channel_mut(0, c).and_then(|d| d.get_mut(..n))) {
-                        dst.copy_from_slice(src);
-                    }
-                }
-            }
-            let k = self.notes.iter().position(|e| e.time() >= end).unwrap_or(self.notes.len());
-            let offset = u32::try_from(start).unwrap_or(u32::MAX);
-            let notes = self.notes.get(..k).unwrap_or(&[]);
-            let r = self.inst.process(n, &mut self.inputs, &mut self.outputs, &self.pending, notes, offset, self.position);
-            self.pending.clear();
-            self.notes.drain(..k);
-            self.position = self.position.saturating_add(i64::try_from(n).unwrap_or(0));
-            match r {
-                Ok(()) if self.has_output => {
-                    let oc = self.outputs.channels(0);
-                    for (c, dst) in io.iter_mut().take(ch).enumerate() {
-                        let Some(dst) = dst.get_mut(start..start + n) else { continue };
-                        if ch == 1 && oc >= 2 {
-                            if let (Some(l), Some(r)) = (self.outputs.channel(0, 0), self.outputs.channel(0, 1)) {
-                                for ((d, a), b) in dst.iter_mut().zip(l).zip(r) {
-                                    *d = 0.5 * (a + b);
-                                }
-                            }
-                        } else if let Some(src) = self.outputs.channel(0, c.min(oc.saturating_sub(1))).and_then(|s| s.get(..n)) {
-                            dst.copy_from_slice(src);
-                        }
-                    }
-                }
-                Err(e) => log::debug!("{}: {e}", self.info.id),
-                _ => {}
-            }
-            start += n;
-        }
+        self.run(io, None, frames);
+    }
+
+    fn accepts_sidechain(&self) -> bool {
+        self.side_bus.is_some() && self.max_block > 0
+    }
+
+    fn process_sidechain(&mut self, io: &mut [Vec<f32>], side: &[Vec<f32>], frames: usize) {
+        self.run(io, Some(side), frames);
     }
 
     fn latency(&self) -> usize {

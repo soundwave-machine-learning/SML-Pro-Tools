@@ -2808,6 +2808,11 @@ pub struct RenderReport {
     /// through, so `audio` is NOT the mix the user hears. Exports must refuse unless the user
     /// explicitly accepts a substituted result.
     pub failed_plugins: Vec<(String, usize, String)>,
+    /// Hosted plugins that were created but did not process every block of this render (an
+    /// isolated worker crashed, hung or was restarting): (track name, slot label, id, silent
+    /// blocks). Like `failed_plugins`, the audio is NOT the mix; exports must refuse unless the
+    /// user explicitly accepts it.
+    pub faulted_plugins: Vec<(String, String, String, u64)>,
     /// Samples rendered past the range end.
     pub tail_samples: usize,
     /// Delay-compensation latency that was removed from the head.
@@ -2897,7 +2902,32 @@ pub fn render_range_report(s: &Session, range: Range, block: usize, tail: Tail) 
             c.drain(..latency.min(c.len()));
         }
     }
-    RenderReport { audio: out, failed_plugins: failed, tail_samples, latency_samples: latency }
+    let faulted = substituted_plugins(s, &eng);
+    RenderReport { audio: out, failed_plugins: failed, faulted_plugins: faulted, tail_samples, latency_samples: latency }
+}
+
+/// Plugins of `eng` that substituted silence for some blocks, in track order.
+fn substituted_plugins(s: &Session, eng: &MixEngine) -> Vec<(String, String, String, u64)> {
+    let mut out = Vec::new();
+    for t in &s.tracks {
+        let Some(st) = eng.strips.get(&t.id) else { continue };
+        for (label, slot) in st
+            .plugins
+            .iter()
+            .enumerate()
+            .map(|(i, p)| (format!("insert {}", char::from(b'a' + u8::try_from(i % 26).unwrap_or(0))), p.as_ref()))
+            .chain(std::iter::once(("instrument".to_string(), st.instrument.as_ref())))
+            .chain(st.dedicated.iter().map(|p| ("dedicated slot".to_string(), p.as_ref())))
+        {
+            if let Some(p) = slot {
+                let n = p.plugin.substituted_blocks();
+                if n > 0 {
+                    out.push((t.name.clone(), label, p.id.clone(), n));
+                }
+            }
+        }
+    }
+    out
 }
 
 /// ITU-R BS.775 stereo fold-down of planar audio in `fmt` (C and surrounds at -3 dB, LFE dropped;

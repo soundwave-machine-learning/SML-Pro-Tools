@@ -13,7 +13,7 @@ use serde_json::json;
 pub const LIMITS: &[(&str, &str)] = &[
     (
         "clip.warp_",
-        "Bend: segments between anchors are butt-joined (no crossfade), ratio 0.25..4 per segment, stereo shares one map; listening review is a native gate",
+        "Bend: segments between anchors are joined with a 10 ms crossfade at each anchor (where the two sides differ in phase the level can dip briefly), ratio 0.25..4 per segment, stereo shares one map; listening review is a native gate",
     ),
     ("clip.remove_warp", "restores the original material recorded on the first warp"),
     ("audition.", "Listen: only while the transport is stopped and not recording; never saved; explicit mutes still win"),
@@ -148,7 +148,7 @@ mod tests {
         assert!(row["limits"][0].as_str().unwrap().contains("B04"));
         let r = ask(&mut e, "bend warp");
         assert!(r["results"].as_array().unwrap().iter().any(|x| x["id"] == "clip.warp_set"));
-        assert!(r["results"][0]["limits"].as_array().unwrap().iter().any(|l| l.as_str().unwrap().contains("butt-joined")));
+        assert!(r["results"][0]["limits"].as_array().unwrap().iter().any(|l| l.as_str().unwrap().contains("10 ms crossfade")));
         for nonexistent in ["melodyne", "pitch correction note editor", "elastique", "dolby atmos renderer", "izotope rx"] {
             let r = ask(&mut e, nonexistent);
             assert_eq!(r["total"], 0, "no invented command for `{nonexistent}`: {r}");

@@ -20,6 +20,8 @@
 //! never start a take; duplicate request ids answer with the first receipt (engine dedup) and a
 //! stale `expected_revision` is rejected, so two phones cannot silently overwrite each other.
 
+#![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
+
 use serde_json::{Value, json};
 use soundcraft_engine::envelope::{Client, Envelope, Receipt};
 use std::collections::HashMap;

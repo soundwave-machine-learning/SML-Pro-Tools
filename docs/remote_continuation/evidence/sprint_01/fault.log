@@ -1,0 +1,12 @@
+# RC03 sandbox run: utc 2026-10-12T20:08:48Z base HEAD b774674a60532f2f7c0fd186bb3227948bf295f7 + Sprint 1 working tree; env P (Linux x86_64 container, debug build)
+# cmd: SML_SANDBOX_CSV=<evidence>/latency.csv cargo test -p soundcraft-engine --test sandbox
+sandbox block 64: 2000 blocks, 6 late, p50 25.3 us p99 385.9 us max 2725.7 us rss 5512 KiB
+sandbox block 128: 2000 blocks, 0 late, p50 29.8 us p99 119.9 us max 2150.0 us rss 5624 KiB
+sandbox block 256: 800 blocks, 0 late, p50 41.5 us p99 104.6 us max 634.1 us rss 5424 KiB
+sandbox block 1024: 800 blocks, 0 late, p50 84.9 us p99 277.7 us max 1873.3 us rss 5340 KiB
+sandbox variable blocks (offline): impulse delay 256 samples, declared 256, late blocks 0
+sandbox variable blocks (paced realtime): impulse delay 256 samples, declared 256, late blocks 1
+sandbox fault mid-render export: refused: bad parameters for `file.bounce_mix`: 1 sandboxed plugin(s) stopped processing during the render (worker crashed, hung or restarted), so this export would contain dropouts (Vox insert a: sandbox:clap:org.soundcraft.test.gain (65 silent blocks)); nothing was written. Export again, or bypass or remove the plugin
+sandbox: restart 61.093667ms, hang detected in 1.044238547s
+sandbox: ok
+EXIT: 0

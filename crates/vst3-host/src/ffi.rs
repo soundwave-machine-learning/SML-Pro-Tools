@@ -1070,6 +1070,9 @@ pub(crate) struct Layout {
     pub inputs: Vec<u32>,
     pub outputs: Vec<u32>,
     pub event_input: bool,
+    /// The first aux audio input bus with channels, activated to carry the insert's sidechain
+    /// (`None`: no such bus, or the plugin refused to activate it).
+    pub sidechain: Option<usize>,
 }
 
 /// A live plugin: component + audio processor (+ edit controller) and the host objects.
@@ -1324,16 +1327,24 @@ impl Instance {
         if !tried_ok {
             log::debug!("vst3: plugin refused mono/stereo bus arrangements; using its own");
         }
-        let layout = Layout {
-            inputs: (0..nin).map(|i| self.bus_channels(din, i)).collect(),
+        let inputs: Vec<u32> = (0..nin).map(|i| self.bus_channels(din, i)).collect();
+        let aux = inputs.iter().skip(1).position(|&c| c > 0).map(|i| i + 1);
+        let mut layout = Layout {
+            inputs,
             outputs: (0..nout).map(|i| self.bus_channels(dout, i)).collect(),
             event_input: self.bus_count(event, din) > 0,
+            sidechain: None,
         };
-        // Main buses on, aux buses off (VST3 still gets buffers for every bus).
+        // Main buses on; the first aux input on for the sidechain; other aux buses off (VST3
+        // still gets buffers for every bus).
         for (dir, n) in [(din, nin), (dout, nout)] {
             for i in 0..n {
+                let side = dir == din && usize::try_from(i).ok() == aux;
                 // SAFETY: valid component; index below the bus count.
-                unsafe { self.component.activateBus(audio as sv::MediaType, dir as sv::BusDirection, i, u8::from(i == 0)) };
+                let r = unsafe { self.component.activateBus(audio as sv::MediaType, dir as sv::BusDirection, i, u8::from(i == 0 || side)) };
+                if side && ok(r) {
+                    layout.sidechain = aux;
+                }
             }
         }
         if layout.event_input {

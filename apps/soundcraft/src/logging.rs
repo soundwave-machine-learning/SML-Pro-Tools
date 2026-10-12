@@ -27,6 +27,14 @@
 //! there: the first one is kept in a fixed buffer (`try_lock`, no allocation, never waits) and the
 //! rest are only counted (an atomic). Another thread writes them out: the UI thread every frame
 //! ([`AppLogger::report_audio_thread`]) and any other thread before its own next record.
+//!
+//! Privacy (R05): a log is meant to be attached to a bug report, so private paths and secrets are
+//! taken out of every message before it is written ([`Redaction`]): the user's home directory
+//! becomes `~`, the folder name after `/home/`, `/Users/` or `\Users\` becomes `<user>` (other
+//! accounts, a builder's registry path in a panic location), and the value after `token=`,
+//! `password:` and similar keys becomes `<redacted>`. `SOUNDCRAFT_LOG_PATHS=full` keeps paths as
+//! they are for a developer's own debugging; secrets are hidden either way. The engine's panic
+//! report goes through this logger, so it is redacted too.
 
 use std::fmt::Write as _;
 use std::fs::File;
@@ -159,6 +167,134 @@ pub fn rotate(dir: &Path) -> std::io::Result<(PathBuf, File)> {
 pub fn format_line(ts: &str, level: log::Level, thread: &str, target: &str, message: &str) -> String {
     let message = message.strip_suffix('\n').unwrap_or(message);
     format!("{ts} {level:<5} [{thread}] {target}: {message}\n")
+}
+
+/// How log lines treat private paths and secrets (R05).
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct Redaction {
+    /// The user's home directory, written as `~` (both separator styles). `None`: unknown.
+    home: Option<String>,
+    /// `SOUNDCRAFT_LOG_PATHS=full`: keep paths as they are (secrets are still hidden).
+    full_paths: bool,
+}
+
+/// Folders under `/home`, `/Users` or `C:\Users` that name no person.
+const SHARED_PROFILES: [&str; 4] = ["Shared", "Public", "Default", "All Users"];
+/// `name=value` / `name: value` keys whose value never reaches a log line.
+const SECRET_KEYS: [&str; 7] = ["token", "secret", "password", "passwd", "api_key", "apikey", "authorization"];
+
+impl Redaction {
+    /// From the environment: the home directory (`HOME`, else `USERPROFILE`) and
+    /// `SOUNDCRAFT_LOG_PATHS` (`full` keeps paths).
+    pub fn from_env() -> Redaction {
+        let home = std::env::var("HOME").ok().or_else(|| std::env::var("USERPROFILE").ok());
+        let full = std::env::var("SOUNDCRAFT_LOG_PATHS").is_ok_and(|v| v.trim().eq_ignore_ascii_case("full"));
+        Redaction::new(home.as_deref(), full)
+    }
+
+    pub fn new(home: Option<&str>, full_paths: bool) -> Redaction {
+        // A home of `/` or a single character would hide everything; ignore it.
+        let home = home.map(|h| h.trim_end_matches(['/', '\\'])).filter(|h| h.len() > 2).map(str::to_owned);
+        Redaction { home, full_paths }
+    }
+
+    /// `message` as written to the log.
+    pub fn apply(&self, message: &str) -> String {
+        let mut s = hide_secrets(message);
+        if !self.full_paths {
+            if let Some(h) = &self.home {
+                for form in [h.clone(), h.replace('\\', "/"), h.replace('/', "\\")] {
+                    if !form.is_empty() && s.contains(form.as_str()) {
+                        s = s.replace(form.as_str(), "~");
+                    }
+                }
+            }
+            s = hide_profile_names(&s);
+        }
+        s
+    }
+}
+
+/// Ends a secret value.
+fn ends_value(c: char) -> bool {
+    c.is_whitespace() || matches!(c, '"' | '\'' | '`' | ')' | ']' | '}' | ',' | ';' | '&' | '>' | '<')
+}
+
+/// Ends a path segment.
+fn ends_segment(c: char) -> bool {
+    ends_value(c) || matches!(c, '/' | '\\' | ':')
+}
+
+/// The folder after `/home/`, `/Users/` or `\Users\` (any case) becomes `<user>`.
+fn hide_profile_names(s: &str) -> String {
+    let lower = s.to_ascii_lowercase();
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < s.len() {
+        let rest = lower.get(i..).unwrap_or("");
+        let marker = ["/home/", "/users/", "\\users\\"].iter().find(|m| rest.starts_with(**m)).map(|m| m.len());
+        let Some(m) = marker else {
+            let c = s.get(i..).and_then(|r| r.chars().next()).unwrap_or('\0');
+            out.push(c);
+            i += c.len_utf8().max(1);
+            continue;
+        };
+        out.push_str(s.get(i..i + m).unwrap_or(""));
+        i += m;
+        let tail = s.get(i..).unwrap_or("");
+        let end = tail.find(ends_segment).unwrap_or(tail.len());
+        let name = tail.get(..end).unwrap_or("");
+        if name.is_empty() || name == "<user>" || SHARED_PROFILES.iter().any(|p| p.eq_ignore_ascii_case(name)) {
+            out.push_str(name);
+        } else {
+            out.push_str("<user>");
+        }
+        i += end;
+    }
+    out
+}
+
+/// The value after `token=`, `password: ` and the like becomes `<redacted>`.
+fn hide_secrets(s: &str) -> String {
+    let lower = s.to_ascii_lowercase();
+    if !SECRET_KEYS.iter().any(|k| lower.contains(k)) {
+        return s.to_owned();
+    }
+    let mut out = String::with_capacity(s.len());
+    let mut i = 0;
+    while i < s.len() {
+        let rest = lower.get(i..).unwrap_or("");
+        let boundary = i == 0 || lower.get(..i).and_then(|p| p.chars().next_back()).is_some_and(|c| !c.is_ascii_alphanumeric() && c != '_');
+        let key = if boundary { SECRET_KEYS.iter().find(|k| rest.starts_with(**k)) } else { None };
+        let Some(key) = key else {
+            let c = s.get(i..).and_then(|r| r.chars().next()).unwrap_or('\0');
+            out.push(c);
+            i += c.len_utf8().max(1);
+            continue;
+        };
+        // key, optional quote, spaces, `=` or `:`, spaces, optional quote, value.
+        let after = s.get(i + key.len()..).unwrap_or("");
+        let sep = after.trim_start_matches(['"', '\'']).trim_start();
+        let Some(value) = sep.strip_prefix(['=', ':']) else {
+            out.push_str(s.get(i..i + key.len()).unwrap_or(""));
+            i += key.len();
+            continue;
+        };
+        let value = value.trim_start().trim_start_matches(['"', '\'']);
+        let v0 = s.len() - value.len();
+        // `Authorization: Bearer <token>`: the scheme and the credential both go.
+        let vlen = if *key == "authorization" {
+            value.find(['\n', '"', '\'', ',', ';']).unwrap_or(value.len())
+        } else {
+            value.find(ends_value).unwrap_or(value.len())
+        };
+        out.push_str(s.get(i..v0).unwrap_or(""));
+        if vlen > 0 {
+            out.push_str("<redacted>");
+        }
+        i = v0 + vlen;
+    }
+    out
 }
 
 /// Where formatted lines go besides standard error: kept in memory until a file is attached,
@@ -305,7 +441,7 @@ impl Realtime {
     }
 
     /// Another thread: the lines to write for what the audio thread logged (empty when nothing).
-    fn take_lines(&self) -> String {
+    fn take_lines(&self, redaction: &Redaction) -> String {
         if self.records.load(Ordering::Relaxed) == 0 {
             return String::new();
         }
@@ -313,7 +449,7 @@ impl Realtime {
         let records = self.records.swap(0, Ordering::Relaxed);
         let mut lines = String::new();
         if let Some(h) = &held {
-            let mut message = h.message.as_str().to_owned();
+            let mut message = redaction.apply(h.message.as_str());
             if h.message.cut {
                 message.push('…');
             }
@@ -335,11 +471,19 @@ pub struct AppLogger {
     stderr: bool,
     sink: Mutex<Sink>,
     realtime: Realtime,
+    redaction: Redaction,
 }
 
 impl AppLogger {
     pub fn new(filter: Filter, stderr: bool) -> AppLogger {
-        AppLogger { filter, stderr, sink: Mutex::new(Sink::new(MAX_FILE_BYTES)), realtime: Realtime::default() }
+        AppLogger { filter, stderr, sink: Mutex::new(Sink::new(MAX_FILE_BYTES)), realtime: Realtime::default(), redaction: Redaction::from_env() }
+    }
+
+    /// The same logger with `redaction` in place of the one read from the environment (tests).
+    #[cfg(test)]
+    pub fn with_redaction(mut self, redaction: Redaction) -> AppLogger {
+        self.redaction = redaction;
+        self
     }
 
     /// Rotate the logs in `dir` and send records to the fresh file; returns its path.
@@ -365,7 +509,7 @@ impl AppLogger {
 
     /// Write what the audio thread logged since the last report (never call it on the audio thread).
     pub fn report_audio_thread(&self) {
-        let lines = self.realtime.take_lines();
+        let lines = self.realtime.take_lines(&self.redaction);
         if !lines.is_empty() {
             self.emit(&lines);
         }
@@ -397,8 +541,13 @@ impl log::Log for AppLogger {
         self.report_audio_thread();
         // Formatted before the sink is locked, so a message that logs while it is formatted can't deadlock.
         let thread = std::thread::current();
-        let line =
-            format_line(&timestamp(SystemTime::now()), record.level(), thread.name().unwrap_or("?"), record.target(), &record.args().to_string());
+        let line = format_line(
+            &timestamp(SystemTime::now()),
+            record.level(),
+            thread.name().unwrap_or("?"),
+            record.target(),
+            &self.redaction.apply(&record.args().to_string()),
+        );
         self.emit(&line);
     }
 
@@ -791,6 +940,55 @@ mod tests {
         assert!(message.ends_with("…\n"), "{text}");
         assert!(message.len() <= REALTIME_MESSAGE_BYTES + "…\n".len(), "{}", message.len());
         assert!(message.trim_end_matches(['…', '\n']).chars().all(|c| c == 'é'));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// R05: what a bug report's log can't carry. Paths under the user's home (either separator
+    /// style), other accounts' profile folders and secret values are taken out; shared profile
+    /// folders and ordinary text stay; `SOUNDCRAFT_LOG_PATHS=full` keeps paths but not secrets.
+    #[test]
+    fn private_paths_and_secrets_are_redacted() {
+        let r = Redaction::new(Some("/home/ada/"), false);
+        assert_eq!(r.apply("opened /home/ada/Music/Song.scs"), "opened ~/Music/Song.scs");
+        assert_eq!(r.apply("plugin /home/bob/.vst3/X.vst3 failed"), "plugin /home/<user>/.vst3/X.vst3 failed");
+        assert_eq!(r.apply("/Users/Shared/Loops and /home/"), "/Users/Shared/Loops and /home/");
+        assert_eq!(r.apply("audio device 'Scarlett 2i2' at 48000 Hz"), "audio device 'Scarlett 2i2' at 48000 Hz");
+        let w = Redaction::new(Some(r"C:\Users\Ada Lovelace"), false);
+        assert_eq!(w.apply(r"autosave C:\Users\Ada Lovelace\AppData\Roaming\x.json"), r"autosave ~\AppData\Roaming\x.json");
+        assert_eq!(w.apply("panic at C:/Users/Ada Lovelace/.cargo/registry/src/a.rs:3:5"), "panic at ~/.cargo/registry/src/a.rs:3:5");
+        assert_eq!(w.apply(r"panic at C:\Users\builder\.cargo\registry\b.rs:1:1"), r"panic at C:\Users\<user>\.cargo\registry\b.rs:1:1");
+        assert_eq!(r.apply("GET /pair?token=abc/DEF+== HTTP/1.1"), "GET /pair?token=<redacted> HTTP/1.1");
+        assert_eq!(r.apply(r#"{"password": "hunter2", "api_key":"k-1"}"#), r#"{"password": "<redacted>", "api_key":"<redacted>"}"#);
+        assert_eq!(r.apply("Authorization: Bearer"), "Authorization: <redacted>");
+        assert_eq!(r.apply("authorization: Bearer abc.def\nnext"), "authorization: <redacted>\nnext");
+        assert_eq!(r.apply("tokens issued: 3; mytoken=x"), "tokens issued: 3; mytoken=x", "only whole keys followed by = or :");
+        let full = Redaction::new(Some("/home/ada"), true);
+        assert_eq!(full.apply("/home/ada/a.wav token=s3cret"), "/home/ada/a.wav token=<redacted>");
+        // A home too short to mean anything is ignored rather than eating every slash.
+        assert_eq!(Redaction::new(Some("/"), false).apply("/tmp/x"), "/tmp/x");
+        // Hostile input never panics and keeps multi-byte text whole.
+        for m in ["é/home/", "token=", "token", "/Users/é€", "password:\"", "\\users\\", ""] {
+            let _ = r.apply(m);
+        }
+        assert_eq!(r.apply("/home/zoë/é"), "/home/<user>/é");
+    }
+
+    /// R05 end to end: the file gets the redacted line, from ordinary threads, from the audio
+    /// thread's held record, and for the engine's panic report (which logs through `log::error!`).
+    #[test]
+    fn the_log_file_and_panic_reports_are_redacted() {
+        let dir = temp_dir("redact");
+        let logger = AppLogger::new(Filter::parse("info"), false).with_redaction(Redaction::new(Some("/home/ada"), false));
+        let path = logger.attach_dir(&dir).expect("attach");
+        record(&logger, log::Level::Warn, "soundcraft", "could not open /home/ada/Songs/a.scs");
+        record(&logger, log::Level::Error, "soundcraft_engine", "panic: panicked at /home/ci/.cargo/registry/src/x.rs:1:1: boom");
+        on_audio_thread(|| record(&logger, log::Level::Warn, "soundcraft_playback", "token=abcdef lost"));
+        logger.report_audio_thread();
+        let text = read(&path);
+        assert!(text.contains("could not open ~/Songs/a.scs"), "{text}");
+        assert!(text.contains("panicked at /home/<user>/.cargo/registry/src/x.rs:1:1: boom"), "{text}");
+        assert!(text.contains("token=<redacted> lost"), "{text}");
+        assert!(!text.contains("ada") && !text.contains("/home/ci") && !text.contains("abcdef"), "{text}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

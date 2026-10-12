@@ -333,7 +333,8 @@ fn checked_state(app: &SoundApp, path: &str, id: Option<&str>) -> bool {
     match id {
         Some("options.loop_playback") => e.loop_playback,
         Some("options.loop_record") => e.loop_record,
-        Some("options.quickpunch") => e.quickpunch,
+        // Disabled (B04/RC03): a legacy session's flag is kept but never shown as active.
+        Some("options.quickpunch") => false,
         Some("options.pre_post_roll") => e.pre_post_roll,
         Some("options.link_timeline_edit") => e.link_timeline_edit,
         Some("options.link_track_edit") => e.link_track_edit,
@@ -951,5 +952,19 @@ mod tests {
         app.dialogs.open = None;
         invoke_menu(&mut app, "ui.bounce_dialog", "File > Bounce Mix...");
         assert_eq!(app.dialogs.open_name(), Some("bounce"));
+    }
+
+    /// RC03: a session saved with the legacy QuickPunch/TrackPunch/destructive flags keeps them,
+    /// but the menus show those modes disabled and unchecked (they do nothing in this build).
+    #[test]
+    fn legacy_record_mode_flags_are_never_shown_as_active() {
+        let mut engine = soundcraft_engine::Engine::default();
+        engine.session_mut().edit.quickpunch = true;
+        engine.session_mut().edit.record_mode = "trackpunch".into();
+        let app = SoundApp::new(engine, None, Services::default());
+        for id in ["options.quickpunch", "options.trackpunch", "options.destructive_record", "options.destructive_punch"] {
+            assert_eq!(item_state(&app, "Options > X", Some(id)), (false, false), "{id}");
+        }
+        assert!(app.engine.session().edit.quickpunch, "the legacy flag itself is kept");
     }
 }

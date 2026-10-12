@@ -234,6 +234,13 @@ pub trait Plugin: Send {
     fn accepts_sidechain(&self) -> bool {
         false
     }
+    /// Blocks this instance could not really process since it was created: an isolated worker
+    /// that crashed, hung, was restarting or answered too late, whose blocks became silence.
+    /// An offline render with any refuses to export unless the user accepts the substitution.
+    /// Default: 0 (an in-process plugin always processes).
+    fn substituted_blocks(&self) -> u64 {
+        0
+    }
     /// Tells the instance it serves an offline render (no callback deadline): a host that trades
     /// waiting for silence under a realtime deadline waits instead. Default: nothing to do.
     fn set_offline(&mut self, _offline: bool) {}

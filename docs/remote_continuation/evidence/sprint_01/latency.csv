@@ -1,0 +1,7 @@
+case,block_frames,blocks,late_blocks,p50_us,p99_us,max_us,added_latency_samples,worker_rss_kib,provenance
+exchange,64,2000,6,25.3,385.9,2725.7,64,5512,debug build in container P (not native; E03 release numbers remain the admission reference)
+exchange,128,2000,0,29.8,119.9,2150.0,128,5624,debug build in container P (not native; E03 release numbers remain the admission reference)
+exchange,256,800,0,41.5,104.6,634.1,256,5424,debug build in container P (not native; E03 release numbers remain the admission reference)
+exchange,1024,800,0,84.9,277.7,1873.3,1024,5340,debug build in container P (not native; E03 release numbers remain the admission reference)
+crash restart,256,,,,,61093.7,,,time from auto-restart enabled to audio back with the re-applied parameter
+hang detection,256,,,,,1044238.5,,,time from first block to the worker declared hung (no reply for 1 s; silent meanwhile)

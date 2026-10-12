@@ -1,0 +1,22 @@
+# RC02 structural guard: utc 2026-10-12T20:24:37Z source = commit b1c3099 tree; env P debug build
+# cmd: cargo test -p soundcraft-mix --test structural_alloc -- --nocapture
+
+running 1 test
+add audio track: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+add bus + aux return and route a track to it: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+add a send: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+add an insert (test provider): apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+add a Tape slot provider: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+add a latent insert (64 samples): apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+bypass the latent insert (its delay is kept): apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+route the bus into a gate's sidechain: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+reorder tracks: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+remove the insert again: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+remove a track: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+re-route the aux to Main and delete the bus: apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+replace the whole session (open another song): apply 0/0/0 (alloc/realloc/dealloc), blocks [(0, 0, 0), (0, 0, 0), (0, 0, 0), (0, 0, 0)], counted fallbacks 0
+test structural_edits_do_not_allocate_on_the_audio_thread ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+EXIT: 0

@@ -34,8 +34,9 @@
 //! opening reports "unsupported".
 //!
 //! Not hosted yet: `IMessage`/`IAttributeList` creation through the host (plugins that need it
-//! for processor ↔ controller messaging may lose those messages), sidechain (aux buses are kept
-//! inactive) and 64-bit processing.
+//! for processor ↔ controller messaging may lose those messages), aux buses beyond the first
+//! aux input (the first one carries the insert's sidechain, as on the CLAP host; other aux
+//! inputs and aux outputs stay inactive) and 64-bit processing.
 
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 

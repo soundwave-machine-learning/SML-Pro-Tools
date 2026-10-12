@@ -243,8 +243,22 @@ pub struct ExportStats {
     pub tail_samples: usize,
 }
 
-/// Refuses a render in which a hosted plugin failed to load, unless the user accepted that.
+/// Refuses a render in which a hosted plugin failed to load, unless the user accepted that, and
+/// always one in which a sandboxed plugin's worker failed mid-render (its blocks became silence:
+/// dropouts no one asked for; export again, or bypass or remove the plugin).
 fn substituted_guard(cmd: &str, report: &soundcraft_mix::RenderReport, guard: &BounceGuard) -> Result<()> {
+    if !report.faulted_plugins.is_empty() {
+        let list: Vec<String> =
+            report.faulted_plugins.iter().map(|(t, slot, id, blocks)| format!("{t} {slot}: {id} ({blocks} silent blocks)")).collect();
+        return Err(EngineError::BadParams(
+            cmd.into(),
+            format!(
+                "{} sandboxed plugin(s) stopped processing during the render (worker crashed, hung or restarted), so this export would contain dropouts ({}); nothing was written. Export again, or bypass or remove the plugin",
+                list.len(),
+                list.join("; ")
+            ),
+        ));
+    }
     if report.failed_plugins.is_empty() || guard.accept_substituted {
         return Ok(());
     }

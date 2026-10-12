@@ -2,8 +2,6 @@
 
 Updated: 2026-10-12T07:00Z. Branch `fable/recording-core` (pushed). Base checkpoint
 `396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
-`396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
-`396fd0a7a7aa5b62d8dae0e49b3413c7e2e3432b` (verified). Environment P only.
 
 | Gate / sprint | State | Evidence |
 |---|---|---|

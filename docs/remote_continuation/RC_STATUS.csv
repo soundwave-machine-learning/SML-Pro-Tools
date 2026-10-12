@@ -1,7 +1,7 @@
 id,sprint,requirement,status,evidence,commit,env,note
-RC01,1,"Verified source identity, evidence-backed 38-row gap ledger and real commands",NOT STARTED,,,,
-RC02,1,Safe structural mutation/callback/lifetime policy and honest overrun status,NOT STARTED,,,,
-RC03,1,"Sandbox latency/fault behavior, keypad assessment and unavailable-toggle honesty",NOT STARTED,,,,
+RC01,1,"Verified source identity, evidence-backed 38-row gap ledger and real commands",PASS,sprint_01/baseline-ci.log; baseline.json; gap-matrix.csv; sprint1-ci.log,b1c3099,P,"baseline gate at 9f9b4d3: 678 passed/0 failed; Sprint 1 gate: 683 passed/0 failed, exit 0"
+RC02,1,Safe structural mutation/callback/lifetime policy and honest overrun status,PASS_PORTABLE (H timing pending),sprint_01/structural-guard.log; callback-profile.csv; callback-profile-run.log,b1c3099,P,"13 structural edits incl. reorder/latent bypass/sidechain/session replacement: 0 alloc on apply+4 blocks, identical to offline; 64-frame p99 compute 6% of budget, misses = preemption (native pending)"
+RC03,1,"Sandbox latency/fault behavior, keypad assessment and unavailable-toggle honesty",PASS_PORTABLE (keyboard W/H pending),sprint_01/latency.csv; fault.log; sprint1-ci.log,b1c3099,P,"variable-block delay = declared exactly; mid-render worker fault refuses export; legacy record modes never shown active; keypad: minus indistinguishable at egui 0.36 (documented, fallback kept)"
 RC04,2,Actual licensed conversational runtime through existing checked command service,NOT STARTED,,,,
 RC05,2,"Real STT/TTS push-to-talk pipeline, bounded/cancelable workers and monitor-only routing",NOT STARTED,,,,
 RC06,2,Grounded unseen-request/action/voice evaluations and accurate partial status,NOT STARTED,,,,

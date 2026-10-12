@@ -4,10 +4,14 @@
 //! per clip, and a session-wide queue ceiling; a result whose revision no longer matches the clip
 //! is stale and dropped. The caller keeps the last valid render until a current result is ready.
 //!
-//! Limits of this baseline (stated, not hidden): each segment between anchors is stretched on
-//! its own and the segments are butt-joined (no crossfade at anchors), so an anchor placed in
-//! the middle of a sustained note can click; stereo channels share one timing map (the stretch
-//! uses the channel average as its guide); ratios are bounded to 0.25..4 per segment.
+//! Joins (RC01): each segment between anchors is stretched on its own, rendered [`JOIN_XFADE`]
+//! samples past its anchor from the material that follows, and that overlap is crossfaded
+//! (raised cosine) into the next segment's start, so an anchor in the middle of a sustained note
+//! does not click. Where the two sides differ in phase the fade can dip in level over those
+//! 10 ms (a dip, not a step); identical sides (consecutive unstretched segments) stay bit-exact.
+//!
+//! Limits of this baseline (stated, not hidden): stereo channels share one timing map (the
+//! stretch uses the channel average as its guide); ratios are bounded to 0.25..4 per segment.
 
 use soundcraft_audio_io::AudioBuffer;
 use soundcraft_model::{ClipId, SourceAudio, WarpAnchor, warped_len};
@@ -15,6 +19,10 @@ use soundcraft_time::Samples;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
+
+/// Samples each segment is rendered past its anchor and crossfaded into the next one (10 ms at
+/// 48 kHz; shorter where the material or the next segment is shorter).
+pub const JOIN_XFADE: usize = 480;
 
 /// Session-wide ceiling on queued (not yet started) renders.
 pub const QUEUE_CEILING: usize = 4;
@@ -163,7 +171,8 @@ fn spawn_worker() -> (Sender<Job>, Receiver<Done>) {
 
 /// Render the warp map: every segment between consecutive anchors (with the implicit (0,0)
 /// start and the clip end carried at ratio 1 after the last anchor) is stretched to its
-/// destination length and the pieces are concatenated. Deterministic; pure function of the job.
+/// destination length and the pieces are joined with a [`JOIN_XFADE`] crossfade at each anchor.
+/// Deterministic; pure function of the job.
 pub fn render(job: &Job) -> Result<AudioBuffer, String> {
     let src_len = usize::try_from(job.src_len).map_err(|_| "bad source length".to_string())?;
     if src_len == 0 {
@@ -193,18 +202,33 @@ pub fn render(job: &Job) -> Result<AudioBuffer, String> {
     if tail_src > 0 {
         segments.push((prev, WarpAnchor { src: job.src_len, dst: prev.dst + tail_src }));
     }
+    // The previous segment rendered past its anchor, per channel: faded into the next segment.
+    let mut carry: Vec<Vec<f32>> = vec![Vec::new(); nch];
     for (a, b) in segments {
         let (s0, s1) = (usize::try_from(a.src).unwrap_or(0), usize::try_from(b.src).unwrap_or(0).min(src_len));
         let want = usize::try_from(b.dst - a.dst).unwrap_or(0);
         if s1 <= s0 || want == 0 {
             continue;
         }
-        let seg: Vec<Vec<f32>> = material.iter().map(|c| c[s0..s1].to_vec()).collect();
         let ratio = want as f64 / (s1 - s0) as f64;
+        // Source past the anchor that renders to about JOIN_XFADE samples at this ratio.
+        let ext = ((JOIN_XFADE as f64 / ratio).ceil() as usize).min(src_len - s1);
+        let extra = ((ext as f64 * ratio).round() as usize).min(JOIN_XFADE);
+        let seg: Vec<Vec<f32>> = material.iter().map(|c| c.get(s0..s1 + ext).unwrap_or(&[]).to_vec()).collect();
         let mut stretched = if (ratio - 1.0).abs() < 1e-9 { seg } else { soundcraft_dsp::offline::time_stretch(&seg, ratio, job.sample_rate) };
-        for (o, s) in out.iter_mut().zip(stretched.iter_mut()) {
-            s.resize(want, 0.0);
-            o.extend_from_slice(s);
+        for ((o, s), c) in out.iter_mut().zip(stretched.iter_mut()).zip(carry.iter_mut()) {
+            s.resize(want + extra, 0.0);
+            let n = c.len().min(want);
+            for (i, (h, &p)) in s.iter_mut().zip(c.iter()).take(n).enumerate() {
+                // Identical sides stay bit-exact (a·(1−w) + a·w need not round back to a).
+                if *h != p {
+                    let w = 0.5 - 0.5 * (std::f32::consts::PI * (i as f32 + 0.5) / n as f32).cos();
+                    *h = p * (1.0 - w) + *h * w;
+                }
+            }
+            o.extend_from_slice(s.get(..want).unwrap_or(&[]));
+            c.clear();
+            c.extend_from_slice(s.get(want..).unwrap_or(&[]));
         }
     }
     for o in &mut out {
@@ -255,6 +279,36 @@ mod tests {
         assert!(render(&bad).is_err());
         let steep = Job { anchors: vec![WarpAnchor { src: 1_000, dst: 10_000 }], ..job };
         assert!(render(&steep).is_err(), "ratio 10 is outside the bound");
+    }
+
+    /// RC01 / carried gap C04: anchors placed mid-note must not click. Each anchor joins two
+    /// separately stretched segments; at every join the sample-to-sample step must stay within
+    /// what the tone itself does (plus a margin), and an identity map stays bit-exact.
+    #[test]
+    fn anchor_joins_are_continuous_and_identity_stays_exact() {
+        let sr = 48_000.0;
+        let src = tone(48_000, sr, 220.0);
+        // Joins at awkward phases, each segment at a different ratio.
+        let anchors = vec![WarpAnchor { src: 10_007, dst: 13_331 }, WarpAnchor { src: 25_013, dst: 22_222 }, WarpAnchor { src: 37_777, dst: 41_000 }];
+        let job = Job { clip: ClipId(1), rev: 1, source: Arc::clone(&src), offset: 0, src_len: 48_000, anchors: anchors.clone(), sample_rate: sr };
+        let out = render(&job).unwrap();
+        let x = &out.channels[0];
+        let step = |a: usize, b: usize| x[a..b].windows(2).map(|w| (w[1] - w[0]).abs()).fold(0.0f32, f32::max);
+        // The tone's own largest step (0.5 · 2π · 220 / 48000 ≈ 0.0144).
+        let tone_step = 0.5 * 2.0 * std::f32::consts::PI * 220.0 / sr;
+        let mut worst = Vec::new();
+        for a in &anchors {
+            let d = a.dst as usize;
+            worst.push((d, step(d - 64, d + 64)));
+        }
+        println!("join steps {worst:?} (tone step {tone_step})");
+        for (d, s) in worst {
+            assert!(s <= 1.5 * tone_step, "click at the anchor at {d}: step {s} > 1.5 × {tone_step}");
+        }
+        // Identity anchors (ratio 1 everywhere) reproduce the material exactly.
+        let id = Job { anchors: vec![WarpAnchor { src: 10_007, dst: 10_007 }, WarpAnchor { src: 30_000, dst: 30_000 }], ..job };
+        let same = render(&id).unwrap();
+        assert_eq!(same.channels, src.buffer.channels);
     }
 
     /// Bounded admission: one pending revision per clip (newer replaces), a queue ceiling,

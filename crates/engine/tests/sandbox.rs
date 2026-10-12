@@ -119,6 +119,84 @@ fn parity_and_latency(block: usize) -> Measured {
     m
 }
 
+/// RC03: the declared added latency holds for every block size a callback may deliver, not just
+/// `max_block`: an impulse through the sandboxed gain comes out exactly `max_block` samples later
+/// than through the in-process gain, with blocks of 256, 100, 37, 1, 200, … frames (the FIFO
+/// keeps a one-`max_block` lead). Offline (every reply awaited) it must match exactly; paced
+/// like a realtime callback it must match whenever no block was late. Returns (measured delay,
+/// declared delay, late blocks in the paced run).
+fn variable_blocks_keep_the_declared_delay() -> Vec<(String, i64, i64, u64)> {
+    let mb = 256usize;
+    let n = 12_000usize;
+    let sizes = [256usize, 100, 37, 1, 200, 255, 64, 3, 128, 17];
+    let run = |p: &mut Box<dyn soundcraft_dsp::Plugin>, paced: bool| -> Option<usize> {
+        let mut out = Vec::with_capacity(n);
+        let mut pos = 0usize;
+        let mut k = 0usize;
+        let mut next = Instant::now();
+        while pos < n {
+            let f = sizes[k % sizes.len()].min(n - pos);
+            k += 1;
+            let mut io = vec![(pos..pos + f).map(|i| if i == 1000 { 1.0 } else { 0.0 }).collect::<Vec<f32>>()];
+            p.process(&mut io, f);
+            out.extend_from_slice(&io[0]);
+            pos += f;
+            if paced {
+                next += Duration::from_secs_f64(f as f64 / 48_000.0);
+                if let Some(d) = next.checked_duration_since(Instant::now()) {
+                    std::thread::sleep(d);
+                }
+            }
+        }
+        out.iter().position(|x| x.abs() > 1e-6)
+    };
+    let mut inproc = soundcraft_mix::create_instance(GAIN, None, 48_000.0, mb, 1).unwrap();
+    let base = run(&mut inproc, false).expect("in-process impulse");
+    let mut rows = Vec::new();
+    for paced in [false, true] {
+        let mut p = soundcraft_mix::create_instance(&format!("sandbox:{GAIN}"), None, 48_000.0, mb, 1).unwrap();
+        p.set_offline(!paced);
+        let declared = (p.latency() - inproc.latency()) as i64;
+        let late0 = sandbox::status().into_iter().filter(|s| s.plugin == format!("sandbox:{GAIN}")).map(|s| s.late_blocks).sum::<u64>();
+        let found = run(&mut p, paced).expect("sandboxed impulse");
+        let late = sandbox::status().into_iter().filter(|s| s.plugin == format!("sandbox:{GAIN}")).map(|s| s.late_blocks).sum::<u64>() - late0;
+        let measured = found as i64 - base as i64;
+        assert_eq!(declared, mb as i64, "declared added latency is one max_block");
+        if !paced || late == 0 {
+            assert!((measured - declared).abs() <= 1, "paced {paced}: impulse moved {measured}, declared {declared}");
+        }
+        assert_eq!(p.substituted_blocks(), late, "every late block is counted as substituted");
+        rows.push((if paced { "paced realtime" } else { "offline" }.to_string(), measured, declared, late));
+    }
+    rows
+}
+
+/// RC03: a worker that crashes in the middle of an offline render (auto-restart on, so audio
+/// comes back after a gap) must not yield an export: the render reports the substituted blocks
+/// and the bounce refuses, writing nothing. The same bounce without the fault succeeds.
+fn export_refuses_a_worker_fault_mid_render() -> String {
+    let n = 96_000usize;
+    let (mut e, t) = dc_session(0.25, n);
+    e.execute("mix.insert", &json!({"track": t.0, "plugin": format!("sandbox:{GAIN}"), "params": {"7": 1.0}})).unwrap();
+    let dir = std::env::temp_dir().join(format!("sml-sandbox-export-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let wav = dir.join("faulted.wav");
+    sandbox::set_auto_restart(true);
+    sandbox::set_fault_injection(Some("crash:30"));
+    let err = e.execute("file.bounce_mix", &json!({"path": wav.to_string_lossy(), "end": n})).unwrap_err().to_string();
+    sandbox::set_fault_injection(None);
+    assert!(err.contains("stopped processing during the render"), "{err}");
+    assert!(err.contains("silent blocks"), "{err}");
+    assert!(!wav.exists(), "nothing written");
+    // Acknowledging missing plugins does not cover dropouts.
+    let again = e.execute("file.bounce_mix", &json!({"path": wav.to_string_lossy(), "end": n, "acknowledge_missing": true}));
+    assert!(again.is_ok(), "no fault injected now: the export proceeds ({again:?})");
+    assert!(wav.exists());
+    let _ = std::fs::remove_dir_all(&dir);
+    err
+}
+
 /// A worker that aborts after some blocks: the slot goes silent (no stall, no crash here), the
 /// fault is logged, and the instance comes back with its state and parameters when
 /// auto-restart is on; while "recording" (auto-restart off) it stays silent and flagged.
@@ -272,6 +350,8 @@ fn main() {
     for block in [64usize, 128, 256, 1024] {
         rows.push(parity_and_latency(block));
     }
+    let delays = variable_blocks_keep_the_declared_delay();
+    let refused = export_refuses_a_worker_fault_mid_render();
     let restart = crash_is_contained_and_restarted();
     let hang = hang_is_contained();
     state_round_trip();
@@ -285,6 +365,13 @@ fn main() {
                 f,
                 "exchange,{},{},{},{:.1},{:.1},{:.1},{},{},debug build in container P (not native; E03 release numbers remain the admission reference)",
                 m.block, m.blocks, m.late, m.p50_us, m.p99_us, m.max_us, m.block, m.rss_kib
+            )
+            .unwrap();
+        }
+        for (mode, measured, declared, late) in &delays {
+            writeln!(
+                f,
+                "variable blocks {mode},256,,{late},,,,{measured},,impulse delay vs in-process with blocks 256/100/37/1/200/255/64/3/128/17; declared {declared}"
             )
             .unwrap();
         }
@@ -307,6 +394,10 @@ fn main() {
             m.block, m.blocks, m.late, m.p50_us, m.p99_us, m.max_us, m.rss_kib
         );
     }
+    for (mode, measured, declared, late) in &delays {
+        println!("sandbox variable blocks ({mode}): impulse delay {measured} samples, declared {declared}, late blocks {late}");
+    }
+    println!("sandbox fault mid-render export: refused: {refused}");
     println!("sandbox: restart {restart:?}, hang detected in {hang:?}");
     println!("sandbox: ok");
 }

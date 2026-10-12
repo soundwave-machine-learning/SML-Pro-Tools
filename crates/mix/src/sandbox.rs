@@ -408,6 +408,8 @@ pub struct SandboxPlugin {
     /// Offline render: wait for every reply (bounded by `STATE_TIMEOUT`) instead of
     /// substituting silence after half a block — an export is never a substituted result.
     offline: bool,
+    /// Blocks replaced by silence since creation ([`Plugin::substituted_blocks`]).
+    substituted: u64,
 }
 
 /// Most unanswered blocks before the host stops sending (silence instead).
@@ -462,6 +464,7 @@ pub fn create(id: &str) -> Option<Box<dyn Plugin>> {
         in_flight: 0,
         seen_pid: 0,
         offline: false,
+        substituted: 0,
     }))
 }
 
@@ -540,7 +543,10 @@ impl SandboxPlugin {
         }
     }
 
-    fn silence(io: &mut [Vec<f32>], frames: usize) {
+    /// This block becomes silence in place of the plugin's output (counted: an offline render
+    /// with substituted blocks is not the mix and refuses to export).
+    fn silence(&mut self, io: &mut [Vec<f32>], frames: usize) {
+        self.substituted = self.substituted.saturating_add(1);
         for c in io.iter_mut() {
             c.iter_mut().take(frames).for_each(|x| *x = 0.0);
         }
@@ -553,17 +559,17 @@ impl SandboxPlugin {
             return;
         }
         if self.shared.fault() != Fault::None {
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         }
         let link_arc = Arc::clone(&self.link);
         let Ok(mut guard) = link_arc.try_lock() else {
             // A restart is swapping the worker: this block is silent.
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         };
         let Some(link) = guard.as_mut() else {
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         };
         if self.shared.pid.load(Ordering::Relaxed) != self.seen_pid {
@@ -605,7 +611,7 @@ impl SandboxPlugin {
                 }
                 Err(_) => {
                     self.fault(link, Fault::Hung);
-                    Self::silence(io, frames);
+                    self.silence(io, frames);
                     return;
                 }
             }
@@ -621,7 +627,7 @@ impl SandboxPlugin {
                 self.fault(link, Fault::Hung);
             }
             self.owed = self.owed.saturating_add(frames);
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         }
         self.req.clear();
@@ -643,7 +649,7 @@ impl SandboxPlugin {
         }
         if link.stdin.write_all(&self.req).and_then(|()| link.stdin.flush()).is_err() {
             self.fault(link, Fault::Crashed);
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         }
         self.shared.blocks.fetch_add(1, Ordering::Relaxed);
@@ -678,7 +684,7 @@ impl SandboxPlugin {
                         self.fault(link, Fault::Hung);
                     }
                     self.owed = self.owed.saturating_add(frames);
-                    Self::silence(io, frames);
+                    self.silence(io, frames);
                     return;
                 }
                 Err(RecvTimeoutError::Disconnected) => None,
@@ -686,7 +692,7 @@ impl SandboxPlugin {
         };
         let Some(reply) = reply else {
             self.fault(link, Fault::Crashed);
-            Self::silence(io, frames);
+            self.silence(io, frames);
             return;
         };
         self.consecutive_late = 0;
@@ -835,6 +841,10 @@ impl Plugin for SandboxPlugin {
 
     fn accepts_sidechain(&self) -> bool {
         self.accepts_side
+    }
+
+    fn substituted_blocks(&self) -> u64 {
+        self.substituted
     }
 
     fn set_offline(&mut self, offline: bool) {

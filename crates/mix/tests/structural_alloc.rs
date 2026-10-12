@@ -1,5 +1,6 @@
 //! B01 (next cycle, Sprint 1): structural session edits during playback — add/remove tracks and
-//! buses, change routing, add/remove inserts and dedicated-slot providers — must not allocate or
+//! buses, change routing, add/remove inserts and dedicated-slot providers, bypass a latent
+//! insert, route a sidechain, reorder tracks, replace the whole session — must not allocate or
 //! free on the audio thread. The graph for the new session is prepared off the audio thread
 //! (`GraphPrep`) and applied by moving existing strips across; leftovers return as garbage.
 //!
@@ -26,6 +27,26 @@ fn base() -> Session {
         let cid = s.new_clip_id();
         s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(cid, "c", SourceId(k + 1), 0, 0, 96_000));
     }
+    s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
+    s
+}
+
+/// A different song: other track count and formats, a bus with an aux return, a send and inserts.
+fn other() -> Session {
+    let mut s = Session::default();
+    let b = s.add_bus("Verb", ChannelFormat::Stereo);
+    for k in 0..6u64 {
+        let t = s.add_track(TrackKind::Audio, if k % 3 == 0 { ChannelFormat::Mono } else { ChannelFormat::Stereo }, None);
+        let ch = s.track(t).unwrap().channels();
+        s.pool.insert(SourceId(100 + k), Arc::new(SourceAudio::new(AudioBuffer { sample_rate: 48_000, channels: vec![vec![0.05; 96_000]; ch] })));
+        let cid = s.new_clip_id();
+        let tr = s.track_mut(t).unwrap();
+        tr.playlist_mut().unwrap().clips.push(Clip::audio(cid, "o", SourceId(100 + k), 0, 0, 96_000));
+        tr.mixer.sends[0] = Some(SendSlot::new(Route::Bus(b)));
+        tr.mixer.inserts[0] = Some(Insert::new(if k % 2 == 0 { "test:gain:-2" } else { "test:delay:16" }));
+    }
+    let a = s.add_track(TrackKind::Aux, ChannelFormat::Stereo, Some("Verb"));
+    s.track_mut(a).unwrap().mixer.input = Route::Bus(b);
     s.add_track(TrackKind::Master, ChannelFormat::Stereo, None);
     s
 }
@@ -59,6 +80,26 @@ fn edits() -> Vec<Edit> {
             s.track_mut(t).unwrap().mixer.slots.tape =
                 Some(DedicatedSlot { id: 7, provider: Some(Insert::new("test:delay:32")), bypass: false, trim_db: 0.0 });
         }),
+        ("add a latent insert (64 samples)", |s| {
+            let t = s.tracks[0].id;
+            s.track_mut(t).unwrap().mixer.inserts[1] = Some(Insert::new("test:delay:64"));
+        }),
+        ("bypass the latent insert (its delay is kept)", |s| {
+            let t = s.tracks[0].id;
+            s.track_mut(t).unwrap().mixer.inserts[1].as_mut().unwrap().bypass = true;
+        }),
+        ("route the bus into a gate's sidechain", |s| {
+            let b = s.busses[0].id;
+            let t = s.tracks[2].id;
+            let mut gate = Insert::new("test:sidegate:-60");
+            gate.sidechain = Some(b);
+            s.track_mut(t).unwrap().mixer.inserts[1] = Some(gate);
+        }),
+        ("reorder tracks", |s| {
+            s.tracks.swap(0, 2);
+            let n = s.tracks.len();
+            s.tracks.swap(1, n - 1);
+        }),
         ("remove the insert again", |s| {
             let t = s.tracks[1].id;
             s.track_mut(t).unwrap().mixer.inserts[0] = None;
@@ -79,6 +120,9 @@ fn edits() -> Vec<Edit> {
                 t.mixer.sends[0] = None;
             }
             s.busses.retain(|x| x.id != b);
+        }),
+        ("replace the whole session (open another song)", |s| {
+            *s = other();
         }),
     ]
 }

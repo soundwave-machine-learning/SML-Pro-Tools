@@ -13,10 +13,10 @@ fn id_of(name: &str) -> String {
 }
 
 #[test]
-fn scan_lists_both_audio_modules_but_not_the_controller_class() {
+fn scan_lists_the_audio_modules_but_not_the_controller_class() {
     let dir = fixture_dir();
     let found = soundcraft_vst3_host::scan_paths(&[dir.to_path_buf()]);
-    assert_eq!(found.len(), 2, "{found:?}");
+    assert_eq!(found.len(), 3, "{found:?}");
     let g = found.iter().find(|d| d.name == "Fixture Gain").unwrap();
     // `uid()` lays out the first 8 bytes differently on Windows (COM GUID order).
     let want = if cfg!(windows) { "vst3:001D0A5C111122223333444455556666" } else { "vst3:5C0A1D00111122223333444455556666" };
@@ -250,8 +250,12 @@ fn capability_record_of_the_fixture() {
     } else {
         assert!(c.editor.contains("not supported on this platform"), "{}", c.editor);
     }
+    assert_eq!(c.sidechain, "none declared");
     let synth = soundcraft_vst3_host::capabilities(&id_of("Fixture Synth")).unwrap();
     assert!(synth.note_input && synth.is_instrument);
+    let gate = soundcraft_vst3_host::capabilities(&id_of("Fixture SideGate")).unwrap();
+    assert_eq!((gate.audio_inputs.clone(), gate.aux_inputs), (vec![2, 2], 1));
+    assert!(gate.sidechain.contains("routed into the first aux input bus"), "{}", gate.sidechain);
     assert!(soundcraft_vst3_host::capabilities("vst3:00000000000000000000000000000000").is_err());
     if let Some(path) = std::env::var_os("SML_HOST_MATRIX_CSV") {
         use std::io::Write;
@@ -260,7 +264,7 @@ fn capability_record_of_the_fixture() {
         if new {
             writeln!(f, "kind,id,format,name,version,audio_inputs,audio_outputs,aux_inputs,sidechain,note_input,params,param_units,editor,state,latency_samples,tail_samples,probed_at,host_notes,platform").unwrap();
         }
-        for c in [&c, &synth] {
+        for c in [&c, &synth, &gate] {
             let j = |v: String| v.replace(',', ";").replace('"', "");
             writeln!(
                 f,
@@ -288,4 +292,41 @@ fn capability_record_of_the_fixture() {
             .unwrap();
         }
     }
+}
+
+/// RC01 / carried gap C03 (R24): the host activates the first aux input bus and feeds it from
+/// the insert's sidechain. The SideGate fixture passes its main input only while the host has
+/// activated its aux bus and that bus carries signal, so audio through it proves both.
+#[test]
+fn the_sidechain_reaches_the_aux_input_bus() {
+    let mut p = soundcraft_vst3_host::create(&id_of("Fixture SideGate")).unwrap();
+    p.prepare(48_000.0, 64, 2);
+    assert!(p.accepts_sidechain(), "the aux input bus was activated");
+    let dc = || vec![vec![0.5f32; 160], vec![0.5f32; 160]];
+    // No sidechain: the gate stays closed.
+    let mut io = dc();
+    p.process(&mut io, 160);
+    assert!(io.iter().flatten().all(|&x| x == 0.0), "closed without a key");
+    // A silent key keeps it closed.
+    let mut io = dc();
+    p.process_sidechain(&mut io, &[vec![0.0; 160], vec![0.0; 160]], 160);
+    assert!(io.iter().flatten().all(|&x| x == 0.0));
+    // A key in the second 64-frame chunk only opens that chunk (chunks follow max_block).
+    let mut key = vec![0.0f32; 160];
+    key[100] = 1.0;
+    let mut io = dc();
+    p.process_sidechain(&mut io, &[key], 160);
+    for (i, &x) in io[0].iter().enumerate() {
+        let want = if (64..128).contains(&i) { 0.5 } else { 0.0 };
+        assert_eq!(x, want, "frame {i}: a mono key fills both aux channels");
+    }
+    assert_eq!(io[0], io[1]);
+    // After a keyed block, a plain process clears the aux buffers instead of reusing the key.
+    let mut io = dc();
+    p.process(&mut io, 160);
+    assert!(io.iter().flatten().all(|&x| x == 0.0), "stale key reused");
+    // Plugins without an aux bus keep refusing a sidechain.
+    let mut g = soundcraft_vst3_host::create(&id_of("Fixture Gain")).unwrap();
+    g.prepare(48_000.0, 64, 2);
+    assert!(!g.accepts_sidechain());
 }
