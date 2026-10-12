@@ -68,6 +68,9 @@ pub struct Renderer {
     errors: HashMap<ClipId, (u64, String)>,
     /// Count of results dropped as stale (evidence for T-T3).
     pub dropped_stale: u64,
+    /// In-flight renders of a replaced session: their results are dropped, never applied
+    /// (a new session's clip can have the same id and revision).
+    discard: Vec<(ClipId, u64)>,
 }
 
 impl std::fmt::Debug for Renderer {
@@ -122,6 +125,11 @@ impl Renderer {
                 if self.active.is_some_and(|(c, r)| c == d.clip && r == d.rev) {
                     self.active = None;
                 }
+                if let Some(i) = self.discard.iter().position(|&(c, r)| c == d.clip && r == d.rev) {
+                    self.discard.swap_remove(i);
+                    self.dropped_stale += 1;
+                    continue;
+                }
                 if let Err(m) = &d.result {
                     self.errors.insert(d.clip, (d.rev, m.clone()));
                 }
@@ -135,6 +143,7 @@ impl Renderer {
     pub fn status(&self, clip: ClipId) -> Option<Status> {
         if let Some((c, rev)) = self.active
             && c == clip
+            && !self.discard.contains(&(c, rev))
         {
             return Some(Status::Rendering { rev });
         }
@@ -146,6 +155,18 @@ impl Renderer {
 
     pub fn is_busy(&self) -> bool {
         self.active.is_some() || !self.pending.is_empty()
+    }
+
+    /// The session was replaced (opened, closed, new): drop every queued job and error, and
+    /// make the render in flight, if any, be discarded when it finishes.
+    pub fn forget_all(&mut self) {
+        self.pending.clear();
+        self.errors.clear();
+        if let Some(a) = self.active
+            && !self.discard.contains(&a)
+        {
+            self.discard.push(a);
+        }
     }
 
     /// Forget a clip's pending work and error (the clip was removed or unwarped).
@@ -309,6 +330,46 @@ mod tests {
         let id = Job { anchors: vec![WarpAnchor { src: 10_007, dst: 10_007 }, WarpAnchor { src: 30_000, dst: 30_000 }], ..job };
         let same = render(&id).unwrap();
         assert_eq!(same.channels, src.buffer.channels);
+    }
+
+    /// RC11: replacing the session discards queued renders and the result of the render in
+    /// flight, even though a clip of the new session may carry the same id and revision.
+    #[test]
+    fn a_replaced_session_never_receives_old_renders() {
+        let sr = 48_000.0;
+        let src = tone(96_000, sr, 220.0);
+        let job = |clip: u64| Job {
+            clip: ClipId(clip),
+            rev: 1,
+            source: Arc::clone(&src),
+            offset: 0,
+            src_len: 96_000,
+            anchors: vec![WarpAnchor { src: 48_000, dst: 60_000 }],
+            sample_rate: sr,
+        };
+        let mut r = Renderer::default();
+        r.submit(job(1)).unwrap();
+        r.submit(job(2)).unwrap();
+        assert!(matches!(r.status(ClipId(1)), Some(Status::Rendering { .. })));
+        r.forget_all();
+        assert_eq!(r.status(ClipId(1)), None, "the old render is not reported for the new session's clip 1");
+        assert_eq!(r.status(ClipId(2)), None, "queued job dropped");
+        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(20);
+        let mut got = Vec::new();
+        while r.is_busy() && std::time::Instant::now() < deadline {
+            got.extend(r.poll());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert!(got.is_empty(), "nothing from the old session is delivered");
+        assert_eq!(r.dropped_stale, 1);
+        // The renderer still works for the new session.
+        r.submit(job(1)).unwrap();
+        let mut done = Vec::new();
+        while done.is_empty() && std::time::Instant::now() < deadline {
+            done.extend(r.poll());
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        assert_eq!(done.len(), 1);
     }
 
     /// Bounded admission: one pending revision per clip (newer replaces), a queue ceiling,

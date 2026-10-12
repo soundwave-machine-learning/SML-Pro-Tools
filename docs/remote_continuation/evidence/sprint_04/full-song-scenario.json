@@ -1,0 +1,56 @@
+{
+  "environment": "P",
+  "pending": [
+    "30-min W1 recordings",
+    "2 h endurance",
+    "8 h soak",
+    "native crash/recovery rates"
+  ],
+  "steps": [
+    {
+      "detail": "recovered generation opened (unsaved); tracks [\"Inst 1\"]",
+      "ok": true,
+      "step": "recover/open"
+    },
+    {
+      "detail": "clips 1 1 gen 2",
+      "ok": true,
+      "step": "record lead + double (+ autosave during capture)"
+    },
+    {
+      "detail": "lead clips 2",
+      "ok": true,
+      "step": "comp/edit/nudge"
+    },
+    {
+      "detail": "lead and double routed",
+      "ok": true,
+      "step": "buses + mixer"
+    },
+    {
+      "detail": "accepted true duplicate true",
+      "ok": true,
+      "step": "remote transport envelope + duplicate"
+    },
+    {
+      "detail": "{\"accepted\":true,\"applied\":[{\"value\":true}],\"revision\":20,\"steps\":1,\"undo_steps\":1}",
+      "ok": true,
+      "step": "assistant explain + operate + undo"
+    },
+    {
+      "detail": "{\"candidates\":[],\"reason\":\"no phrases are enrolled\",\"threshold\":0.0,\"transcript\":null} / \"off: answers come from the grounded rules (turn on a local model server in Window › Assistant)\"",
+      "ok": true,
+      "step": "model/speech status is honest"
+    },
+    {
+      "detail": "peak -8.8 dBFS with a 0.9 DC reference listening",
+      "ok": true,
+      "step": "reference excluded from the render"
+    },
+    {
+      "detail": "{\"content_fnv\":\"d88ee6d826894b20\",\"decoded_channels\":2,\"decoded_frames\":96000,\"decoded_peak_db\":-8.812952995300293,\"decoded_rate\":48000,\"expected\":{\"channels\":2,\"frames\":96000,\"rate\":48000},\"header_ok\":true}",
+      "ok": true,
+      "step": "export + reopen"
+    }
+  ]
+}

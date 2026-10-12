@@ -1,0 +1,57 @@
+case,metric,soundcraft,ffmpeg,difference,tolerance,analytic,agree,soundcraft_vs_analytic,ffmpeg_vs_analytic,signal
+X01,integrated_lufs,-22.993,-23.000,+0.007,0.1,-23.0,true,true,true,"stereo 1 kHz sine, −23 dBFS per channel, 20 s, 48 kHz"
+X01,max_momentary_lufs,-22.993,-22.993,-0.000,0.1,-23.0,true,true,true,"stereo 1 kHz sine, −23 dBFS per channel, 20 s, 48 kHz"
+X01,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,"stereo 1 kHz sine, −23 dBFS per channel, 20 s, 48 kHz"
+X01,true_peak_db,-23.000,-22.975,-0.025,0.3,,true,,,"stereo 1 kHz sine, −23 dBFS per channel, 20 s, 48 kHz"
+X02,integrated_lufs,-32.993,-33.000,+0.007,0.1,-33.0,true,true,true,"stereo 1 kHz, −33 dBFS, 20 s, 48 kHz"
+X02,max_momentary_lufs,-32.993,-32.993,-0.000,0.1,,true,,,"stereo 1 kHz, −33 dBFS, 20 s, 48 kHz"
+X02,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,"stereo 1 kHz, −33 dBFS, 20 s, 48 kHz"
+X02,true_peak_db,-33.000,-33.152,+0.152,0.3,,true,,,"stereo 1 kHz, −33 dBFS, 20 s, 48 kHz"
+X03,integrated_lufs,-23.014,-23.021,+0.007,0.1,-23.0,true,true,true,stereo 1 kHz −36 / −23 / −36 dBFS for 10 / 60 / 10 s (relative gate)
+X03,max_momentary_lufs,-22.993,-22.993,-0.000,0.1,,true,,,stereo 1 kHz −36 / −23 / −36 dBFS for 10 / 60 / 10 s (relative gate)
+X03,loudness_range_lu,13.000,13.000,+0.000,1.0,,true,,,stereo 1 kHz −36 / −23 / −36 dBFS for 10 / 60 / 10 s (relative gate)
+X03,true_peak_db,-23.000,-22.975,-0.025,0.3,,true,,,stereo 1 kHz −36 / −23 / −36 dBFS for 10 / 60 / 10 s (relative gate)
+X04,integrated_lufs,-23.058,-23.065,+0.007,0.1,-23.0,true,true,true,stereo 1 kHz −72 / −23 / −72 dBFS for 10 / 20 / 10 s (absolute gate)
+X04,max_momentary_lufs,-22.993,-22.993,-0.000,0.1,,true,,,stereo 1 kHz −72 / −23 / −72 dBFS for 10 / 20 / 10 s (absolute gate)
+X04,loudness_range_lu,4.000,3.980,+0.020,1.0,,true,,,stereo 1 kHz −72 / −23 / −72 dBFS for 10 / 20 / 10 s (absolute gate)
+X04,true_peak_db,-23.000,-22.975,-0.025,0.3,,true,,,stereo 1 kHz −72 / −23 / −72 dBFS for 10 / 20 / 10 s (absolute gate)
+X05,integrated_lufs,-22.986,-22.993,+0.007,0.1,-23.0,true,true,true,"stereo 1 kHz −26 / −20 / −26 dBFS, 20 s each"
+X05,max_momentary_lufs,-19.993,-19.993,-0.000,0.1,,true,,,"stereo 1 kHz −26 / −20 / −26 dBFS, 20 s each"
+X05,loudness_range_lu,6.000,6.000,+0.000,1.0,,true,,,"stereo 1 kHz −26 / −20 / −26 dBFS, 20 s each"
+X05,true_peak_db,-20.000,-20.000,+0.000,0.3,,true,,,"stereo 1 kHz −26 / −20 / −26 dBFS, 20 s each"
+X06,integrated_lufs,-25.354,-25.360,+0.006,0.1,-23.0,true,false,false,"5.1 (L R C LFE Ls Rs), 1 kHz −30 dBFS in every channel, 20 s: channel weights 1,1,1,0,1.41,1.41"
+X06,max_momentary_lufs,-25.354,-25.354,-0.000,0.1,,true,,,"5.1 (L R C LFE Ls Rs), 1 kHz −30 dBFS in every channel, 20 s: channel weights 1,1,1,0,1.41,1.41"
+X06,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,"5.1 (L R C LFE Ls Rs), 1 kHz −30 dBFS in every channel, 20 s: channel weights 1,1,1,0,1.41,1.41"
+X06,true_peak_db,-30.000,-29.897,-0.103,0.3,,true,,,"5.1 (L R C LFE Ls Rs), 1 kHz −30 dBFS in every channel, 20 s: channel weights 1,1,1,0,1.41,1.41"
+X07,integrated_lufs,-6.000,-6.006,+0.006,0.1,,true,,,"stereo 997 Hz, −6 dBFS, 20 s"
+X07,max_momentary_lufs,-5.999,-5.999,+0.000,0.1,,true,,,"stereo 997 Hz, −6 dBFS, 20 s"
+X07,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,"stereo 997 Hz, −6 dBFS, 20 s"
+X07,true_peak_db,-6.000,-6.003,+0.003,0.3,-6.0,true,true,true,"stereo 997 Hz, −6 dBFS, 20 s"
+X08,integrated_lufs,3.264,3.260,+0.004,0.1,,true,,,"stereo sine at fs/4 (12 kHz), amplitude 0.99, phase 45°: samples at ±0.70, true peak −0.09 dBFS (inter-sample)"
+X08,max_momentary_lufs,3.264,3.264,+0.000,0.1,,true,,,"stereo sine at fs/4 (12 kHz), amplitude 0.99, phase 45°: samples at ±0.70, true peak −0.09 dBFS (inter-sample)"
+X08,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,"stereo sine at fs/4 (12 kHz), amplitude 0.99, phase 45°: samples at ±0.70, true peak −0.09 dBFS (inter-sample)"
+X08,true_peak_db,-0.165,0.514,-0.679,0.3,-0.087,false,true,false,"stereo sine at fs/4 (12 kHz), amplitude 0.99, phase 45°: samples at ±0.70, true peak −0.09 dBFS (inter-sample)"
+X09,integrated_lufs,-22.590,-22.596,+0.006,0.1,,true,,,"stereo 1 kHz −20 / −30 dBFS, 20 s each"
+X09,max_momentary_lufs,-19.993,-19.993,-0.000,0.1,,true,,,"stereo 1 kHz −20 / −30 dBFS, 20 s each"
+X09,loudness_range_lu,10.000,10.000,+0.000,1.0,10.0,true,true,true,"stereo 1 kHz −20 / −30 dBFS, 20 s each"
+X09,true_peak_db,-20.000,-20.000,+0.000,0.3,,true,,,"stereo 1 kHz −20 / −30 dBFS, 20 s each"
+X10,integrated_lufs,-20.026,-20.032,+0.006,0.1,,true,,,"stereo 1 kHz −40 / −20 dBFS, 20 s each"
+X10,max_momentary_lufs,-19.993,-19.993,-0.000,0.1,,true,,,"stereo 1 kHz −40 / −20 dBFS, 20 s each"
+X10,loudness_range_lu,20.000,20.000,+0.000,1.0,20.0,true,true,true,"stereo 1 kHz −40 / −20 dBFS, 20 s each"
+X10,true_peak_db,-20.000,-20.000,+0.000,0.3,,true,,,"stereo 1 kHz −40 / −20 dBFS, 20 s each"
+X11,integrated_lufs,-12.669,-12.674,+0.005,0.1,,true,,,"stereo noise bursts (fixed seed, low-passed), 0.5–2 s at −12…−30 dBFS separated by silence, 60 s"
+X11,max_momentary_lufs,-4.980,-4.980,+0.000,0.1,,true,,,"stereo noise bursts (fixed seed, low-passed), 0.5–2 s at −12…−30 dBFS separated by silence, 60 s"
+X11,loudness_range_lu,12.650,12.620,+0.030,1.0,,true,,,"stereo noise bursts (fixed seed, low-passed), 0.5–2 s at −12…−30 dBFS separated by silence, 60 s"
+X11,true_peak_db,-0.596,-0.612,+0.015,0.3,,true,,,"stereo noise bursts (fixed seed, low-passed), 0.5–2 s at −12…−30 dBFS separated by silence, 60 s"
+X12,integrated_lufs,-11.053,-11.057,+0.004,0.1,,true,,,"stereo log sine sweep 20 Hz–20 kHz, −12 dBFS, 30 s, 48 kHz (K-weighting across the band)"
+X12,max_momentary_lufs,-8.648,-8.648,+0.000,0.1,,true,,,"stereo log sine sweep 20 Hz–20 kHz, −12 dBFS, 30 s, 48 kHz (K-weighting across the band)"
+X12,loudness_range_lu,7.700,7.790,-0.090,1.0,,true,,,"stereo log sine sweep 20 Hz–20 kHz, −12 dBFS, 30 s, 48 kHz (K-weighting across the band)"
+X12,true_peak_db,-11.999,-12.007,+0.008,0.3,,true,,,"stereo log sine sweep 20 Hz–20 kHz, −12 dBFS, 30 s, 48 kHz (K-weighting across the band)"
+X13,integrated_lufs,-22.991,-23.000,+0.009,0.1,-23.0,true,true,true,X01 at 44.1 kHz
+X13,max_momentary_lufs,-22.991,-22.991,+0.000,0.1,,true,,,X01 at 44.1 kHz
+X13,loudness_range_lu,0.000,0.000,+0.000,1.0,,true,,,X01 at 44.1 kHz
+X13,true_peak_db,-23.000,-22.975,-0.025,0.3,,true,,,X01 at 44.1 kHz
+X14,integrated_lufs,-11.049,-11.054,+0.005,0.1,,true,,,X12 at 44.1 kHz
+X14,max_momentary_lufs,-8.644,-8.644,+0.000,0.1,,true,,,X12 at 44.1 kHz
+X14,loudness_range_lu,7.650,7.790,-0.140,1.0,,true,,,X12 at 44.1 kHz
+X14,true_peak_db,-11.999,-12.007,+0.008,0.3,,true,,,X12 at 44.1 kHz

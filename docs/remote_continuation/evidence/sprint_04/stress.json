@@ -1,0 +1,55 @@
+{
+  "environment": "P",
+  "growth_round1_to_3_kib": 3876,
+  "rounds": [
+    {
+      "assistant_5000_markers_ms": 2,
+      "bend_dropped_stale": 1,
+      "bend_queued": 5,
+      "bend_refused_queue_full": 3,
+      "gesture_10k_ms": 104,
+      "model": {
+        "busy_refusals": 24,
+        "cancelled": 4,
+        "errors_or_timeouts": 10,
+        "plans": 4,
+        "rejected_replies": 6
+      },
+      "round": 0,
+      "rss_kib": 31268
+    },
+    {
+      "assistant_5000_markers_ms": 2,
+      "bend_dropped_stale": 1,
+      "bend_queued": 5,
+      "bend_refused_queue_full": 3,
+      "gesture_10k_ms": 92,
+      "model": {
+        "busy_refusals": 24,
+        "cancelled": 4,
+        "errors_or_timeouts": 10,
+        "plans": 4,
+        "rejected_replies": 6
+      },
+      "round": 1,
+      "rss_kib": 34656
+    },
+    {
+      "assistant_5000_markers_ms": 2,
+      "bend_dropped_stale": 1,
+      "bend_queued": 5,
+      "bend_refused_queue_full": 3,
+      "gesture_10k_ms": 90,
+      "model": {
+        "busy_refusals": 24,
+        "cancelled": 4,
+        "errors_or_timeouts": 10,
+        "plans": 4,
+        "rejected_replies": 6
+      },
+      "round": 2,
+      "rss_kib": 35048
+    }
+  ],
+  "rss_start_kib": 4428
+}

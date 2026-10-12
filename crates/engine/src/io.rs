@@ -612,7 +612,7 @@ fn write_session(session: &Session, path: &str, overwrite: bool) -> Result<(Sess
         }
         let opts = EncodeOptions { format: FileFormat::Wav, bit_depth: soundcraft_audio_io::BitDepth::Float32, dither: false, bwf: None };
         let bytes = soundcraft_audio_io::encode(&audio.buffer, &opts).map_err(|err| EngineError::Io(err.to_string()))?;
-        std::fs::write(dir.join(&target), bytes).map_err(|err| EngineError::Io(format!("{target}: {err}")))?;
+        write_durably(&dir.join(&target), &bytes).map_err(|err| EngineError::Io(format!("{target}: {err}")))?;
         src.path = target;
         src.unsaved = false;
         src.format = FileFormat::Wav;
@@ -622,11 +622,40 @@ fn write_session(session: &Session, path: &str, overwrite: bool) -> Result<(Sess
         s.name = stem.to_string();
     }
     let text = s.to_json().map_err(|err| EngineError::Io(err.to_string()))?;
-    // Atomic-ish write: temp file then rename.
+    // RC10 commit boundary: the new session is written to a temporary file and flushed to disk
+    // before it replaces the old one (rename), then the folder entry is flushed. A failure at
+    // any point leaves the previous file exactly as it was and removes the temporary file; the
+    // audio files it references were flushed before this point.
     let tmp = p.with_extension("scraft.tmp");
-    std::fs::write(&tmp, text).map_err(|err| EngineError::Io(format!("{}: {err}", tmp.display())))?;
-    std::fs::rename(&tmp, &p).map_err(|err| EngineError::Io(format!("{}: {err}", p.display())))?;
+    if let Err(err) = write_durably(&tmp, text.as_bytes()) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(EngineError::Io(format!("{}: {err}", tmp.display())));
+    }
+    if let Err(err) = std::fs::rename(&tmp, &p) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(EngineError::Io(format!("{}: {err}", p.display())));
+    }
+    sync_dir(&dir);
     Ok((s, written, p))
+}
+
+/// Writes `bytes` to `path` and flushes them to the device before returning.
+fn write_durably(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write as _;
+    let mut f = std::fs::File::create(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
+}
+
+/// Flushes a folder's entries (so a rename survives power loss) where the OS allows it.
+fn sync_dir(dir: &Path) {
+    #[cfg(unix)]
+    if let Ok(d) = std::fs::File::open(if dir.as_os_str().is_empty() { Path::new(".") } else { dir }) {
+        let _ = d.sync_all();
+    }
+    // Windows has no directory handle to flush; NTFS journals the rename (W pending).
+    #[cfg(not(unix))]
+    let _ = dir;
 }
 
 /// Open a `.scraft` session and decode its audio files (missing files are reported, not fatal).
@@ -964,6 +993,44 @@ mod loop_record_tests {
 #[cfg(test)]
 mod save_tests {
     use super::*;
+
+    /// RC10: a save that fails while writing the temporary file, or at the rename, leaves the
+    /// previous session file byte-identical, removes the temporary file and keeps the document
+    /// unsaved (dirty) so nothing claims it was saved.
+    #[test]
+    fn a_failed_save_keeps_the_previous_file_and_stays_unsaved() {
+        let dir = std::env::temp_dir().join(format!("sml-save-fault-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("song.scraft");
+        let mut e = Engine::default();
+        e.execute("track.new", &json!({"kind": "audio", "format": "mono"})).unwrap();
+        save_session(&mut e, path.to_str().unwrap()).unwrap();
+        let before = std::fs::read(&path).unwrap();
+        e.execute("track.new", &json!({"kind": "audio", "format": "stereo"})).unwrap();
+        assert!(e.is_dirty());
+        // 1. The temporary file cannot be created (a folder sits at its name).
+        let tmp = path.with_extension("scraft.tmp");
+        std::fs::create_dir_all(&tmp).unwrap();
+        let err = save_session(&mut e, path.to_str().unwrap()).unwrap_err().to_string();
+        assert!(err.contains("scraft.tmp"), "{err}");
+        assert_eq!(std::fs::read(&path).unwrap(), before, "previous file untouched");
+        assert!(e.is_dirty(), "still unsaved");
+        std::fs::remove_dir_all(&tmp).unwrap();
+        // 2. The rename fails (the target became a non-empty folder): temp removed, nothing lost.
+        let other = dir.join("other.scraft");
+        std::fs::create_dir_all(other.join("keep")).unwrap();
+        let err = save_session(&mut e, other.to_str().unwrap()).unwrap_err().to_string();
+        assert!(err.contains("other.scraft"), "{err}");
+        assert!(!other.with_extension("scraft.tmp").exists(), "temporary file removed");
+        assert!(other.join("keep").is_dir());
+        assert!(e.is_dirty());
+        // A good save afterwards works and replaces the file atomically.
+        save_session(&mut e, path.to_str().unwrap()).unwrap();
+        assert_ne!(std::fs::read(&path).unwrap(), before);
+        assert!(!e.is_dirty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn autosave_copy_leaves_document_untouched_and_reuses_audio() {

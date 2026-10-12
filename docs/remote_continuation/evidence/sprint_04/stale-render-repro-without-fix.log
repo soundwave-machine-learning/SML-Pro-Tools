@@ -1,0 +1,7 @@
+thread 'shared_services_under_load' (10328) panicked at crates/engine/tests/rc11_stress.rs:133:9:
+assertion `left == right` failed: no render of the old session landed in the new one
+  left: 5
+--
+test result: FAILED. 0 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+
+error: test failed, to rerun pass `-p soundcraft-engine --test rc11_stress`

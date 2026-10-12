@@ -1,0 +1,3 @@
+# X05 meter comparison: utc 2026-10-12T22:11:29Z source 399d7c7 + generator; env P; ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+56 comparisons, 2 outside tolerance (agreement, or SoundCraft vs analytic)
+EXIT: 1

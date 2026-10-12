@@ -190,6 +190,8 @@ impl Engine {
         self.redo.clear();
         self.revision = self.revision.wrapping_add(1);
         self.dirty = false;
+        // RC11: renders of the previous session must never land in this one.
+        self.warp.forget_all();
     }
 
     pub fn is_dirty(&self) -> bool {
