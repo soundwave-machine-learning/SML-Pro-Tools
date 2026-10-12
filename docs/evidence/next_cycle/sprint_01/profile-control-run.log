@@ -1,1 +1,29 @@
-EXIT: 143
+# utc: 2026-10-12T00:43:29Z commit: 7bffb39 (rerun: the first run used a stale soundcraft-cli binary for the probe and started with residual build load)
+error: could not compile `soundcraft-model` (lib) due to 3 previous errors
+warning: build failed, waiting for other jobs to finish...
+build exit 101
+# load before profile: 0.18 1.10 1.37 1/104 18170
+# profile start 00:44:20
+config,callback_frames,sample_rate,callbacks,budget_us,p50_us,p99_us,max_us,p99_load,max_load,deadline_misses,provenance
+no-work control (paced spin; lateness = scheduler preemption only),64,48000,45000,1333.3,0.0,105.1,7062.3,0.079,5.297,98,headless container release build (not native; no device; single process)
+no-work control (paced spin; lateness = scheduler preemption only),128,48000,22500,2666.7,0.0,125.4,6173.2,0.047,2.315,14,headless container release build (not native; no device; single process)
+no-work control (paced spin; lateness = scheduler preemption only),256,48000,11250,5333.3,0.0,56.8,5413.5,0.011,1.015,1,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,64,48000,45000,1333.3,23.7,57.5,3582.5,0.043,2.687,4,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,64,48000,45000,1333.3,23.9,66.7,3614.6,0.050,2.711,3,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),64,48000,45000,1333.3,21.8,63.2,6017.4,0.047,4.513,10,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,128,48000,22500,2666.7,38.0,76.0,2055.8,0.029,0.771,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,128,48000,22500,2666.7,38.2,80.6,2198.1,0.030,0.824,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),128,48000,22500,2666.7,36.8,76.4,2641.2,0.029,0.990,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + per-block structure check,256,48000,11250,5333.3,69.4,129.7,1356.9,0.024,0.254,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 serial strips + per-block structure check,256,48000,11250,5333.3,69.9,132.8,1608.3,0.025,0.302,0,headless container release build (not native; no device; single process)
+16play+2rec+bus+fx v2 adaptive strips + announced changes (playback config),256,48000,11250,5333.3,67.3,118.7,3004.8,0.022,0.563,0,headless container release build (not native; no device; single process)
+profile exit 0 00:47:30
+# load after profile: 0.97 1.05 1.29 1/104 18228
+# probe start 00:47:30
+case,frames,blocks,budget_us,p50_us,p99_us,max_us,over_budget,p99_added_latency_frames,outcome
+pipe round trip (gain worker),64,45000,1333.3,NaN,NaN,NaN,45000,NaN,faults during run
+pipe round trip (gain worker),128,22500,2666.7,NaN,NaN,NaN,22500,NaN,faults during run
+pipe round trip (gain worker),256,11250,5333.3,NaN,NaN,NaN,11250,NaN,faults during run
+worker crash (SIGABRT after 100 blocks),128,0,2666.7,,,,,,fault after 0 blocks: worker gone (pipe closed); detected in 1.6 ms; host continues (silence policy)
+worker hang (silent after 100 blocks),128,0,2666.7,,,,,,fault after 0 blocks: worker gone (pipe closed); detected in 1.5 ms; host continues (silence policy)
+probe exit 0 00:47:30

@@ -1,0 +1,6 @@
+case,frames,blocks,budget_us,p50_us,p99_us,max_us,over_budget,p99_added_latency_frames,outcome
+pipe round trip (gain worker),64,45000,1333.3,41.9,121.6,3195.1,11,5.84,completed
+pipe round trip (gain worker),128,22500,2666.7,41.1,126.5,7159.7,2,6.07,completed
+pipe round trip (gain worker),256,11250,5333.3,38.8,87.7,1291.6,0,4.21,completed
+worker crash (SIGABRT after 100 blocks),128,100,2666.7,,,,,,fault after 100 blocks: worker gone (pipe closed); detected in 6.8 ms; host continues (silence policy)
+worker hang (silent after 100 blocks),128,100,2666.7,,,,,,fault after 100 blocks: deadline missed: worker hung or too slow; detected in 16.2 ms; host continues (silence policy)

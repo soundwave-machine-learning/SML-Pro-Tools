@@ -140,3 +140,57 @@ here is prepopulated as PASS.
   owner configures a provider or a local model (recorded, not faked). Text input works without a
   model (rules + search); push-to-talk UI can be wired with the STT boundary returning
   "unavailable".
+
+## B02 — 64-frame overruns (Sprint 1 measurement, environment P) — NOT REPRODUCIBLE AS COMPUTE; native pending
+
+Command (run alone, CPU otherwise idle, release build, commit 7bffb39):
+`./target/release/examples/sml_profile docs/evidence/next_cycle/sprint_01/callback-profile-control.csv docs/evidence/next_cycle/sprint_01/response-profile.csv`
+(log: `profile-control-run.log`; the first attempt started with residual build load and was discarded).
+
+Control = a paced no-work loop (spin to the next period; lateness = scheduler preemption only;
+a miss is lateness ≥ the period). Workload = 16 play + 2 rec + bus + fx, graph v2, per-block
+structure check (the realtime callback's work), measured as compute time per callback.
+
+| frames @48 kHz | budget | control p99 / max lateness | control misses | workload p99 / max compute | workload misses |
+|---|---|---|---|---|---|
+| 64 | 1333 µs | 105 µs / 7.06 ms | 98 / 45 000 | 57–67 µs (4.3–5.0 % of budget) / 3.6 ms | 3–4 |
+| 128 | 2667 µs | 125 µs / 6.17 ms | 14 / 22 500 | 79–92 µs (3.0–3.5 %) / 1.0–4.8 ms | 0–1 |
+| 256 | 5333 µs | 57 µs / 5.41 ms | 1 / 11 250 | 112–139 µs (2.1–2.6 %) / 0.6–3.5 ms | 0 |
+
+Reading: with zero work the container's scheduler alone preempts the thread for several
+milliseconds often enough to miss ~0.2 % of 64-frame periods; the workload's p99 compute is
+≤ 5 % of the budget and its few misses are millisecond-scale preemptions of the same shape, not
+compute. B02's "64-frame overruns" therefore cannot be attributed to the mixer in environment P;
+they are consistent with scheduler preemption on a non-realtime thread. What remains native:
+the owner machine's device callback at 64 frames with a realtime-priority audio thread (N),
+which this environment cannot provide. No product change is justified by P data; the Playback
+Engine's buffer selection and the xrun counter stay the user's tools. Status: B02 OPEN (native).
+
+## E03 — runtime process isolation of hosted plugins (Sprint 1 experiment) — DECIDED: feasible for containment, not for the default callback path
+
+Command (run alone, release build, rebuilt `soundcraft-cli` with the `plugin-worker-probe`
+worker; the first two attempts used a stale CLI binary and are discarded):
+`./target/release/examples/ipc_probe docs/evidence/next_cycle/sprint_01/ipc-probe.csv`
+(log: `ipc-probe-run.log`). Model: one worker process per plugin, one blocking pipe round trip
+per block (write N f32, read N f32), crash = SIGABRT after 100 blocks, hang = silent after 100
+blocks, host policy = silence and continue.
+
+| frames | round trip p50 / p99 / max | over budget (of blocks) | p99 added latency |
+|---|---|---|---|
+| 64 | 41.9 / 121.6 µs / 3.20 ms | 11 / 45 000 | 5.8 frames |
+| 128 | 41.1 / 126.5 µs / 7.16 ms | 2 / 22 500 | 6.1 frames |
+| 256 | 38.8 / 87.7 µs / 1.29 ms | 0 / 11 250 | 4.2 frames |
+| crash | detected in 6.8 ms, host continued | | |
+| hang | detected in 16.2 ms (deadline), host continued | | |
+
+Decision: process isolation contains a plugin crash or hang (detection within one or two
+periods, host keeps running, silence policy) but costs a blocking syscall pair in the callback
+with a p99 of ~0.12 ms per plugin per block (9 % of a 64-frame budget per plugin) and tail
+latencies of several milliseconds from scheduling, which alone exceed the 64- and 128-frame
+budgets. Running the worker one block ahead would hide the tail at the price of one block of
+added latency per isolated plugin. Therefore: (1) the default host keeps in-process plugins with
+the isolated *scanner* (R07) as the crash boundary for discovery; (2) an opt-in "sandboxed"
+instance mode (worker process, one-block-ahead pipeline, declared added latency, silence on
+fault, automatic restart) is the Sprint 3 R31 design, labelled as compatibility mode, never a
+default; (3) no claim of runtime crash containment is made for this build. Status: R07 runtime
+part DEFERRED to Sprint 3 with these numbers as the admission criteria.
