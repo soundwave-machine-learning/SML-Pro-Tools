@@ -7,8 +7,9 @@ Evidence: `docs/remote_continuation/evidence/sprint_03/`.
 
 ## Source
 Base `710120c` (Sprint 2 closed). Local commits: `48e58b6` (cross-build script, manual Windows
-workflow, backend audit), `d742ee6` (checkpoint), `219d9b5` (evidence), the milestone
-`build: improve Windows delivery and remote studio usability`. No push.
+workflow, backend audit), `d742ee6` (checkpoint), `219d9b5` (evidence), the milestone `f8163e9`
+`build: improve Windows delivery and remote studio usability`, `bc9cacd` (compact-toolbar fix
+after gate attempt 2) and a closing evidence commit. No push.
 
 ## RC07 — Windows build, package, backend (PASS_PORTABLE; W pending)
 - **X04 discovery** (INSPECTED): `.github/workflows/release.yml` already builds, signs (when
@@ -68,14 +69,23 @@ workflow, backend audit), `d742ee6` (checkpoint), `219d9b5` (evidence), the mile
   toolbar headless at 910.7×512 (1366×768 at 150 %), 1280×720, 1920×1080 and 2560×1440 in light
   and dark themes: both groups fully on screen, not overlapping, ≥ 250 points left for the
   scrolling groups (`layout.log`; e.g. 910.7: scroll 0–321, Nudge 329–719, transport 727–903).
+  In the compact strip the edit and audio tools come first; from 1366 points wide they are
+  fully in view, below that they scroll (edit modes also have F1–F4).
 - **Keyboard**: the Nudge buttons state the fallback (keypad Num± where recognised; plain ± when
   no text field/plugin editor/dialog has focus; remappable `nudge.apply`). Modifier cleanup is
   egui-winit's (modifiers cleared on focus loss, INSPECTED) plus the app's existing gesture
   cancel on focus loss; no new code needed.
 
 ## Gate
-`CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only cargo xtask ci` → GATE_RESULT
-(`sprint3-ci.log`).
+`CARGO_INCREMENTAL=0 CARGO_PROFILE_DEV_DEBUG=line-tables-only cargo xtask ci`: attempt 1
+failed rustfmt only (`sprint3-ci-attempt1-fmt.log`); attempt 2 caught a **regression from the
+compact toolbar** — at 1500 points wide the Listen tool button was outside the visible strip,
+so the existing kittest `listen_runs_while_held_and_cleans_up_on_release_or_escape` could not
+select it (`sprint3-ci-attempt2-listen-regression.log`). Fixed by listing the edit and audio
+tools first in the compact strip (the full row is unchanged), and the layout test now also
+asserts the tools are fully in view from 1366 points up and top-aligned (`bc9cacd`).
+**Attempt 3: fmt, clippy, test, assets, layers, wasm all ok; 700 passed / 0 failed / 1 ignored in
+71 suites; EXIT 0** (`sprint3-ci.log`).
 
 ## Not done / external gates
 T10 WASAPI run on Windows, T11 ASIO build, T12 VST3 editor on Windows, T13 real 1366×768@150 %
