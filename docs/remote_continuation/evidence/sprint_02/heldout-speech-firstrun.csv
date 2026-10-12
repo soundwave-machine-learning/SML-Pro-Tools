@@ -1,0 +1,63 @@
+case,input,output,result,detail
+S01,play,play,PASS,best play 0.00; threshold 68.09
+S01,stop,stop,PASS,best stop 0.00; threshold 60.78
+S01,record,record,PASS,best record 0.00; threshold 72.01
+S01,undo,undo,PASS,best undo 0.00; threshold 72.49
+S01,save,save,PASS,best save 0.00; threshold 47.28
+S01,mute kick,mute kick,PASS,best mute kick 0.00; threshold 80.87
+S01,louder,louder,PASS,best louder 0.00; threshold 77.56
+S01,next marker,next marker,PASS,best next marker 0.00; threshold 78.22
+S02,play,play,PASS,best play 34.77; threshold 68.09
+S02,stop,stop,PASS,best stop 15.15; threshold 60.78
+S02,record,record,PASS,best record 35.36; threshold 72.01
+S02,undo,undo,PASS,best undo 29.58; threshold 72.49
+S02,save,save,PASS,best save 23.87; threshold 47.28
+S02,mute kick,mute kick,PASS,best mute kick 38.66; threshold 80.87
+S02,louder,louder,PASS,best louder 36.36; threshold 77.56
+S02,next marker,next marker,PASS,best next marker 35.68; threshold 78.22
+S03,play,play,PASS,best play 47.22; threshold 68.09
+S03,stop,stop,PASS,best stop 52.12; threshold 60.78
+S03,record,record,PASS,best record 47.13; threshold 72.01
+S03,undo,undo,PASS,best undo 41.31; threshold 72.49
+S03,save,save,PASS,best save 43.03; threshold 47.28
+S03,mute kick,mute kick,PASS,best mute kick 64.62; threshold 80.87
+S03,louder,louder,PASS,best louder 42.11; threshold 77.56
+S03,next marker,next marker,PASS,best next marker 51.65; threshold 78.22
+S04,play,play,PASS,best play 47.27; threshold 68.09
+S04,stop,stop,PASS,best stop 48.51; threshold 60.78
+S04,record,record,PASS,best record 53.60; threshold 72.01
+S04,undo,undo,PASS,best undo 45.21; threshold 72.49
+S04,save,save,PASS,best save 44.40; threshold 47.28
+S04,mute kick,mute kick,PASS,best mute kick 62.29; threshold 80.87
+S04,louder,louder,PASS,best louder 48.72; threshold 77.56
+S04,next marker,next marker,PASS,best next marker 58.60; threshold 78.22
+S05,play,(rejected: not close enough to any enrolled phrase),FAIL,best play inf; threshold 68.09
+S05,stop,(rejected: not close enough to any enrolled phrase),FAIL,best stop 127.97; threshold 60.78
+S05,record,(rejected: not close enough to any enrolled phrase),FAIL,best stop 153.56; threshold 60.78
+S05,undo,(rejected: no speech found),FAIL,best ; threshold 0.00
+S05,save,(rejected: not close enough to any enrolled phrase),FAIL,best stop 136.04; threshold 60.78
+S05,mute kick,(rejected: not close enough to any enrolled phrase),FAIL,best stop 148.63; threshold 60.78
+S05,louder,(rejected: no speech found),FAIL,best ; threshold 0.00
+S05,next marker,(rejected: not close enough to any enrolled phrase),FAIL,best stop 133.12; threshold 60.78
+S06,play,(rejected: no speech found),FAIL,best ; threshold 0.00
+S06,stop,(rejected: not close enough to any enrolled phrase),FAIL,best stop 134.20; threshold 60.78
+S06,record,(rejected: not close enough to any enrolled phrase),FAIL,best stop 147.00; threshold 60.78
+S06,undo,(rejected: no speech found),FAIL,best ; threshold 0.00
+S06,save,(rejected: not close enough to any enrolled phrase),FAIL,best stop 138.71; threshold 60.78
+S06,mute kick,(rejected: not close enough to any enrolled phrase),FAIL,best stop 145.89; threshold 60.78
+S06,louder,(rejected: no speech found),FAIL,best ; threshold 0.00
+S06,next marker,(rejected: not close enough to any enrolled phrase),FAIL,best stop 133.48; threshold 60.78
+S07,banana,(rejected: not close enough to any enrolled phrase),PASS,best play 126.76; threshold 68.09
+S07,delete everything,(rejected: not close enough to any enrolled phrase),PASS,best mute kick 167.78; threshold 80.87
+S07,hello there,(rejected: not close enough to any enrolled phrase),PASS,best louder 151.64; threshold 77.56
+S08,silence,(rejected: no speech found),PASS,
+S08,noise,(rejected: no speech found),PASS,
+T01,play,0.38 s; peak 0.80; rms 0.054,PASS,
+T01,stop,0.43 s; peak 0.80; rms 0.157,PASS,
+T01,record,0.51 s; peak 0.80; rms 0.063,PASS,
+T01,undo,0.34 s; peak 0.80; rms 0.057,PASS,
+T01,save,0.40 s; peak 0.80; rms 0.165,PASS,
+T01,mute kick,0.65 s; peak 0.80; rms 0.058,PASS,
+T01,louder,0.50 s; peak 0.80; rms 0.059,PASS,
+T01,next marker,0.98 s; peak 0.80; rms 0.105,PASS,
+summary,,S01 8/8; S02 8/8; S03 8/8; S04 8/8; S05 0/8; S06 0/8; S07 3/3; S08 2/2; T01 8/8,,

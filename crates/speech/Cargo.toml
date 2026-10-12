@@ -1,0 +1,18 @@
+[package]
+name = "soundcraft-speech"
+description = "SoundCraft speech: a rule-based formant speech synthesizer and an enrolled-command recognizer (MFCC + DTW), original code, no model weights"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde.workspace = true
+rustfft.workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+
+[lints]
+workspace = true

@@ -3585,6 +3585,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "soundcraft-speech"
+version = "0.5.0"
+dependencies = [
+ "rustfft",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "soundcraft-time"
 version = "0.5.0"
 dependencies = [

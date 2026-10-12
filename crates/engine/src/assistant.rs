@@ -151,6 +151,19 @@ fn needs_authorization(text: &[String]) -> Option<&'static str> {
     None
 }
 
+/// The deterministic refusals, whoever answers the rest: features this build does not have and
+/// requests that need the user's own authorization. A model's reply never overrides them.
+pub fn refusal(text: &str) -> Option<(Mode, String)> {
+    let words = tokens(text);
+    let t = words.join(" ");
+    for (keys, why) in UNSUPPORTED {
+        if keys.iter().any(|k| t.contains(k)) {
+            return Some((Mode::Unsupported, format!("not available: {why}")));
+        }
+    }
+    needs_authorization(&words).map(|w| (Mode::NeedsAuthorization, w.to_string()))
+}
+
 /// Resolves a track named in the request: exact name match first, then unique prefix. Returns
 /// `Clarify` when several tracks match materially differently.
 fn resolve_track(e: &Engine, words: &[String], after: &[&str]) -> std::result::Result<TrackId, Mode> {
