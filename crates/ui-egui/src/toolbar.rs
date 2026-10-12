@@ -35,13 +35,23 @@ pub struct ToolbarLayout {
     pub nudge_width: f32,
     pub transport: Rect,
     pub nudge: Rect,
+    /// The edit tools and audio tools groups (in compact mode they come first in the strip).
+    pub tools: Rect,
     /// The area the toolbar had.
     pub visible: Rect,
 }
 
 impl Default for ToolbarLayout {
     fn default() -> Self {
-        ToolbarLayout { compact: false, full_width: 0.0, nudge_width: 0.0, transport: Rect::NOTHING, nudge: Rect::NOTHING, visible: Rect::NOTHING }
+        ToolbarLayout {
+            compact: false,
+            full_width: 0.0,
+            nudge_width: 0.0,
+            transport: Rect::NOTHING,
+            nudge: Rect::NOTHING,
+            tools: Rect::NOTHING,
+            visible: Rect::NOTHING,
+        }
     }
 }
 
@@ -54,7 +64,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     layout.visible = full;
     // RC09: when the row does not fit (e.g. 1366×768 at 150 %), transport/record and the active
     // Nudge are pinned on the right where they are always visible; only the other groups
-    // scroll. The row's natural width is learned from a frame where it fitted (or the first one).
+    // scroll, most-used first. The row's natural width is learned from a full-row frame.
     layout.compact = layout.full_width > 0.0 && full.width() < layout.full_width;
     if !layout.compact {
         let out = egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
@@ -63,19 +73,10 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
                 ui.spacing_mut().item_spacing.x = 8.0;
                 edit_modes(app, ui);
                 zoom_group(app, ui);
-                tools(app, ui);
-                audio_tools(app, ui);
+                layout.tools = tool_groups(app, ui);
                 counters(app, ui);
                 grid_nudge(app, ui);
-                // Exactly its natural width, so the scrolling groups keep the rest of the row.
-                let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
-                layout.nudge = ui
-                    .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                        ui.set_max_width(nw);
-                        nudge_panel(app, ui);
-                    })
-                    .response
-                    .rect;
+                layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
                 layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
                 tempo_meter(app, ui);
                 output_meter(app, ui);
@@ -102,12 +103,13 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
                     ui.horizontal(|ui| {
                         ui.add_space(8.0);
                         ui.spacing_mut().item_spacing.x = 8.0;
+                        // Most-used first, so the tools stay in view on common laptop widths;
+                        // the edit modes also have F1–F4.
+                        layout.tools = tool_groups(app, ui);
                         edit_modes(app, ui);
-                        zoom_group(app, ui);
-                        tools(app, ui);
-                        audio_tools(app, ui);
                         counters(app, ui);
                         grid_nudge(app, ui);
+                        zoom_group(app, ui);
                         tempo_meter(app, ui);
                         output_meter(app, ui);
                     });
@@ -116,6 +118,19 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         });
     }
     app.toolbar_layout = layout;
+}
+
+/// The edit tools and the audio tools side by side; returns their area.
+fn tool_groups(app: &mut SoundApp, ui: &mut Ui) -> Rect {
+    ui.scope(|ui| {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 8.0;
+            tools(app, ui);
+            audio_tools(app, ui);
+        })
+    })
+    .response
+    .rect
 }
 
 fn edit_modes(app: &mut SoundApp, ui: &mut Ui) {
@@ -628,7 +643,14 @@ mod tests {
     /// normal full row is used and they are on screen too. Light and dark themes alike.
     #[test]
     fn transport_and_nudge_are_reachable_on_small_screens() {
-        for (w, h, compact) in [(1366.0 / 1.5, 768.0 / 1.5, true), (1280.0, 720.0, true), (1920.0, 1080.0, true), (2560.0, 1440.0, false)] {
+        for (w, h, compact) in [
+            (1366.0 / 1.5, 768.0 / 1.5, true),
+            (1280.0, 720.0, true),
+            (1366.0, 768.0, true),
+            (1500.0, 900.0, true),
+            (1920.0, 1080.0, true),
+            (2560.0, 1440.0, false),
+        ] {
             for light in [false, true] {
                 let l = layout_at(w, h, light);
                 println!("{w}x{h} light {light}: {l:?}");
@@ -644,6 +666,15 @@ mod tests {
                 assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}x{h}: transport and Nudge do not overlap");
                 if compact {
                     assert!(l.nudge.min.x >= 250.0, "{w}x{h}: the other groups keep a scrollable strip: {l:?}");
+                }
+                // From 1366 points wide the edit and audio tools are fully in view as well;
+                // narrower, they come first in the scrolling strip.
+                assert!(l.tools.min.y <= 5.0, "{w}x{h}: tool groups top-aligned like the others: {l:?}");
+                if w >= 1366.0 {
+                    assert!(
+                        l.tools.width() > 300.0 && l.tools.min.x >= 0.0 && l.tools.max.x <= l.nudge.min.x.min(w),
+                        "{w}x{h}: tools in view: {l:?}"
+                    );
                 }
             }
         }
