@@ -1,0 +1,8 @@
+# cross-build.sh run: utc 2026-10-12T21:48:48Z
+==> SoundCraft 0.5.0 for Windows x64 (GNU) from d742ee6a5baa5e6a97d7b050d7e0c129ddd41fc5
+    Finished `release` profile [optimized] target(s) in 4m 42s
+==> /home/user/SML-Pro-Tools/target/dist-windows-gnu/soundcraft-0.5.0-windows-x64-gnu-portable.zip
+    sha256 4ceabefcbfc3070a9de8aa01a1739480e9feddaf7e7b2d09c9ff055fa0f8d611
+    soundcraft-cli.exe imports: KERNEL32.dll, WS2_32.dll, api-ms-win-core-synch-l1-2-0.dll, bcryptprimitives.dll, kernel32.dll, msvcrt.dll, ntdll.dll, user32.dll
+    soundcraft.exe imports: KERNEL32.dll, USER32.dll, advapi32.dll, api-ms-win-core-synch-l1-2-0.dll, bcryptprimitives.dll, combase.dll, dwmapi.dll, dxgi.dll, gdi32.dll, imm32.dll, kernel32.dll, msvcrt.dll, ntdll.dll, ole32.dll, oleaut32.dll, opengl32.dll, setupapi.dll, shell32.dll, shlwapi.dll, uiautomationcore.dll, user32.dll, uxtheme.dll, ws2_32.dll
+EXIT: 0

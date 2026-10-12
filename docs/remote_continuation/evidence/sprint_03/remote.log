@@ -1,0 +1,7 @@
+# RC08 remote: utc 2026-10-12T21:54:13Z source d742ee6 + tree; env P protocol tests (no phone)
+test tests::phone_assistant_plans_are_bounded_by_the_allowlist ... ok
+test tests::capture_survives_disconnect_and_reconnect_sees_current_state ... ok
+test tests::pairing_auth_origin_replay_and_two_clients ... ok
+test tests::rate_limit_queue_bound_meters_and_pairing_expiry ... ok
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.15s
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
