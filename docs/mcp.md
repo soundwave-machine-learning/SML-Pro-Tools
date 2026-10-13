@@ -34,10 +34,11 @@ Resources: `soundcraft://session` (full session JSON), `soundcraft://commands`.
 
 ## Conventions
 
-- Programmatic calls never open dialogs; empty params act on the current selection.
+- Programmatic calls never open dialogs (except theme/shortcut import/export without a path); empty params act on the current selection. There is no confirmation: `new_session`/`open_session` discard unsaved changes.
 - Positions: samples, `{"seconds": x}`, or `"bars_beats:5|1|000"`-style strings.
 - Tracks by name or id; clips by id.
-- Every command is undoable through `edit.undo` unless it is a query or a view setting.
+- Editing and mixing commands are undoable through `edit.undo`; session, file, export, transport, setup and options commands are not (see the Undo column of [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md) or `help.search`). Each call — including each call inside `batch` — is its own undo step.
+- `serverInfo.version` is the CLI's version; with `--connect` it does not prove the app's version (ask the app: `help.limits` returns `build`).
 
 The acceptance test `crates/automation/tests/agent_tasks.rs` drives a realistic session end to end
 through MCP only (mixing, plugins, routing, editing with undo, markers, tempo, automation, bounce,

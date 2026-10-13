@@ -1,0 +1,112 @@
+{
+  "schema": "sml-docs-manifest-1",
+  "product": "SML Studio (SoundCraft engine)",
+  "product_version": "0.5.0",
+  "docs_revision": "2026-10-13.1",
+  "updated": "2026-10-13",
+  "verification": {
+    "source_sha": "018793f7c2f3d601800b7ddbcd38b45c2c30a255",
+    "date": "2026-10-13",
+    "method": "source review of every chapter against the code and tests at source_sha (four cited audits: recording/device/recovery, editing/Nudge/shortcuts, mixer/plugins/mastering, remote/assistant/UI/external control), generated reference from the registry, headless CLI walkthroughs B/C/E on synthetic audio (docs/evidence/documentation/walkthrough-commands.log)",
+    "environment": "P: Linux x86_64 build container; no display, audio device, Windows host, phone, microphone, third-party plugin or listener",
+    "observed": [],
+    "pending": [
+      "Windows: identify the installed build (USER_GUIDE.md §3.4) and walk through §4, §6, §17.3, §21 on it",
+      "recording, input monitoring and buffer sizes on the owner's interface",
+      "VST3 editor windows and third-party plugins (including sidechain) on Windows",
+      "phone remote on a real phone and network",
+      "push-to-talk with the owner's microphone; spoken replies by ear",
+      "local language model with a real local server",
+      "keyboard: keypad and main-row keys on the owner's keyboard; known issues K5-K7",
+      "listening checks for every walkthrough"
+    ]
+  },
+  "installed_build": {
+    "status": "unverified",
+    "note": "The documentation session had no access to the owner's Windows computer. The last package delivered was the portable zip from b641b5a (known_builds[0]). Identify the installed copy by hashing soundcraft.exe (USER_GUIDE.md §3.4)."
+  },
+  "known_builds": [
+    {
+      "version": "0.5.0",
+      "commit": "b641b5ad938d47a9387f611cf717f9933c7cdb19",
+      "program_code_identical_to": "018793f7c2f3d601800b7ddbcd38b45c2c30a255",
+      "documentation": "this edition (behaviour); the in-app assistant cites manual_archive/USER_GUIDE-0.5.0-b641b5a.md",
+      "artifacts": [
+        {
+          "name": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+          "sha256": "3ae863aab5339798afad94a3f5a3dedc175ec1ba962e485f48ff118166de27fd",
+          "files": {
+            "soundcraft.exe": "bb405c79a3a3c2d3d4a9bf9f0bb80e845901f80f794d891b30653f1d34878967",
+            "soundcraft-cli.exe": "7e8ca105f4a64e80bd531bb54c3951e0ed812ac8de2c247694352be99a67300b"
+          },
+          "notes": "unsigned GNU cross-build; not yet run on Windows"
+        },
+        {
+          "name": "soundcraft-0.5.0-linux-x86_64.tar.gz",
+          "sha256": "fe1cd6949353fae37b2621ba0ed4abfbc473ac3565a3c58809b3ae046b46f963",
+          "files": {
+            "bin/soundcraft": "88ab9af5128583201e593251f493a6858554048c8a2009452944ef3f199776d7",
+            "bin/soundcraft-cli": "f1cca515aade9fc466ef9e3979aaba51166b2a1974e31d79ebe64917be906060"
+          }
+        }
+      ]
+    }
+  ],
+  "documents": [
+    {"path": "docs/README.md", "role": "documentation index"},
+    {"path": "docs/USER_GUIDE.md", "role": "authoritative manual (compiled into the app)"},
+    {"path": "docs/COMMAND_REFERENCE.md", "role": "generated command reference"},
+    {"path": "docs/reference/commands.json", "role": "generated machine-readable reference"},
+    {"path": "docs/reference/SHORTCUTS.md", "role": "generated shortcut tables"},
+    {"path": "docs/reference/CAPABILITIES.md", "role": "generated stated limits and interfaces"},
+    {"path": "docs/grok/GROK_OPERATOR_GUIDE.md", "role": "external AI operator guide"},
+    {"path": "docs/grok/GROK_BOT_INSTRUCTIONS.md", "role": "copyable operator instructions"},
+    {"path": "docs/DOCS_MAINTENANCE.md", "role": "update procedure"},
+    {"path": "docs/DOCS_CHANGELOG.md", "role": "documentation history"},
+    {"path": "docs/control-protocol.md", "role": "control channel protocol"},
+    {"path": "docs/mcp.md", "role": "MCP server"},
+    {"path": "docs/manual_archive/USER_GUIDE-0.5.0-b641b5a.md", "role": "archived edition compiled into b641b5a"},
+    {"path": "docs/DOCS_MANIFEST.json", "role": "this manifest"}
+  ],
+  "bundle": [
+    "docs/README.md",
+    "docs/USER_GUIDE.md",
+    "docs/COMMAND_REFERENCE.md",
+    "docs/reference/commands.json",
+    "docs/reference/SHORTCUTS.md",
+    "docs/reference/CAPABILITIES.md",
+    "docs/grok/GROK_OPERATOR_GUIDE.md",
+    "docs/grok/GROK_BOT_INSTRUCTIONS.md",
+    "docs/DOCS_MAINTENANCE.md",
+    "docs/DOCS_CHANGELOG.md",
+    "docs/DOCS_MANIFEST.json",
+    "docs/control-protocol.md",
+    "docs/mcp.md",
+    "docs/manual_archive/USER_GUIDE-0.5.0-b641b5a.md"
+  ],
+  "non_command_identifiers": [],
+  "chapters": [
+    {"chapter": "3 First launch, settings, versions and Safe Open", "commands": ["window.about", "help.limits"], "sources": ["apps/soundcraft/src/main.rs", "apps/soundcraft/src/config.rs", "apps/soundcraft/src/logging.rs"]},
+    {"chapter": "4 Audio devices, sample rate, buffer and monitoring", "commands": ["window.playback_engine", "options.delay_compensation", "mix.monitor_mode", "mix.input_monitor", "mix.tracking_deactivate", "mix.tracking_restore", "monitor.*"], "sources": ["crates/playback/src", "crates/ui-egui/src/windows.rs", "crates/ui-egui/src/panels.rs"]},
+    {"chapter": "5 Sessions and project setup", "commands": ["session.new", "session.save", "session.save_as", "session.save_copy", "session.save_template", "setup.session", "track.new", "file.import_audio"], "sources": ["crates/engine/src/cmd/file.rs", "crates/engine/src/io.rs", "crates/ui-egui/src/dialogs.rs"]},
+    {"chapter": "6 Recording", "commands": ["transport.record", "mix.record_arm", "track.input", "options.pre_post_roll", "options.pre_roll", "options.post_roll", "options.countoff", "setup.click_countoff", "options.loop_record"], "sources": ["crates/ui-egui/src/lib.rs", "crates/playback/src/capture.rs", "crates/playback/src/record.rs", "crates/engine/src/io.rs"]},
+    {"chapter": "7 Takes, playlists and comping", "commands": ["track.playlist_*", "clip.rating"], "sources": ["crates/engine/src/cmd/track.rs", "crates/ui-egui/src/edit_window.rs"]},
+    {"chapter": "8 Audio editing tools and edit modes", "commands": ["edit.mode", "edit.tool", "edit.split_at", "edit.erase_clips", "edit.mute_clips", "audition.*", "edit.alt_tool", "edit.tool_link"], "sources": ["crates/engine/src/cmd/tools.rs", "crates/engine/src/cmd/edit.rs", "crates/engine/src/cmd/audition.rs", "crates/ui-egui/src/edit_window.rs", "crates/ui-egui/src/toolbar.rs"]},
+    {"chapter": "9 Clip gain, fades and strip silence", "commands": ["clip.gain*", "edit.fades_create", "edit.fades_delete", "edit.strip_silence", "edit.clear_clip_gain"], "sources": ["crates/engine/src/cmd/clip.rs", "crates/engine/src/cmd/edit.rs", "crates/dsp/src/offline.rs"]},
+    {"chapter": "10 Bend (warp anchors)", "commands": ["clip.warp_*", "clip.remove_warp"], "sources": ["crates/engine/src/warp.rs", "crates/engine/src/cmd/bend.rs", "crates/model/src/clip.rs"]},
+    {"chapter": "11 Clip groups, edit groups and stereo editing", "commands": ["clip.group", "clip.ungroup", "clip.regroup", "track.group"], "sources": ["crates/engine/src/cmd/clip.rs", "crates/engine/src/cmd/track.rs"]},
+    {"chapter": "12 Nudge", "commands": ["nudge.*"], "sources": ["crates/engine/src/cmd/nudge.rs", "crates/ui-egui/src/nudge_keys.rs", "crates/ui-egui/src/toolbar.rs", "crates/model/src/nudge.rs"]},
+    {"chapter": "13 Mixer views: Console, Visual and Split", "commands": ["mix.view", "mix.volume", "mix.trim", "mix.pan", "mix.width", "mix.mute", "mix.solo", "mix.profile", "mix.graph_migrate"], "sources": ["crates/ui-egui/src/mix_window.rs", "crates/ui-egui/src/visual_mixer.rs", "crates/engine/src/cmd/mix.rs", "crates/engine/src/cmd/snapshot.rs"]},
+    {"chapter": "14 Automation and mixer snapshots", "commands": ["mix.automation_mode", "automation.*", "snapshot.*"], "sources": ["crates/model/src/automation.rs", "crates/engine/src/cmd/paint.rs", "crates/engine/src/cmd/snapshot.rs"]},
+    {"chapter": "15 Buses, sends, FX returns and sidechains", "commands": ["bus.*", "mix.send", "mix.send_level", "mix.insert_sidechain"], "sources": ["crates/engine/src/cmd/bus.rs", "crates/vst3-host/src", "crates/clap-host/src"]},
+    {"chapter": "16 Signal order, Summing and Tape slots", "commands": ["mix.slot", "mix.slot_state", "mix.signal_flow", "mix.audition_bypass"], "sources": ["crates/mix/src/lib.rs", "crates/engine/src/cmd/slots.rs"]},
+    {"chapter": "17 Plugins", "commands": ["mix.insert", "mix.insert_*", "engine.plugin_capabilities", "engine.host_faults", "session.plugin_versions", "session.missing_plugins", "mix.latency_report", "track.save_preset", "track.load_preset"], "sources": ["crates/mix/src/scan_isolated.rs", "crates/mix/src/sandbox.rs", "crates/engine/src/cmd/host.rs", "crates/ui-egui/src/plugin_scan.rs"]},
+    {"chapter": "18 Mastering and export", "commands": ["mastering.*", "file.bounce_mix", "file.bounce_stems", "file.export_path", "window.master"], "sources": ["crates/engine/src/cmd/mastering.rs", "crates/engine/src/cmd/file.rs", "crates/ui-egui/src/layouts.rs", "crates/audio-io/src"]},
+    {"chapter": "19 SML Remote (phone)", "commands": ["window.remote", "remote.*"], "sources": ["crates/remote/src"]},
+    {"chapter": "20 The internal assistant", "commands": ["assistant.*", "window.assistant"], "sources": ["crates/engine/src/assistant.rs", "crates/engine/src/assistant_runtime.rs", "crates/engine/src/cmd/assistant.rs", "crates/ui-egui/src/assistant_ui.rs", "crates/speech/src"]},
+    {"chapter": "21 Shortcut profiles", "commands": ["window.shortcuts", "ui.shortcut_*", "ui.shortcuts_*"], "sources": ["crates/ui-egui/src/shortcut_profiles.rs", "crates/ui-egui/src/shortcuts.rs", "crates/ui-egui/src/menus.rs"]},
+    {"chapter": "22 Themes, scaling and layouts", "commands": ["ui.theme", "ui.theme_*", "window.ui_customization", "window.theme_editor", "window.config_*", "window.record", "window.edit", "window.mix"], "sources": ["crates/ui-egui/src/theme.rs", "crates/ui-egui/src/extra_windows.rs", "crates/ui-egui/src/layouts.rs"]},
+    {"chapter": "23 Autosave, recovery and troubleshooting", "commands": ["window.recover", "session.audio_health"], "sources": ["crates/engine/src/autosave.rs", "crates/playback/src/capture.rs"]},
+    {"chapter": "25 External control (and the Grok operator guide)", "commands": ["engine.history", "session.inspect", "help.search"], "sources": ["crates/ui-egui/src/control.rs", "apps/soundcraft/src/control_server.rs", "crates/automation/src", "apps/soundcraft-cli/src/main.rs"]}
+  ]
+}

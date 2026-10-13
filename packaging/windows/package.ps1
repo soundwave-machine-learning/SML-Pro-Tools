@@ -110,6 +110,12 @@ foreach ($f in 'README.md', 'LICENSE', 'LICENSE-MIT', 'LICENSE-APACHE', 'NOTICE'
   $p = Join-Path $Root $f
   if (Test-Path $p) { Copy-Item $p $Portable }
 }
+# The user documentation of this source (manual, references, Grok guide, DOCS_MANIFEST.json).
+# Not yet in the MSI (that needs WiX component entries).
+$Python = (Get-Command python, python3 -ErrorAction SilentlyContinue | Select-Object -First 1).Source
+if (-not $Python) { throw 'documentation bundle needs Python (packaging/docs/build_docs.py)' }
+& $Python (Join-Path $Root 'packaging\docs\build_docs.py') --bundle-dir (Join-Path $Portable 'docs')
+if ($LASTEXITCODE -ne 0) { throw 'documentation bundle failed (run cargo xtask docs-check)' }
 $Zip = Join-Path $Dist "soundcraft-$Version-windows-$Arch-portable.zip"
 Remove-Item -Force $Zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $Portable -DestinationPath $Zip

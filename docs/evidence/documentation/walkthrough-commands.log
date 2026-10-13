@@ -1,0 +1,58 @@
+## walkthrough B/C/E command check: 2026-10-13T00:16:39Z, soundcraft-cli SoundCraft CLI 0.5.0, Linux (P), headless, synthetic audio
+file.import_audio: {"imported":[{"channels":1,"clip":3,"frames":384000,"source":1,"track":2},{"channels":1,"clip":6,"frames":384000,"source":4,"track":5},{"channels":1,"clip":9,"frames":384000,"source":7,"track":8},{"channels":1,"clip":12,"frames":384000,"source":10,"track":11}]}
+track.rename: {"name":"Lead"}
+track.rename: {"name":"Dbl L"}
+track.rename: {"name":"Dbl R"}
+track.rename: {"name":"Adlib"}
+edit.select: {"clips":[],"selection":{"end":480,"start":0},"tracks":[2]}
+edit.fades_create: {"fades":1}
+clip.gain: {"clips":2}
+nudge.set: {"accumulated_steps":0,"applied_samples":0,"sample_rate":48000,"step_ms":10.0,"step_samples_exact":480.0,"target":"clips","target_label":"Selected clips","unit":"ms","value":10.0}
+nudge.info: {"accumulated_steps":0,"applied_samples":0,"sample_rate":48000,"step_ms":10.0,"step_samples_exact":480.0,"target":"clips","target_label":"Selected clips","unit":"ms","value":10.0}
+edit.select: {"clips":[6],"selection":{"end":384000,"start":0},"tracks":[5]}
+nudge.clips: {"accumulated_samples":480,"applied_samples":480,"below_one_sample":false,"changed":[6],"requested_steps":1,"target":"clips"}
+nudge.clips: {"accumulated_samples":0,"applied_samples":-480,"below_one_sample":false,"changed":[6],"requested_steps":-1,"target":"clips"}
+mix.volume: {"tracks":2}
+mix.pan: {"pan":-0.6000000238418579}
+mix.pan: {"pan":0.6000000238418579}
+mix.volume: {"tracks":1}
+edit.select: {"clips":[6],"selection":{"end":384000,"start":0},"tracks":[2,5,8,11]}
+bus.create_from_selection: {"bus":13,"bus_track":14,"name":"Vocal Bus","output":"main","rerouted":[{"from":"Main","to":"bus","track":"Lead"},{"from":"Main","to":"bus","track":"Dbl L"},{"from":"Main","to":"bus","track":"Dbl R"},{"from":"Main","to":"bus","track":"Adlib"}]}
+bus.create_fx_return: {"bus":15,"note":"sends start at -inf; an empty return duplicates the dry signal once raised","return_track":16,"sends":[{"slot":0,"track":"Lead"},{"slot":0,"track":"Dbl L"},{"slot":0,"track":"Dbl R"},{"slot":0,"track":"Adlib"}]}
+bus.validate: {"ok":true}
+mix.signal_flow: {"inserts":[],"note":"inserts marked post_fader run after the fader (graph v2)","order":["source (comp, clip gain/fades, edits)","utility trim/polarity","Tape [empty]","user Pre inserts","Width 100%","pre-fader send tap","fader","user Post inserts","post-fader send tap","output panner","output route/mute"],"sends":["Bus(BusId(15)) post-fader (follow pan)"],"track":"Lead"}
+snapshot.save: {"channels":6,"excluded":"plugins, slots, routing, trims, automation","scope":"gain, pan, width, mute, solo, visibility","slot":"A"}
+mix.volume: {"tracks":1}
+snapshot.save: {"channels":6,"excluded":"plugins, slots, routing, trims, automation","scope":"gain, pan, width, mute, solo, visibility","slot":"B"}
+snapshot.recall: {"applied":6,"excluded":"plugins, slots, routing, trims, automation","missing":[],"slot":"A"}
+engine.history: {"can_redo":false,"undo":["Audio...","Rename Track","Rename Track","Rename Track","Rename Track","Create...","Clip Gain","Nudge Clips","Nudge Clips","Set Volume","Set Pan","Set Pan","Set Volume","Create Bus from Selection","Create FX Return","Save Mix Snapshot","Set Volume","Save Mix Snapshot","Recall Mix Snapshot"]}
+mastering.meters: {"correlation":0.9851091504096985,"integrated_lufs":-9.963066101074219,"loudness_range_lu":0.9500007629394531,"max_momentary_lufs":-7.9623799324035645,"max_short_term_lufs":-8.918091773986816,"mono_peak_db":-4.949747085571289,"range":[0,384000],"sample_peak_db":-4.948369026184082,"true_peak_db":-4.948369026184082}
+file.bounce_mix: {"bytes":2304104,"loudness_range_lu":0.9500007629394531,"lufs":-9.963066101074219,"path":"<scratch>/out/mix.wav","peak_db":-4.948369026184082,"rate":48000,"report":"<scratch>/out/mix.wav.report.json","seconds":8.0,"tail_samples":0,"true_peak_db":-4.948369026184082,"verified":{"content_fnv":"f5f079b8c3185eeb","decoded_channels":2,"decoded_frames":384000,"decoded_peak_db":-4.948369026184082,"decoded_rate":48000,"expected":{"channels":2,"frames":384000,"rate":48000},"header_ok":true}}
+session.save_as: {"audio_files_written":4,"path":"<scratch>/out/song/song.scraft"}
+## reopen
+mastering.meters: {"correlation":0.9851091504096985,"integrated_lufs":-9.963066101074219,"loudness_range_lu":0.9500007629394531,"max_momentary_lufs":-7.9623799324035645,"max_short_term_lufs":-8.918091773986816,"mono_peak_db":-4.949747085571289,"range":[0,384000],"sample_peak_db":-4.948369026184082,"true_peak_db":-4.948369026184082}
+file.import_audio: {"imported":[{"channels":1,"clip":19,"frames":384000,"source":17,"track":18}]}
+mastering.status: {"chain":[],"chain_applied":"once, on the Master track (the export path is the main mix)","export_exclusions":["reference","monitor volume/dim/mono","cue","assistant speech"],"program":null,"reference":null,"standards":{"loudness":"ITU-R BS.1770-4 / EBU R128 (K-weighting; absolute gate −70 LUFS; relative gate −10 LU)","loudness_range":"EBU Tech 3342 (short-term 3 s, −70 abs / −20 rel, 10th–95th percentile)","provenance":"in-house implementation checked against analytic Tech 3341/3342 signals (E07); not a certification","true_peak":"4× oversampled (BS.1770-4 Annex 2)"}}
+## reference registration (track deleted) + level match + bounce
+mastering.meters: {"correlation":0.9851091504096985,"integrated_lufs":-9.963066101074219,"loudness_range_lu":0.9500007629394531,"max_momentary_lufs":-7.9623799324035645,"max_short_term_lufs":-8.918091773986816,"mono_peak_db":-4.949747085571289,"range":[0,384000],"sample_peak_db":-4.948369026184082,"true_peak_db":-4.948369026184082}
+file.import_audio: {"imported":[{"channels":1,"clip":19,"frames":384000,"source":17,"track":18}]}
+track.delete: {"deleted":1}
+mastering.reference: {"gain_db":0.0,"listening":false,"source":17}
+mastering.level_match: {"gain_db":-1.2365970611572266,"note":"audition only; apply with mastering.reference {gain_db}","program_lufs":-9.963066101074219,"reference_lufs":-8.726469039916992}
+mastering.meters: {"correlation":0.9851091504096985,"integrated_lufs":-9.963066101074219,"loudness_range_lu":0.9500007629394531,"max_momentary_lufs":-7.9623799324035645,"max_short_term_lufs":-8.918091773986816,"mono_peak_db":-4.949747085571289,"range":[0,384000],"sample_peak_db":-4.948369026184082,"true_peak_db":-4.948369026184082}
+<scratch>/r.txt:8: file.bounce_mix: bad parameters for `file.bounce_mix`: `<scratch>/out/master.wav` exists; pass overwrite: true to replace it
+## verify the export: measure it as the program in a new session (explicit range)
+file.import_audio: {"imported":[{"channels":2,"clip":3,"frames":384000,"source":1,"track":2}]}
+track.delete: {"deleted":1}
+mastering.program: {"program":1}
+mastering.meters: {"correlation":0.9851091504096985,"integrated_lufs":-9.963065147399902,"loudness_range_lu":0.9500007629394531,"max_momentary_lufs":-7.962378978729248,"max_short_term_lufs":-8.918087005615234,"mono_peak_db":-4.949747085571289,"range":[0,384000],"sample_peak_db":-4.948369026184082,"true_peak_db":-4.948369026184082}
+## operator cookbook additions (reopened song.scraft)
+engine.history: {"can_redo":false,"undo":[]}
+mix.send_level: {"send":{"follow_main_pan":true,"level_db":-18.0,"mute":false,"pan":0.0,"pre_fader":false,"surround":null,"target":{"Bus":15}}}
+mix.mute: {"value":true}
+mix.latency_report: {"latent_processors":[],"provenance":"plugin-reported latency (inserts + dedicated slots; bypassed inserts keep theirs as a plain delay); device/driver latency is Unknown until measured","sidechains":[],"strips":[{"latency_samples":0,"ms":0
+edit.undo: {"undone":true}
+engine.history: {"can_redo":true,"undo":["Send Level"]}
+engine.plugins: []
+clip.inspect: {"end":384000,"fade_in":480,"fade_out":0,"gain_db":0.0,"id":3,"length":384000,"locked":false,"muted":false,"name":"lead","offset":0,"source":1,"start":0,"start_time":"0:00.000","track":2}
+help.search: {"build":"0.5.0","query":"mix.send_level","results":[{"disabled_reason":null,"id":"mix.send_level","label":"Send Level","limits":[],"menu":[],"params":"{track?, slot, db?, pan?, follow_pan?: bool, mute?, pre_fader?}","risk":"reversible","shortcut"

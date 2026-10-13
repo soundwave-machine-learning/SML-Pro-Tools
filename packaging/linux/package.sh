@@ -71,6 +71,9 @@ mkdir -p "$STAGE/usr/share/icons"
 cp -R "$ROOT/assets/app-icon/hicolor" "$STAGE/usr/share/icons/"
 mkdir -p "$STAGE/usr/share/doc/soundcraft"
 copy_docs "$STAGE/usr/share/doc/soundcraft"
+# The user documentation of this source (manual, references, Grok guide, DOCS_MANIFEST.json).
+python3 "$ROOT/packaging/docs/build_docs.py" --bundle-dir "$STAGE/usr/share/doc/soundcraft/manual" \
+  || { echo "documentation bundle failed (needs python3; run cargo xtask docs-check)" >&2; exit 1; }
 
 if command -v desktop-file-validate >/dev/null; then
   desktop-file-validate "$STAGE/usr/share/applications/$APP_ID.desktop"

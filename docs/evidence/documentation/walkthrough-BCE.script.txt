@@ -1,0 +1,34 @@
+file.import_audio {"paths": ["<scratch>/lead.wav", "<scratch>/dbl_l.wav", "<scratch>/dbl_r.wav", "<scratch>/adlib.wav"]}
+track.rename {"track": "lead", "name": "Lead"}
+track.rename {"track": "dbl_l", "name": "Dbl L"}
+track.rename {"track": "dbl_r", "name": "Dbl R"}
+track.rename {"track": "adlib", "name": "Adlib"}
+# B: edit - fades on the lead's phrase ends, clip gain on the doubles, nudge a double 10 ms
+edit.select {"tracks": ["Lead"], "start": 0, "end": 480}
+edit.fades_create {"shape": "equal power"}
+clip.gain {"clips": [6, 9], "db": -6}
+nudge.set {"value": 10, "unit": "ms", "target": "clips"}
+nudge.info {}
+edit.select {"tracks": ["Dbl L"], "clips": [6]}
+nudge.clips {"direction": 1}
+nudge.clips {"direction": -1}
+# B: mix balance
+mix.volume {"tracks": ["Dbl L", "Dbl R"], "db": -8}
+mix.pan {"tracks": ["Dbl L"], "pan": -0.6}
+mix.pan {"tracks": ["Dbl R"], "pan": 0.6}
+mix.volume {"tracks": ["Adlib"], "db": -10}
+# C: vocal bus + FX return
+edit.select {"tracks": ["Lead", "Dbl L", "Dbl R", "Adlib"], "exact": true}
+bus.create_from_selection {"name": "Vocal Bus"}
+bus.create_fx_return {"tracks": ["Lead", "Dbl L", "Dbl R", "Adlib"], "name": "Vocal Verb"}
+bus.validate {}
+mix.signal_flow {"track": "Lead"}
+snapshot.save {"slot": "A"}
+mix.volume {"tracks": ["Adlib"], "db": -14}
+snapshot.save {"slot": "B"}
+snapshot.recall {"slot": "A"}
+engine.history {}
+# E: measure, export with report, save
+mastering.meters {}
+file.bounce_mix {"path": "<scratch>/out/mix.wav", "bit_depth": "24", "tail": "auto", "report": true}
+session.save_as {"path": "<scratch>/out/song/song.scraft"}

@@ -1,0 +1,13 @@
+mastering.meters {}
+file.import_audio {"path": "<scratch>/reference.wav"}
+track.delete {"track": "reference"}
+session.inspect {}
+mastering.reference {"source": 17}
+mastering.level_match {}
+mastering.meters {}
+file.bounce_mix {"path": "<scratch>/out/master.wav", "bit_depth": "24", "report": true}
+file.import_audio {"path": "<scratch>/out/master.wav"}
+track.delete {"track": "master"}
+session.inspect {}
+mastering.program {"source": 1}
+mastering.meters {"start": 0, "end": 384000}

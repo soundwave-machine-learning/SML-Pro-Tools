@@ -62,8 +62,21 @@ Parity is measured, not guessed: `crates/engine/catalog/menus.txt` lists the inc
 - Shell gotcha: `mv`/`cp` are aliased interactive here — use `/bin/mv -f` / `/bin/cp -f`.
 - Parallel agents: separate `CARGO_TARGET_DIR` per agent; edit only the crates you own; write manifests atomically; delete your target dir when done (disk).
 
+## User documentation stays in step with behaviour
+When a change alters what a command does, its parameters, label, menu path or default chord, a UI
+label or window, a shortcut profile, a user-visible message, a stated limit, the signal order,
+export/recovery/safety behaviour, plugin/platform/device/format compatibility, or the control
+channel, MCP or CLI, update in the same commit: the affected chapters of `docs/USER_GUIDE.md` (the
+manual, compiled into the app — keep its `## N. Title` headings), the operator guidance in
+`docs/grok/` when operators are affected, the capability table (manual §2) and known issues (§26)
+when a capability changes, and `docs/DOCS_CHANGELOG.md`. Run `cargo xtask docs` to regenerate the
+command/shortcut/capability references (never edit them by hand); `cargo xtask docs-check` (part
+of `cargo xtask ci`) must pass. Never advance `verification` in `docs/DOCS_MANIFEST.json` without
+doing that verification, and never describe planned or unobserved behaviour as working. Procedure:
+`docs/DOCS_MAINTENANCE.md`.
+
 ## Quality gates (before every commit)
-`cargo xtask ci` = fmt check, `clippy --workspace --all-targets -D warnings`, tests, assets, layers, wasm check. Commit after each arc of work that builds; one topic per commit.
+`cargo xtask ci` = fmt check, `clippy --workspace --all-targets -D warnings`, tests, assets, layers, docs check, wasm check. Commit after each arc of work that builds; one topic per commit.
 
 ## Release
 Push to the `release` branch to build signed installers for macOS (universal DMG), Windows (x64/x86 MSI + zip), Linux (AppImage, deb, rpm, tar.gz, Flatpak; riscv64 tar.gz), FreeBSD and Web (wasm zip). Version: `cargo xtask version [set X.Y.Z]`. See `docs/release-playbook.md` and craftrules `release/playbook.md`.

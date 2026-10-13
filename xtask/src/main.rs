@@ -114,6 +114,17 @@ fn assets() -> Result<(), String> {
     }
 }
 
+/// Regenerates the documentation reference from this build's registry (docs/DOCS_MAINTENANCE.md).
+fn docs() -> Result<(), String> {
+    cargo(&["run", "-q", "-p", "soundcraft-ui-egui", "--example", "doc_reference", "--", "--write", "."])
+}
+
+/// Fails on a stale generated reference, broken links/anchors, unknown command names or a
+/// version mismatch in the documentation set; reports chapters whose sources changed.
+fn docs_check() -> Result<(), String> {
+    cargo(&["run", "-q", "-p", "soundcraft-ui-egui", "--example", "doc_reference", "--", "--check", "."])
+}
+
 fn parity() -> Result<(), String> {
     cargo(&["run", "-q", "-p", "soundcraft-cli", "--", "parity", "--write", "docs/parity-checklist.md"])
 }
@@ -153,6 +164,7 @@ fn ci() -> Result<(), String> {
         ("test", Box::new(|| cargo(&["test", "--workspace"]))),
         ("assets", Box::new(assets)),
         ("layers", Box::new(layers)),
+        ("docs", Box::new(docs_check)),
         ("wasm", Box::new(wasm)),
     ];
     let mut summary = Vec::new();
@@ -177,10 +189,12 @@ fn main() -> ExitCode {
         Some("layers") => layers(),
         Some("assets") => assets(),
         Some("parity") => parity(),
+        Some("docs") => docs(),
+        Some("docs-check") => docs_check(),
         Some("wasm") => wasm(),
         Some("version") => version::run(args.get(1..).unwrap_or(&[])),
         Some("ico") => ico::run(args.get(1..).unwrap_or(&[])),
-        _ => Err("usage: cargo xtask <ci|layers|assets|parity|wasm|version>".into()),
+        _ => Err("usage: cargo xtask <ci|layers|assets|parity|docs|docs-check|wasm|version>".into()),
     };
     match r {
         Ok(()) => ExitCode::SUCCESS,

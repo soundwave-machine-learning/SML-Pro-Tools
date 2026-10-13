@@ -2,7 +2,7 @@
 # Reproducible Windows x64 portable build from Linux (mingw-w64, x86_64-pc-windows-gnu).
 #
 # Produces in $OUT (default dist/windows-gnu):
-#   soundcraft-<version>-windows-x64-gnu-portable.zip   soundcraft.exe, soundcraft-cli.exe, licences, MANIFEST.json
+#   soundcraft-<version>-windows-x64-gnu-portable.zip   soundcraft.exe, soundcraft-cli.exe, licences, docs/, MANIFEST.json
 #   soundcraft-<version>-windows-x64-gnu-portable.zip.sha256
 #   MANIFEST.json (also inside the zip)
 #
@@ -46,6 +46,8 @@ Audio backend: WASAPI (ASIO is not compiled into this build; see the project doc
 Windows SmartScreen may warn because this build is not signed.
 Source: commit $SHA
 TXT
+# The user documentation of this source (manual, references, Grok guide, DOCS_MANIFEST.json).
+python3 "$ROOT/packaging/docs/build_docs.py" --bundle-dir "$STAGE/docs" >/dev/null
 export STAGE SHA DIRTY VERSION TARGET NAME OUT
 python3 - <<'PY'
 import hashlib, json, os, subprocess, zipfile, datetime
@@ -64,6 +66,8 @@ def run(*a):
 files = {}
 for f in sorted(os.listdir(stage)):
     p = os.path.join(stage, f)
+    if os.path.isdir(p):
+        continue
     entry = {"bytes": os.path.getsize(p), "sha256": sha(p)}
     if f.endswith(".exe"):
         dump = run("x86_64-w64-mingw32-objdump", "-p", p)
@@ -81,18 +85,22 @@ manifest = {
     "audio_backends": ["WASAPI (cpal default)"],
     "not_included": ["ASIO (needs the Steinberg SDK and the MSVC toolchain; owner build)", "code signing", "installer (MSI comes from package.ps1)", "language model (none ships)"],
     "verification": "cross-built on Linux; NOT executed on Windows by this build (W pending)",
+    "documentation": (lambda d: {"folder": "docs/", "product_version": d.get("product_version"), "docs_revision": d.get("docs_revision"), "verified_source_sha": d.get("verification", {}).get("source_sha"), "sha256sums": sha(os.path.join(stage, "docs", "SHA256SUMS"))})(json.load(open(os.path.join(stage, "docs", "DOCS_MANIFEST.json")))),
     "files": files,
 }
 with open(os.path.join(stage, "MANIFEST.json"), "w") as f:
     json.dump(manifest, f, indent=2)
 zpath = os.path.join(out, name + ".zip")
 with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-    for f in sorted(os.listdir(stage)):
-        info = zipfile.ZipInfo(name + "/" + f, date_time=(2026, 1, 1, 0, 0, 0))
-        info.compress_type = zipfile.ZIP_DEFLATED
-        info.external_attr = 0o644 << 16
-        with open(os.path.join(stage, f), "rb") as src:
-            z.writestr(info, src.read())
+    for dp, dns, fs in os.walk(stage):
+        dns.sort()
+        for f in sorted(fs):
+            full = os.path.join(dp, f)
+            info = zipfile.ZipInfo(name + "/" + os.path.relpath(full, stage).replace(os.sep, "/"), date_time=(2026, 1, 1, 0, 0, 0))
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.external_attr = 0o644 << 16
+            with open(full, "rb") as src:
+                z.writestr(info, src.read())
 with open(zpath + ".sha256", "w") as f:
     f.write(f"{sha(zpath)}  {name}.zip\n")
 with open(os.path.join(out, "MANIFEST.json"), "w") as f:

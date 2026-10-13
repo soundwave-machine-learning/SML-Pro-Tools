@@ -6,7 +6,7 @@ input), and every command is reachable from:
 
 | Surface | How |
 |---|---|
-| Desktop app control channel | `soundcraft --control <port>` (`0` = pick a free port; printed as `SOUNDCRAFT_CONTROL_PORT=…`) |
+| Desktop app control channel | `soundcraft --control <port>` or env `SOUNDCRAFT_CONTROL_PORT` (`0` = pick a free port, printed as `SOUNDCRAFT_CONTROL_PORT=…` on stdout; a Windows release build has no visible console, so use a fixed port there) |
 | CLI against a running app | `soundcraft-cli app --port <port> <method or command id> [JSON]` |
 | Headless CLI | `soundcraft-cli run --demo --cmd 'mix.volume={"track":"Kick","db":-6}' --bounce out.wav` |
 | MCP (headless) | `soundcraft-cli mcp [--demo]` |
@@ -35,12 +35,18 @@ Newline-delimited JSON over TCP on `127.0.0.1`. One request per line, one reply 
 
 Errors: `{"id": 1, "ok": false, "error": "bad parameters for `mix.volume`: no track named `Nope`"}`.
 
+**Security and limits.** The channel binds `127.0.0.1` only and has **no authentication**: any
+process on the machine can drive the app while it is enabled, so enable it only when needed. A
+reply that takes longer than 90 s returns `{"ok": false, "error": "timeout"}`; a malformed line
+returns `"bad JSON: …"`. `id` is echoed; `command` is an alias of `engine.execute` and
+`document.inspect` of `session.inspect`.
+
 ## Methods
 
 | Method | Params | What it does |
 |---|---|---|
-| `engine.execute` (alias `command`) | `{command, params}` | Run a command programmatically. **Never opens a dialog**; empty params use defaults or the current selection. |
-| `engine.commands` | `{filter?}` | Every command: id, label, menu path, shortcut, params doc, enabled + reason. Includes UI-layer commands (`window.*`). |
+| `engine.execute` (alias `command`) | `{command, params}` | Run a command programmatically. Never opens a dialog — except `ui.theme_import`, `ui.theme_export`, `ui.shortcuts_import` and `ui.shortcuts_export` called without `path`/`text`, which open a native file picker. Empty params use defaults or the current selection. No confirmation: `session.new/open/close` discard unsaved changes. |
+| `engine.commands` | `{filter?}` | Every command: id, label, menu path, shortcut, params doc, enabled + reason. Includes UI-layer commands (`window.*`); those rows ignore `filter` and always report enabled with params `{}`. Undo/risk metadata: `help.search`. |
 | `engine.parity` | `{}` | Parity report against the incumbent's menu catalog. |
 | `session.inspect` | `{detail?: "summary"|"full"}` | The document: tracks, clips (with times), inserts (+params when full), sends, routing, automation, markers, groups, busses, sources (`loaded` true when decoded audio is in the pool), selection, transport, undo label. |
 | `ui.inspect` | `{}` | UI state (`window`, panels, dialogs), window size, playing/position, audio device, and `edit_layout` (timeline rect and every track row's rect, for clicking). |
@@ -67,12 +73,17 @@ Errors: `{"id": 1, "ok": false, "error": "bad parameters for `mix.volume`: no tr
 ## Examples
 
 ```sh
-P=$(soundcraft --demo --control 0 | sed -n 's/SOUNDCRAFT_CONTROL_PORT=//p')   # or read stderr
-soundcraft-cli app --port $P mix.solo '{"track":"Bass"}'
+soundcraft --demo --control 7979 &        # a fixed port; with 0, read the port from the app's stdout or log
+P=7979
+soundcraft-cli app --port $P mix.solo '{"tracks":["Bass"]}'
 soundcraft-cli app --port $P transport.play
 soundcraft-cli app --port $P ui.screenshot '{"path":"/tmp/shot.png"}'
 soundcraft-cli app --port $P ui.menu.invoke '{"path":"Track > New..."}'
 ```
+
+`soundcraft-cli app` wraps a bare command id in `engine.execute`, except ids that begin with `ui.`,
+`engine.`, `session.` or `app.`, which are sent as methods; send those commands explicitly:
+`soundcraft-cli app --port $P engine.execute '{"command":"session.save","params":{"path":"/tmp/x.scraft"}}'`.
 
 Offscreen (no window): `cargo run -p soundcraft-ui-egui --example ui_shot -- out.png script.jsonl`,
 where each script line is a request (`{"method": …, "params": …}`), `{"shot": "path.png"}` or
