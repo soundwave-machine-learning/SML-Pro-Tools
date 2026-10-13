@@ -273,23 +273,60 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                             .selected_text(format.to_uppercase())
                             .show_ui(ui, |ui| {
                                 for f in ["wav", "aiff", "flac"] {
-                                    ui.selectable_value(format, f.to_string(), f.to_uppercase());
+                                    if ui.selectable_value(format, f.to_string(), f.to_uppercase()).clicked() && !["16", "24", "32f"].contains(&bit_depth.as_str()) {
+                                        *bit_depth = "24".into();
+                                    }
+                                }
+                                // HF20: MP3 / AAC through the encoders built into Windows; listed
+                                // but unavailable (with the reason) elsewhere.
+                                for codec in [soundcraft_mf_encode::Codec::Mp3, soundcraft_mf_encode::Codec::Aac] {
+                                    let f = codec.extension();
+                                    let r = ui
+                                        .add_enabled(soundcraft_mf_encode::available(), egui::Button::selectable(format == f, format!("{} ({})", f.to_uppercase(), codec.label())))
+                                        .on_disabled_hover_text("Uses the encoder built into Windows (Media Foundation): not available on this platform");
+                                    if r.clicked() {
+                                        *format = f.to_string();
+                                        *bit_depth = codec.default_bitrate().to_string();
+                                    }
                                 }
                             })
                             .response
                             .labelled_by(l.id);
                         ui.add_space(crate::theme::metric::GROUP_GAP);
-                        let l = ui.label("Bit Depth");
-                        egui::ComboBox::from_id_salt("bounce_bit_depth")
-                            .selected_text(format!("{bit_depth}-bit"))
-                            .show_ui(ui, |ui| {
-                                for b in ["16", "24", "32f"] {
-                                    ui.selectable_value(bit_depth, b.to_string(), format!("{b}-bit"));
-                                }
-                            })
-                            .response
-                            .labelled_by(l.id);
+                        match soundcraft_mf_encode::Codec::for_name(format) {
+                            Some(codec) => {
+                                let l = ui.label("Bit Rate");
+                                egui::ComboBox::from_id_salt("bounce_bitrate")
+                                    .selected_text(format!("{bit_depth} kbps CBR"))
+                                    .show_ui(ui, |ui| {
+                                        for b in codec.bitrates() {
+                                            ui.selectable_value(bit_depth, b.to_string(), format!("{b} kbps"));
+                                        }
+                                    })
+                                    .response
+                                    .labelled_by(l.id);
+                            }
+                            None => {
+                                let l = ui.label("Bit Depth");
+                                egui::ComboBox::from_id_salt("bounce_bit_depth")
+                                    .selected_text(format!("{bit_depth}-bit"))
+                                    .show_ui(ui, |ui| {
+                                        for b in ["16", "24", "32f"] {
+                                            ui.selectable_value(bit_depth, b.to_string(), format!("{b}-bit"));
+                                        }
+                                    })
+                                    .response
+                                    .labelled_by(l.id);
+                            }
+                        }
                     });
+                    if soundcraft_mf_encode::Codec::for_name(format).is_some() {
+                        ui.label(
+                            egui::RichText::new("Lossy: peaks and loudness change in encoding; the result is decoded and measured, and the file is kept only if it checks out. Multichannel mixes are folded to stereo. No loudness target or limiter is applied.")
+                                .small()
+                                .color(Tokens::current().text_dim),
+                        );
+                    }
                     ui.checkbox(normalize, "Normalize to -0.1 dBFS");
                     ui.label(
                         egui::RichText::new("Bounces the edit selection, or the whole session when nothing is selected.")
@@ -300,7 +337,10 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                         let p = std::path::Path::new(path.as_str()).with_extension(if format == "aiff" { "aif" } else { format.as_str() });
                         action = Some((
                             "file.bounce_mix".into(),
-                            json!({"path": p.to_string_lossy(), "format": format, "bit_depth": bit_depth, "normalize": normalize}),
+                            match soundcraft_mf_encode::Codec::for_name(format) {
+                                Some(_) => json!({"path": p.to_string_lossy(), "format": format, "bitrate": bit_depth.parse::<u32>().unwrap_or(320), "fold_down": "stereo", "normalize": normalize}),
+                                None => json!({"path": p.to_string_lossy(), "format": format, "bit_depth": bit_depth, "normalize": normalize}),
+                            },
                         ));
                     }
                 }

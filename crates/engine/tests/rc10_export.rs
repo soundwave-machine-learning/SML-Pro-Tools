@@ -86,3 +86,41 @@ fn exports_match_the_intended_graph_and_format() {
     let (_, plain16, _) = bounce(&mut engine(None, None, 0.0), "nodith.wav", json!({"bit_depth": "16", "dither": false}));
     assert_eq!(peak(&plain16), 0.0);
 }
+
+/// HF20: compressed export requests through the command. Settings the Windows encoders do not
+/// take, VBR and loudness/limit options are refused before anything is written; off Windows the
+/// encoder is unavailable and nothing (final or temporary) is left behind. WAV/AIFF/FLAC are
+/// covered by the tests above.
+#[test]
+fn hf20_compressed_export_requests() {
+    let mut e = soundcraft_engine::demo::demo_engine();
+    let dir = std::env::temp_dir().join(format!("sml-hf20-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let mp3 = dir.join("mix.mp3");
+    let m4a = dir.join("mix.m4a");
+    let p = |x: &std::path::Path| x.to_string_lossy().to_string();
+    for (params, why) in [
+        (serde_json::json!({"path": p(&mp3), "end": 48_000, "bitrate": 96}), "kbps"),
+        (serde_json::json!({"path": p(&m4a), "end": 48_000, "bitrate": 320}), "kbps"),
+        (serde_json::json!({"path": p(&mp3), "end": 48_000, "mode": "vbr"}), "VBR"),
+        (serde_json::json!({"path": p(&mp3), "end": 48_000, "loudness_target": -14}), "loudness"),
+        (serde_json::json!({"path": p(&mp3), "end": 48_000, "rate": 96_000}), "Hz"),
+        (serde_json::json!({"path": p(&dir.join("mix.wav")), "format": "mp3", "end": 48_000}), ".mp3"),
+    ] {
+        let err = e.execute("file.bounce_mix", &params).unwrap_err().to_string();
+        assert!(err.contains(why), "{params}: {err}");
+    }
+    let r = e.execute("file.bounce_mix", &serde_json::json!({"path": p(&mp3), "end": 48_000, "bitrate": 320}));
+    if soundcraft_mf_encode::available() {
+        let v = r.unwrap();
+        assert!(v["verified"]["decoded_frames"].as_u64().unwrap() > 40_000);
+    } else {
+        assert!(r.unwrap_err().to_string().contains("not available on this platform"));
+    }
+    let left: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|d| d.file_name()).collect();
+    if !soundcraft_mf_encode::available() {
+        assert!(left.is_empty(), "nothing written: {left:?}");
+    }
+    let _ = std::fs::remove_dir_all(&dir);
+}

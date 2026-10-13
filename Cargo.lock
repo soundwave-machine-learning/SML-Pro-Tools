@@ -3651,6 +3651,7 @@ dependencies = [
  "soundcraft-audio-io",
  "soundcraft-clap-host",
  "soundcraft-dsp",
+ "soundcraft-mf-encode",
  "soundcraft-midi",
  "soundcraft-mix",
  "soundcraft-model",
@@ -3659,6 +3660,13 @@ dependencies = [
  "soundcraft-video",
  "soundcraft-vst3-host",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "soundcraft-mf-encode"
+version = "0.5.0"
+dependencies = [
+ "windows 0.54.0",
 ]
 
 [[package]]
@@ -3768,6 +3776,7 @@ dependencies = [
  "soundcraft-clap-host",
  "soundcraft-dsp",
  "soundcraft-engine",
+ "soundcraft-mf-encode",
  "soundcraft-midi",
  "soundcraft-mix",
  "soundcraft-model",

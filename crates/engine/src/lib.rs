@@ -17,6 +17,7 @@ pub mod edit;
 pub mod envelope;
 pub mod inspect;
 pub mod io;
+pub mod lossy;
 pub mod score;
 pub mod warp;
 

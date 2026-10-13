@@ -281,6 +281,21 @@ pub fn bounce_bytes_checked(
     fold_stereo: bool,
     guard: &BounceGuard,
 ) -> Result<(Vec<u8>, ExportStats)> {
+    let (buf, stats, fmt) = render_export(e, r, normalize, fold_stereo, guard)?;
+    let bytes = soundcraft_audio_io::encode_with_channel_mask(&buf, opts, fmt.channel_mask()).map_err(|err| EngineError::Io(err.to_string()))?;
+    Ok((bytes, stats))
+}
+
+/// The rendered export (main mix or program, guarded, normalised and rate-converted as asked)
+/// before any encoding, with its measured facts and channel format. Shared by every format, so a
+/// format change never changes the mix (HF20).
+pub fn render_export(
+    e: &Engine,
+    r: Range,
+    normalize: bool,
+    fold_stereo: bool,
+    guard: &BounceGuard,
+) -> Result<(AudioBuffer, ExportStats, ChannelFormat)> {
     let s = e.session();
     if r.len() > s.sample_rate.samples(4.0 * 3600.0) {
         return Err(EngineError::BadParams("file.bounce_mix".into(), "bounces are limited to 4 hours".into()));
@@ -317,8 +332,7 @@ pub fn bounce_bytes_checked(
         tail_samples: report.tail_samples,
     };
     let buf = AudioBuffer { sample_rate: rate, channels: ch };
-    let bytes = soundcraft_audio_io::encode_with_channel_mask(&buf, opts, fmt.channel_mask()).map_err(|err| EngineError::Io(err.to_string()))?;
-    Ok((bytes, stats))
+    Ok((buf, stats, fmt))
 }
 
 /// Decodes an export back and checks it against what was intended (R34 file verification).

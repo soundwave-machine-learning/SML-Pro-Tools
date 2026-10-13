@@ -77,7 +77,7 @@ pub fn specs() -> Vec<CommandSpec> {
                 crate::io::import_video_bytes(e, &path, bytes, at)
             }
         ),
-        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, rate?: Hz, metadata?: {description, originator}, report?: true|path, overwrite?: false, acknowledge_missing?: false} — refuses an existing file, a missing or failed plugin unless acknowledged; adds no limiter/normaliser/dither of its own", always, bounce),
+        cmd!(noundo "file.bounce_mix", "Bounce Mix...", ["File"], Some("Cmd+Alt+B"), "{path, format?: wav|aiff|flac|mp3|m4a, bit_depth?: 16|24|32f, bitrate?: kbps (mp3 128-320, m4a 96-192; Windows encoders only, CBR), start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, rate?: Hz, metadata?: {description, originator}, report?: true|path, overwrite?: false, acknowledge_missing?: false} — refuses an existing file, a missing or failed plugin unless acknowledged; adds no limiter/normaliser/dither of its own", always, bounce),
         cmd!(noundo "file.bounce_stems", "Bounce Stems...", [], None, "{dir, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, fold_down?: stereo}", has_tracks, |e, p| {
             let dir = str_param(p, "dir").ok_or_else(|| bad("file.bounce_stems", "`dir` required"))?.to_string();
             missing_plugin_guard(e, "file.bounce_stems", p)?;
@@ -273,6 +273,9 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
     let r = if r.is_empty() { soundcraft_time::Range::new(0, e.session().content_end().max(1)) } else { r };
     let ext = std::path::Path::new(&path).extension().and_then(|x| x.to_str()).unwrap_or("wav").to_ascii_lowercase();
     let format_name = str_param(p, "format").unwrap_or(ext.as_str());
+    if let Some(codec) = soundcraft_mf_encode::Codec::for_name(format_name) {
+        return bounce_lossy(e, p, &path, r, codec);
+    }
     let format = soundcraft_audio_io::encode_format_for(format_name).ok_or_else(|| {
         bad("file.bounce_mix", format!("cannot write `{format_name}` files (supported: {})", soundcraft_audio_io::ENCODE_EXTENSIONS))
     })?;
@@ -330,6 +333,64 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
         });
         std::fs::write(&rpath, serde_json::to_string_pretty(&report).unwrap_or_default())
             .map_err(|err| EngineError::Io(format!("{rpath}: {err}")))?;
+        out["report"] = json!(rpath);
+    }
+    Ok(out)
+}
+
+/// HF20: MP3 / AAC (M4A) export of the same render as WAV/AIFF/FLAC, through the encoders built
+/// into Windows, published only after the decoded file checks out.
+fn bounce_lossy(e: &mut Engine, p: &Value, path: &str, r: soundcraft_time::Range, codec: soundcraft_mf_encode::Codec) -> Result<Value> {
+    let want_ext = codec.extension();
+    let ext = std::path::Path::new(path).extension().and_then(|x| x.to_str()).unwrap_or("").to_ascii_lowercase();
+    if ext != want_ext && !(codec == soundcraft_mf_encode::Codec::Aac && ext == "mp4") {
+        return Err(bad("file.bounce_mix", format!("{} files end in .{want_ext}; the path ends in .{ext}", codec.label())));
+    }
+    if str_param(p, "mode").is_some_and(|m| !m.eq_ignore_ascii_case("cbr")) {
+        return Err(bad("file.bounce_mix", "only constant bit rate (mode: cbr) is available: the Windows encoders have no VBR mode"));
+    }
+    if p.get("loudness_target").is_some() || p.get("limit").is_some() || p.get("true_peak_limit").is_some() {
+        return Err(bad(
+            "file.bounce_mix",
+            "loudness targets and limiting are not available in this build (nothing is changed on export; use a limiter plugin on the Master)",
+        ));
+    }
+    let kbps = p.get("bitrate").and_then(Value::as_u64).map_or(codec.default_bitrate(), |b| b as u32);
+    let normalize = bool_or(p, "normalize", false);
+    let fold = fold_down_param(p, "file.bounce_mix")?;
+    let guard = bounce_guard(e, "file.bounce_mix", p)?;
+    if std::path::Path::new(path).exists() && !bool_or(p, "overwrite", false) {
+        return Err(bad("file.bounce_mix", format!("`{path}` exists; pass overwrite: true to replace it")));
+    }
+    let (buf, stats, _) = crate::io::render_export(e, r, normalize, fold, &guard)?;
+    soundcraft_mf_encode::check(codec, buf.sample_rate, buf.channels.len(), kbps).map_err(|why| bad("file.bounce_mix", why))?;
+    let meta = p.get("metadata").and_then(Value::as_object);
+    let req = crate::lossy::LossyRequest {
+        codec,
+        kbps,
+        dither: bool_or(p, "dither", true),
+        title: meta.and_then(|m| m.get("title")).and_then(Value::as_str).map(str::to_string).or_else(|| Some(e.session().name.clone())),
+        artist: meta.and_then(|m| m.get("originator")).and_then(Value::as_str).map(str::to_string),
+        comment: meta.and_then(|m| m.get("description")).and_then(Value::as_str).map(str::to_string),
+    };
+    let cancel = std::sync::atomic::AtomicBool::new(false);
+    let verified = crate::lossy::write(std::path::Path::new(path), &buf, &req, &cancel)
+        .map_err(|why| EngineError::Io(format!("{path}: {why}; nothing was written")))?;
+    let master_muted = e.session().tracks.iter().any(|t| t.kind == soundcraft_model::TrackKind::Master && !t.inactive && t.mixer.mute);
+    let bytes = std::fs::metadata(path).map(|m| m.len()).unwrap_or(0);
+    let mut out = json!({
+        "path": path, "bytes": bytes, "codec": codec.label(), "bitrate_kbps": kbps, "mode": "cbr",
+        "seconds": e.session().sample_rate.seconds(r.len()), "rate": stats.rate, "channels": stats.channels,
+        "before_encoding": {"peak_db": stats.peak_db, "true_peak_db": stats.true_peak_db, "lufs": stats.integrated_lufs},
+        "verified": verified, "master_muted": master_muted,
+        "note": "lossy coding changes peaks and loudness: the verified values are measured on the decoded file; nothing was normalised or limited beyond the settings above",
+    });
+    if master_muted {
+        out["warning"] = json!("the Master track is muted: the exported program is silent (unmute Master and export again)");
+    }
+    if let Some(rp) = p.get("report").filter(|v| v.as_bool().unwrap_or(v.is_string())) {
+        let rpath = rp.as_str().map(str::to_string).unwrap_or_else(|| format!("{path}.report.json"));
+        std::fs::write(&rpath, serde_json::to_string_pretty(&out).unwrap_or_default()).map_err(|err| EngineError::Io(format!("{rpath}: {err}")))?;
         out["report"] = json!(rpath);
     }
     Ok(out)

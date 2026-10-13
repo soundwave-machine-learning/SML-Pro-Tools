@@ -1,0 +1,24 @@
+[package]
+name = "soundcraft-mf-encode"
+description = "SoundCraft compressed export: MP3 (CBR) and AAC-LC in M4A through the encoders built into Windows (Media Foundation). An isolated unsafe FFI crate; Windows only, a safe stub elsewhere"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+
+# The `windows` release cpal 0.16 already uses (no new crate in the dependency tree).
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.54.0", features = ["Win32_Media_MediaFoundation", "Win32_Foundation", "Win32_System_Com"] }
+
+# An isolated unsafe helper crate (craftrules never-crash), like soundcraft-vst3-host: this crate
+# opts out of the workspace `unsafe_code = "forbid"` for itself only. It denies unsafe everywhere
+# and allows it solely on the FFI module (`src/ffi.rs`). The rest mirrors `[workspace.lints]`.
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+too_many_arguments = "allow"
+type_complexity = "allow"
