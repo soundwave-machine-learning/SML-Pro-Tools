@@ -27,6 +27,7 @@ const LAYERS: &[(&str, u8)] = &[
     ("clap-host", 1),
     ("vst3-host", 1),
     ("au-host", 1),
+    ("wasapi-native", 1),
     ("model", 2),
     ("mix", 3),
     ("engine", 4),

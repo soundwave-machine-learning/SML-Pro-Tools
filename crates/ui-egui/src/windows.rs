@@ -993,9 +993,31 @@ fn latency_ledger(app: &mut SoundApp, ui: &mut egui::Ui) {
             r.config.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames"))
         }));
         ui.end_row();
-        ui.label("Driver input/output latency");
-        ui.label("Unknown (not reported by this backend; not assumed zero)");
-        ui.end_row();
+        // HF07: the native WASAPI modes report the output stream latency; otherwise both are unknown.
+        let native = app
+            .player
+            .as_ref()
+            .and_then(|p| p.negotiated.as_ref())
+            .and_then(|n| n.driver_latency_frames.map(|l| (l, n.sample_rate, n.sample_format.clone())));
+        match native {
+            Some((l, r, fmt)) => {
+                ui.label("Driver output latency");
+                ui.label(format!(
+                    "{l} frames = {:.3} ms (reported by the driver, GetStreamLatency){}",
+                    soundcraft_playback::device::buffer_ms(l, r),
+                    fmt.map(|f| format!("; device format {f}")).unwrap_or_default()
+                ));
+                ui.end_row();
+                ui.label("Driver input latency");
+                ui.label("Unknown (not reported by the input backend; not assumed zero)");
+                ui.end_row();
+            }
+            None => {
+                ui.label("Driver input/output latency");
+                ui.label("Unknown (not reported by this backend; not assumed zero)");
+                ui.end_row();
+            }
+        }
         let s = app.engine.session();
         let worst = soundcraft_mix::strip_latencies(s).into_iter().map(|(_, l)| l).max().unwrap_or(0);
         let sandboxed = s.tracks.iter().flat_map(|t| t.mixer.inserts.iter().flatten()).filter(|i| i.plugin.starts_with("sandbox:")).count();

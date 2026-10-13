@@ -75,6 +75,12 @@ pub struct NegotiatedConfig {
     /// Why the requested buffer was not applied as asked, shown beside the delivered size.
     #[serde(default)]
     pub buffer_note: Option<String>,
+    /// Native WASAPI modes: the stream latency the driver reports (`GetStreamLatency`), frames.
+    #[serde(default)]
+    pub driver_latency_frames: Option<u32>,
+    /// Native WASAPI modes: the device sample format used ("32-bit float", "24-bit integer"…).
+    #[serde(default)]
+    pub sample_format: Option<String>,
 }
 
 /// How a host honours a requested buffer size (HF07).
@@ -88,7 +94,8 @@ pub enum BufferControl {
     EnginePeriod,
 }
 
-/// How `host` honours buffer requests in this build.
+/// How `host` honours buffer requests in this build. Only plain WASAPI (cpal's shared mode) has
+/// its period set by Windows; the native exclusive and low-latency modes take a requested period.
 pub fn buffer_control(host: &str) -> BufferControl {
     if host.eq_ignore_ascii_case("WASAPI") { BufferControl::EnginePeriod } else { BufferControl::Settable }
 }
@@ -108,21 +115,31 @@ pub struct DriverType {
 
 /// The ASIO build requirement, stated once.
 pub const ASIO_BLOCKER: &str = "ASIO is not in this build. It needs Steinberg's ASIO SDK, used under a licence the owner must accept (Steinberg's own licence or GPLv3), plus the MSVC toolchain and LLVM at build time; this candidate is cross-built with the GNU toolchain. The interface's ASIO driver is what delivers 64/128-frame buffers.";
-/// Why WASAPI exclusive mode is not offered.
-pub const WASAPI_EXCLUSIVE_BLOCKER: &str = "WASAPI exclusive mode is not available: the audio library this build uses (cpal 0.16) opens WASAPI in shared mode only. Exclusive mode needs a separate Windows audio backend (not written yet).";
+/// What WASAPI exclusive mode means for the user (HF07: native backend, `soundcraft-wasapi-native`).
+pub const WASAPI_EXCLUSIVE_NOTE: &str = "SML Studio owns the device: other programs cannot play through it while it is open. The buffer is the size you choose, aligned to what the driver accepts. Output only; recording stays on the shared input.";
+/// What WASAPI low-latency shared mode means for the user.
+pub const WASAPI_LOW_LATENCY_NOTE: &str = "Shared with other programs, at a smaller period when the driver offers one (IAudioClient3). Runs at the device's own rate and channel count; the buffer is rounded to the driver's period step.";
 
 /// The driver types to offer: every host compiled into this build (`compiled`), plus, on
 /// Windows, the ones this build cannot use with the reason (pure, for tests).
 pub fn driver_types_for(compiled: &[String], windows: bool) -> Vec<DriverType> {
+    let mut compiled = compiled.to_vec();
+    if windows && compiled.iter().any(|h| h.eq_ignore_ascii_case("WASAPI")) {
+        // HF07: the native modes are compiled into every Windows build.
+        compiled.push(crate::wasapi_native::EXCLUSIVE_HOST.to_string());
+        compiled.push(crate::wasapi_native::LOW_LATENCY_HOST.to_string());
+    }
     let mut out: Vec<DriverType> = compiled
         .iter()
         .map(|h| {
             let buffer = buffer_control(h);
             let (mode, note) = match h.to_ascii_uppercase().as_str() {
                 "WASAPI" => (
-                    "Windows audio, shared mode",
-                    "Windows mixes this app with others and sets the buffer itself (its engine period, usually 10 ms = 480 frames at 48 kHz); a smaller buffer cannot be requested.",
+                    "Windows audio, shared mode (standard)",
+                    "Windows mixes this app with others. In this mode the buffer is the Windows audio engine's period (often 10 ms = 480 frames at 48 kHz on this backend); a size cannot be requested here. For a smaller buffer choose WASAPI Low Latency or WASAPI Exclusive.",
                 ),
+                "WASAPI EXCLUSIVE" => ("Windows audio, exclusive mode", WASAPI_EXCLUSIVE_NOTE),
+                "WASAPI LOW LATENCY" => ("Windows audio, low-latency shared mode", WASAPI_LOW_LATENCY_NOTE),
                 "ASIO" => ("manufacturer's ASIO driver", "The driver sets the buffer; its control panel is opened from the driver's own utility."),
                 "COREAUDIO" => ("macOS Core Audio", ""),
                 "ALSA" => ("Linux ALSA", ""),
@@ -132,22 +149,13 @@ pub fn driver_types_for(compiled: &[String], windows: bool) -> Vec<DriverType> {
             DriverType { name: h.clone(), mode: mode.into(), available: true, buffer, note: note.into() }
         })
         .collect();
-    if windows {
-        if !compiled.iter().any(|h| h.eq_ignore_ascii_case("ASIO")) {
-            out.push(DriverType {
-                name: "ASIO".into(),
-                mode: "manufacturer's ASIO driver".into(),
-                available: false,
-                buffer: BufferControl::Settable,
-                note: ASIO_BLOCKER.into(),
-            });
-        }
+    if windows && !compiled.iter().any(|h| h.eq_ignore_ascii_case("ASIO")) {
         out.push(DriverType {
-            name: "WASAPI Exclusive".into(),
-            mode: "Windows audio, exclusive mode".into(),
+            name: "ASIO".into(),
+            mode: "manufacturer's ASIO driver".into(),
             available: false,
             buffer: BufferControl::Settable,
-            note: WASAPI_EXCLUSIVE_BLOCKER.into(),
+            note: ASIO_BLOCKER.into(),
         });
     }
     out
@@ -232,7 +240,7 @@ pub fn negotiate(req: &DeviceRequest, devices: &[DeviceCaps]) -> Result<Negotiat
         (Some(fr), BufferControl::EnginePeriod) => (
             None,
             Some(format!(
-                "{} shared mode cannot use the requested {fr} frames: Windows sets the buffer (usually 10 ms). For small buffers use the interface's ASIO driver.",
+                "{} shared mode cannot use the requested {fr} frames: the Windows audio engine sets the buffer in this mode. Choose WASAPI Low Latency or WASAPI Exclusive for a smaller buffer.",
                 dev.host
             )),
         ),
@@ -248,6 +256,8 @@ pub fn negotiate(req: &DeviceRequest, devices: &[DeviceCaps]) -> Result<Negotiat
         clock_lock: ClockLock::Unknown,
         applied_buffer,
         buffer_note,
+        driver_latency_frames: None,
+        sample_format: None,
     })
 }
 
@@ -302,10 +312,53 @@ pub fn enumerate(dir: Direction) -> Vec<DeviceCaps> {
                     float: c.sample_format() == cpal::SampleFormat::F32,
                 })
                 .collect();
+            #[cfg(windows)]
+            let native_name = (dir == Direction::Output && id.name().eq_ignore_ascii_case("WASAPI")).then(|| name.clone());
             out.push(DeviceCaps { host: id.name().to_string(), is_default: default.as_deref() == Some(name.as_str()), name, configs });
+            #[cfg(windows)]
+            if let Some(n) = native_name {
+                out.extend(native_caps(&n));
+            }
         }
     }
     out
+}
+
+/// HF07: the native WASAPI modes of one output device, as the driver reports them: exclusive mode
+/// at each common rate the device accepts, low-latency shared mode at the device's mix rate.
+#[cfg(windows)]
+fn native_caps(name: &str) -> Vec<DeviceCaps> {
+    use crate::wasapi_native::{self as wn, Mode};
+    let mut v = Vec::new();
+    let excl: Vec<ConfigRange> = [44_100u32, 48_000, 88_200, 96_000]
+        .iter()
+        .filter_map(|r| wn::caps(name, Mode::Exclusive, *r).ok())
+        .map(|c| ConfigRange {
+            channels: c.channels,
+            min_rate: c.rate,
+            max_rate: c.rate,
+            buffer: BufferRange::Range { min: c.min_frames, max: c.max_frames },
+            float: true,
+        })
+        .collect();
+    if !excl.is_empty() {
+        v.push(DeviceCaps { host: wn::EXCLUSIVE_HOST.into(), name: name.into(), is_default: false, configs: excl });
+    }
+    if let Ok(c) = wn::caps(name, Mode::LowLatencyShared, 48_000) {
+        v.push(DeviceCaps {
+            host: wn::LOW_LATENCY_HOST.into(),
+            name: name.into(),
+            is_default: false,
+            configs: vec![ConfigRange {
+                channels: c.channels,
+                min_rate: c.rate,
+                max_rate: c.rate,
+                buffer: BufferRange::Range { min: c.min_frames, max: c.max_frames },
+                float: true,
+            }],
+        });
+    }
+    v
 }
 
 /// Opens the negotiated cpal device (by host and exact name). Errors instead of substituting
@@ -426,7 +479,9 @@ mod tests {
     fn wasapi_shared_never_silently_accepts_a_fixed_buffer() {
         let c = negotiate(&req(Some("WASAPI"), Some("Speakers"), 48_000, Some(128)), &iface()).unwrap();
         assert_eq!((c.requested_buffer, c.applied_buffer), (Some(128), None));
-        assert!(c.buffer_note.as_deref().is_some_and(|n| n.contains("128 frames") && n.contains("ASIO")), "{c:?}");
+        // Hotfix 03: the note points to the native low-latency modes (it pointed to ASIO before
+        // they existed).
+        assert!(c.buffer_note.as_deref().is_some_and(|n| n.contains("128 frames") && n.contains("WASAPI Low Latency")), "{c:?}");
         assert_eq!(stream_config(&c).buffer_size, cpal::BufferSize::Default);
         let a = negotiate(&req(Some("ASIO"), Some("Studio Interface"), 48_000, Some(64)), &iface()).unwrap();
         assert_eq!((a.applied_buffer, a.buffer_note.as_deref()), (Some(64), None));
@@ -437,15 +492,18 @@ mod tests {
         assert!((buffer_ms(64, 48_000) - 1.333).abs() < 0.001 && (buffer_ms(128, 48_000) - 2.667).abs() < 0.001);
     }
 
-    /// Driver types: compiled hosts are offered; on Windows ASIO (when not compiled) and WASAPI
-    /// exclusive are listed as unavailable with the exact reason, never as working choices.
+    /// Driver types: compiled hosts are offered; on Windows the native WASAPI Exclusive and Low
+    /// Latency modes (HF07, Hotfix 03) are available with settable buffers, and ASIO (when not
+    /// compiled) is listed as unavailable with the exact reason, never as a working choice.
     #[test]
     fn driver_types_state_what_this_build_can_use() {
         let w = driver_types_for(&["WASAPI".to_string()], true);
         let names: Vec<(&str, bool)> = w.iter().map(|d| (d.name.as_str(), d.available)).collect();
-        assert_eq!(names, [("WASAPI", true), ("ASIO", false), ("WASAPI Exclusive", false)]);
+        assert_eq!(names, [("WASAPI", true), ("WASAPI Exclusive", true), ("WASAPI Low Latency", true), ("ASIO", false)]);
         assert_eq!(w[0].buffer, BufferControl::EnginePeriod);
-        assert!(w[1].note.contains("Steinberg") && w[2].note.contains("shared mode only"));
+        assert_eq!((w[1].buffer, w[2].buffer), (BufferControl::Settable, BufferControl::Settable));
+        assert!(w[3].note.contains("Steinberg") && w[1].note.contains("other programs cannot play"));
+        assert!(!w[0].note.contains("usually 10 ms"), "no universal claim about Windows' shared period");
         let with_asio = driver_types_for(&["ASIO".to_string(), "WASAPI".to_string()], true);
         assert!(with_asio.iter().any(|d| d.name == "ASIO" && d.available && d.buffer == BufferControl::Settable));
         assert_eq!(driver_types_for(&["ALSA".to_string()], false).len(), 1);

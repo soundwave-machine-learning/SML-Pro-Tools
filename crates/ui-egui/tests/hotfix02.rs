@@ -57,7 +57,9 @@ fn hf07_audio_setup_shows_driver_type_and_buffer_meaning() {
     h.get_by_label("Buffer duration is one callback's length, not the total or round-trip monitoring latency.");
     let types = soundcraft_playback::device::driver_types();
     if cfg!(windows) {
-        assert!(types.iter().any(|d| d.name == "WASAPI Exclusive" && !d.available));
+        // Hotfix 03 (HF07): the native exclusive and low-latency modes are compiled in on Windows.
+        assert!(types.iter().any(|d| d.name == "WASAPI Exclusive" && d.available));
+        assert!(types.iter().any(|d| d.name == "WASAPI Low Latency" && d.available));
     }
     assert!(types.iter().all(|d| d.available || !d.note.is_empty()), "every unavailable driver says why");
 }

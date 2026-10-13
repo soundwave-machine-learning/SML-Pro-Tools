@@ -25,6 +25,8 @@
 pub mod capture;
 pub mod clock;
 pub mod device;
+#[cfg(not(target_arch = "wasm32"))]
+pub use soundcraft_wasapi_native as wasapi_native;
 pub mod ptt;
 pub mod record;
 
@@ -742,6 +744,9 @@ pub struct Player {
     pub silent: bool,
     /// The negotiated configuration when a specific device/rate/buffer was requested.
     pub negotiated: Option<device::NegotiatedConfig>,
+    /// HF07: a native WASAPI stream (exclusive or low-latency shared) instead of a cpal one.
+    #[cfg(not(target_arch = "wasm32"))]
+    _native: Option<soundcraft_wasapi_native::NativeStream>,
 }
 
 impl Player {
@@ -764,6 +769,9 @@ impl Player {
     pub fn open_requested(session: Arc<Session>, req: &device::DeviceRequest) -> Result<Player, String> {
         let caps = device::enumerate(device::Direction::Output);
         let neg = device::negotiate(req, &caps).map_err(|e| e.to_string())?;
+        if let Some(mode) = soundcraft_wasapi_native::mode_for_host(&neg.host) {
+            return Player::open_native(session, neg, mode);
+        }
         let dev = device::find_device(&neg, device::Direction::Output)?;
         let cfg = device::stream_config(&neg);
         let mut p = Player::open_from(Arc::clone(&session), Ok((dev, cfg, neg.device.clone())));
@@ -771,6 +779,72 @@ impl Player {
             return Err(format!("`{}` could not start a stream with the negotiated settings", neg.device));
         }
         p.negotiated = Some(neg);
+        p.update_session(session);
+        Ok(p)
+    }
+
+    /// HF07: opens a native WASAPI mode. The stream thread calls the same `AudioState::fill` as
+    /// the cpal path. Recording placement uses the transport estimate on this path (the native
+    /// stream does not provide cpal's presentation timestamps).
+    #[cfg(not(target_arch = "wasm32"))]
+    fn open_native(session: Arc<Session>, mut neg: device::NegotiatedConfig, mode: soundcraft_wasapi_native::Mode) -> Result<Player, String> {
+        use soundcraft_wasapi_native as wn;
+        let caps = wn::caps(&neg.device, mode, neg.sample_rate)?;
+        let (rate, channels) = match mode {
+            wn::Mode::Exclusive => (neg.sample_rate, caps.channels),
+            wn::Mode::LowLatencyShared => (caps.rate, caps.channels),
+        };
+        let (gtx, grx) = channel();
+        let side = Mutex::new(Side {
+            shadow: HashMap::new(),
+            rate: session.sample_rate.as_f64() as f32,
+            editors: HashMap::new(),
+            garbage: grx,
+            prev_tracks: 0,
+        });
+        let shared = Arc::new(Shared::new());
+        let (tx, rx) = channel();
+        let mut state = AudioState::new(rx, Arc::clone(&shared), Arc::clone(&session), f64::from(rate), gtx);
+        let lost = Arc::clone(&shared);
+        let on_lost: Box<dyn Fn(u8) + Send> = Box::new(move |code| {
+            let _ = lost.output_lost.compare_exchange(0, code, Ordering::AcqRel, Ordering::Acquire);
+        });
+        let render: Box<dyn FnMut(&mut [f32], usize) + Send> = Box::new(move |buf, ch| {
+            mark_audio_thread();
+            state.fill(buf, ch);
+        });
+        let stream = wn::open(&neg.device, mode, rate, channels, neg.applied_buffer, on_lost, render)?;
+        if let Some(req) = neg.requested_buffer
+            && req != stream.period_frames
+        {
+            neg.buffer_note =
+                Some(format!("{} granted {} frames for the requested {req} (the driver's period step).", neg.host, stream.period_frames));
+        }
+        neg.applied_buffer = Some(stream.period_frames);
+        neg.driver_latency_frames = stream.stream_latency_frames;
+        neg.sample_format = Some(stream.sample_kind.label().to_string());
+        neg.sample_rate = stream.rate;
+        log::info!(
+            "native {} output: {} @ {} Hz, {} ch, {} frames, {}",
+            neg.host,
+            neg.device,
+            stream.rate,
+            stream.channels,
+            stream.period_frames,
+            stream.sample_kind.label()
+        );
+        let p = Player {
+            shared,
+            tx,
+            side,
+            _stream: None,
+            device_name: neg.device.clone(),
+            device_rate: stream.rate,
+            device_channels: stream.channels,
+            silent: false,
+            negotiated: Some(neg),
+            _native: Some(stream),
+        };
         p.update_session(session);
         Ok(p)
     }
@@ -831,6 +905,8 @@ impl Player {
                             device_channels: config.channels,
                             silent: false,
                             negotiated: None,
+                            #[cfg(not(target_arch = "wasm32"))]
+                            _native: None,
                         }
                     }
                     Err(e) => {
@@ -898,6 +974,7 @@ impl Player {
             device_channels: 0,
             silent: true,
             negotiated: None,
+            _native: None,
         }
     }
 

@@ -3716,6 +3716,7 @@ dependencies = [
  "soundcraft-model",
  "soundcraft-speech",
  "soundcraft-time",
+ "soundcraft-wasapi-native",
 ]
 
 [[package]]
@@ -3801,6 +3802,13 @@ dependencies = [
  "thiserror 2.0.21",
  "vst3",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "soundcraft-wasapi-native"
+version = "0.5.0"
+dependencies = [
+ "windows 0.54.0",
 ]
 
 [[package]]
