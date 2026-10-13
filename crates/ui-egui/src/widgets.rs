@@ -258,64 +258,120 @@ pub fn clip_gain_to_pos(db: f32) -> f32 {
     if db >= -36.0 { 0.25 + (db + 36.0) / 72.0 * 0.75 } else { (1.0 - ((-36.0 - db) / 108.0).powf(1.0 / 1.5)) * 0.25 }
 }
 
-/// A fader: returns the new dB value when dragged. `db` in -144..12.
-pub fn fader(ui: &mut Ui, r: Rect, db: f32, id: egui::Id) -> Option<f32> {
+/// Fader scale marks (dB), Logic-style: signless numbers, 0 (unity) emphasised.
+pub const FADER_MARKS: [f32; 11] = [6.0, 3.0, 0.0, -3.0, -6.0, -10.0, -15.0, -20.0, -30.0, -40.0, -60.0];
+
+/// A channel fader (HF09, a Logic-inspired look; the gain law is unchanged): a slim groove with a
+/// signless dB scale, a full-width unity (0 dB) mark, and a large cap with a centre line. The
+/// travel scales with the height it is given. Drag moves it (Ctrl/Cmd: fine, 1/10 speed);
+/// double-click or Alt-click returns to 0 dB; with keyboard focus (click it, or Tab) ↑/↓ step
+/// 0.5 dB, Shift+↑/↓ 0.1 dB, Home 0 dB. While hovered or dragged the exact value shows beside the
+/// cap. Positions come from `fader_db_to_pos` / `fader_pos_to_db` only. Returns the new dB.
+pub fn fader(ui: &mut Ui, r: Rect, db: f32, id: egui::Id, name: &str) -> Option<f32> {
     let t = Tokens::current();
     let resp = ui.interact(r, id, Sense::click_and_drag());
-    let slot = Rect::from_center_size(r.center(), vec2(5.0, r.height() - 14.0));
-    ui.painter().rect_filled(slot, 2.0, t.fader_track);
-    // Scale marks.
-    // A label is skipped (its tick stays) when it would collide with the one above it, so the
-    // crowded low end (-30/-40/-60) never prints on top of itself.
+    let cap_h = (r.height() * 0.11).clamp(20.0, 30.0);
+    let cap_w = (r.width() * 0.66).clamp(18.0, 36.0);
+    // The groove leaves half a cap at each end, so the cap never leaves the fader's area.
+    let slot = Rect::from_min_max(pos2(r.center().x + 4.0 - 2.0, r.min.y + cap_h * 0.5), pos2(r.center().x + 4.0 + 2.0, r.max.y - cap_h * 0.5));
+    let painter = ui.painter_at(r.expand(2.0));
+    painter.rect(slot.expand2(vec2(1.0, 2.0)), 2.0, t.fader_track, Stroke::new(1.0, t.border), StrokeKind::Outside);
+    let y_of = |d: f32| slot.max.y - slot.height() * soundcraft_model::fader_db_to_pos(d);
+    // Scale: labels right-aligned left of the groove; a label is skipped (its tick stays) when
+    // it would collide with the one above, so the low end never prints on top of itself.
     let mut last_label_y = f32::NEG_INFINITY;
-    for mark in [12.0f32, 6.0, 0.0, -5.0, -10.0, -15.0, -20.0, -30.0, -40.0, -60.0] {
-        let y = slot.max.y - slot.height() * soundcraft_model::fader_db_to_pos(mark);
-        let show_label = y - last_label_y >= 10.0 || mark == 0.0;
+    let label_x = slot.min.x - 7.0;
+    for mark in FADER_MARKS {
+        let y = y_of(mark);
+        let unity = mark == 0.0;
+        let show_label = y - last_label_y >= 10.0 || unity;
         if show_label {
             last_label_y = y;
         }
-        // 0 dB (unity) is marked brighter than the rest of the scale.
-        let unity = mark == 0.0;
-        ui.painter()
-            .line_segment([pos2(r.min.x + 2.0, y), pos2(slot.min.x - 3.0, y)], Stroke::new(1.0, if unity { t.text_dim } else { t.ruler_tick }));
+        let stroke = Stroke::new(if unity { 1.5 } else { 1.0 }, if unity { t.text } else { t.ruler_tick });
+        painter.line_segment([pos2(slot.min.x - 5.0, y), pos2(slot.min.x - 2.0, y)], stroke);
+        painter.line_segment([pos2(slot.max.x + 2.0, y), pos2(slot.max.x + 5.0, y)], stroke);
         if show_label {
-            ui.painter().text(
-                pos2(r.min.x, y),
-                Align2::LEFT_CENTER,
-                format!("{}", mark.abs()),
-                regular(9.0),
-                if unity { t.text } else { t.text_dim },
-            );
+            let font = if unity { crate::theme::bold(9.5) } else { regular(9.0) };
+            painter.text(pos2(label_x, y), Align2::RIGHT_CENTER, format!("{}", mark.abs()), font, if unity { t.text } else { t.text_dim });
         }
     }
+    // Unity mark across the groove (visible behind the cap's travel).
+    let uy = y_of(0.0);
+    painter.line_segment([pos2(slot.min.x - 1.0, uy), pos2(slot.max.x + 1.0, uy)], Stroke::new(1.5, t.text_dim));
+    // Keyboard and pointer input.
     let pos = soundcraft_model::fader_db_to_pos(db);
-    let y = slot.max.y - slot.height() * pos;
-    let cap = Rect::from_center_size(pos2(slot.center().x, y), vec2(r.width() * 0.62, 22.0));
+    let mut out = None;
+    if resp.has_focus() {
+        // Keep ↑/↓ for the fader instead of moving keyboard focus to the next widget.
+        ui.memory_mut(|m| m.set_focus_lock_filter(id, egui::EventFilter { vertical_arrows: true, ..Default::default() }));
+        // Shift is read from the key event as well as the held modifiers.
+        let key_shift = |i: &egui::InputState| {
+            i.modifiers.shift
+                || i.events.iter().any(|e| {
+                    matches!(e, egui::Event::Key { key: egui::Key::ArrowUp | egui::Key::ArrowDown, pressed: true, modifiers, .. } if modifiers.shift)
+                })
+        };
+        let (up, down, home, fine) =
+            ui.input(|i| (i.key_pressed(egui::Key::ArrowUp), i.key_pressed(egui::Key::ArrowDown), i.key_pressed(egui::Key::Home), key_shift(i)));
+        let step = if fine { 0.1 } else { 0.5 };
+        let base = if db <= -143.9 { -60.0 } else { db };
+        if up {
+            out = Some((base + step).clamp(-144.0, 12.0));
+        } else if down {
+            out = Some((base - step).clamp(-144.0, 12.0));
+        } else if home {
+            out = Some(0.0);
+        }
+    }
+    if resp.clicked() || resp.drag_started() {
+        resp.request_focus();
+    }
+    if resp.double_clicked() || (resp.clicked() && ui.input(|i| i.modifiers.alt)) {
+        out = Some(0.0);
+    } else if resp.dragged() {
+        let fine = ui.input(|i| i.modifiers.command || i.modifiers.ctrl);
+        let dy = resp.drag_delta().y / slot.height().max(1.0) * if fine { 0.1 } else { 1.0 };
+        let np = (pos - dy).clamp(0.0, 1.0);
+        out = Some(soundcraft_model::fader_pos_to_db(np).clamp(-144.0, 12.0));
+    }
+    // The cap, where the value now is.
+    let shown = out.unwrap_or(db);
+    let y = y_of(shown);
+    let cap = Rect::from_center_size(pos2(slot.center().x, y), vec2(cap_w, cap_h));
     let active = resp.hovered() || resp.dragged();
-    ui.painter().rect(
-        cap,
-        2.0,
-        if active { t.button_hi } else { t.button },
-        Stroke::new(1.0, if resp.dragged() { t.focus } else { t.button_border }),
-        StrokeKind::Inside,
-    );
-    ui.painter().line_segment([pos2(cap.min.x + 2.0, cap.center().y), pos2(cap.max.x - 2.0, cap.center().y)], Stroke::new(2.0, t.text));
-    for dy in [-6.0, -3.0, 3.0, 6.0] {
-        ui.painter().line_segment(
-            [pos2(cap.min.x + 3.0, cap.center().y + dy), pos2(cap.max.x - 3.0, cap.center().y + dy)],
+    painter.rect_filled(cap.translate(vec2(0.0, 1.5)), 4.0, Color32::from_black_alpha(110));
+    painter.rect_filled(cap, 4.0, if active { t.button_hi } else { t.button });
+    // Two-tone body: the upper half lighter, like a lit cap.
+    let upper = Rect::from_min_max(cap.min, pos2(cap.max.x, cap.center().y));
+    painter.rect_filled(upper.shrink(1.0), egui::CornerRadius { nw: 3, ne: 3, sw: 0, se: 0 }, t.border_light.gamma_multiply(0.35));
+    let edge = if resp.dragged() || resp.has_focus() {
+        Stroke::new(1.5, t.focus)
+    } else if active {
+        Stroke::new(1.0, t.border_light)
+    } else {
+        Stroke::new(1.0, t.button_border)
+    };
+    painter.rect_stroke(cap, 4.0, edge, StrokeKind::Inside);
+    for dy in [-cap_h * 0.3, cap_h * 0.3] {
+        painter.line_segment(
+            [pos2(cap.min.x + 4.0, cap.center().y + dy), pos2(cap.max.x - 4.0, cap.center().y + dy)],
             Stroke::new(1.0, t.button_border),
         );
     }
-    if resp.double_clicked() || (resp.clicked() && ui.input(|i| i.modifiers.alt)) {
-        return Some(0.0);
+    painter.line_segment([pos2(cap.min.x + 2.0, cap.center().y), pos2(cap.max.x - 2.0, cap.center().y)], Stroke::new(2.0, t.text));
+    // The exact value while it is being looked at or moved.
+    if resp.hovered() || resp.dragged() {
+        let txt = format!("{} dB", db_text(shown));
+        let g = ui.painter().layout_no_wrap(txt, crate::theme::mono(10.0), t.counter_text);
+        let at = pos2(cap.max.x + 3.0, cap.center().y - g.size().y * 0.5);
+        let bg = Rect::from_min_size(at, g.size() + vec2(6.0, 2.0));
+        let fg = ui.painter().clone().with_layer_id(egui::LayerId::new(egui::Order::Tooltip, id.with("value")));
+        fg.rect_filled(bg, 2.0, t.counter_bg);
+        fg.galley(at + vec2(3.0, 1.0), g, t.counter_text);
     }
-    if resp.dragged() {
-        let fine = ui.input(|i| i.modifiers.command || i.modifiers.ctrl);
-        let dy = resp.drag_delta().y / slot.height() * if fine { 0.1 } else { 1.0 };
-        let np = (pos - dy).clamp(0.0, 1.0);
-        return Some(soundcraft_model::fader_pos_to_db(np).clamp(-144.0, 12.0));
-    }
-    None
+    resp.widget_info(|| egui::WidgetInfo::slider(true, f64::from(shown), name));
+    out
 }
 
 pub fn db_text(db: f32) -> String {

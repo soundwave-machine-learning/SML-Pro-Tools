@@ -542,9 +542,14 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
     let fh = (r.max.y - actions_h - readout_h - y).max(120.0);
     let wide_meter = (if track.kind == TrackKind::Master { app.engine.session().main_format() } else { track.format }).channels() > 2;
     let fr = Rect::from_min_size(pos2(x0, y), vec2(inner_w * if wide_meter { 0.45 } else { 0.6 }, fh));
-    if let Some(db) = fader(ui, fr, track.mixer.volume_db, ui.id().with(("fader", id.0))) {
+    let fid = ui.id().with(("fader", id.0));
+    if let Some(db) = fader(ui, fr, track.mixer.volume_db, fid, &format!("{} volume", track.name)) {
         app.gesture = Some(crate::Gesture::Fader { track: id, start_db: track.mixer.volume_db });
         let _ = app.engine.execute_merged("mix.volume", &json!({"track": id.0, "db": db}), &format!("fader:{}", id.0));
+        // A drag is one undo step when it ends; a key step, reset or click is one on its own.
+        if ui.ctx().dragged_id() != Some(fid) {
+            app.engine.end_merge();
+        }
     }
     let md = app.meters.get(&id).copied().unwrap_or_default();
     let mr = Rect::from_min_max(pos2(fr.max.x + 4.0, fr.min.y + 6.0), pos2(x0 + inner_w - 2.0, fr.max.y - 6.0));
@@ -567,9 +572,41 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
     if md.gr > 0.1 {
         ui.painter().text(pos2(mr.center().x, mr.min.y - 3.0), Align2::CENTER_BOTTOM, format!("-{:.0}", md.gr), regular(8.0), t.meter_yellow);
     }
+    // HF09: the exact value; double-click to type one (Enter applies as one undo step, Escape
+    // cancels).
     let vr = Rect::from_min_size(pos2(x0 + 4.0, fr.max.y + 4.0), vec2(inner_w - 8.0, 16.0));
-    ui.painter().rect_filled(vr, 2.0, t.counter_bg);
-    ui.painter().text(vr.center(), Align2::CENTER_CENTER, db_text(track.mixer.volume_db), crate::theme::mono(11.0), t.counter_text);
+    let edit_key = egui::Id::new(("fader_entry", id.0));
+    let editing: Option<String> = ui.ctx().data(|d| d.get_temp(edit_key));
+    if let Some(mut text) = editing {
+        let te = ui.put(
+            vr,
+            egui::TextEdit::singleline(&mut text).font(crate::theme::mono(11.0)).horizontal_align(egui::Align::Center).id(edit_key.with("te")),
+        );
+        te.request_focus();
+        let (enter, esc) = ui.input(|i| (i.key_pressed(egui::Key::Enter), i.key_pressed(egui::Key::Escape)));
+        if esc {
+            ui.ctx().data_mut(|d| d.remove::<String>(edit_key));
+        } else if enter || te.lost_focus() {
+            ui.ctx().data_mut(|d| d.remove::<String>(edit_key));
+            match parse_db(&text) {
+                Some(v) => {
+                    app.engine.end_merge();
+                    let _ = app.run("mix.volume", json!({"track": id.0, "db": v}));
+                }
+                None => app.ui.status = format!("Not a level: `{text}` (type a dB value such as -6 or -inf)"),
+            }
+        } else {
+            ui.ctx().data_mut(|d| d.insert_temp(edit_key, text));
+        }
+    } else {
+        ui.painter().rect_filled(vr, 2.0, t.counter_bg);
+        ui.painter().text(vr.center(), Align2::CENTER_CENTER, db_text(track.mixer.volume_db), crate::theme::mono(11.0), t.counter_text);
+        let vresp = ui.interact(vr, ui.id().with(("vol_readout", id.0)), Sense::click()).on_hover_text("Volume in dB — double-click to type a value");
+        vresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} volume readout", track.name)));
+        if vresp.double_clicked() || vresp.triple_clicked() {
+            ui.ctx().data_mut(|d| d.insert_temp(edit_key, db_text(track.mixer.volume_db)));
+        }
+    }
     // 6. Channel actions: input monitor / record, solo / mute.
     let mut y = r.max.y - actions_h;
     let bw = (inner_w - 6.0) / 2.0;
@@ -1163,4 +1200,14 @@ fn route_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, input: bool) {
             let _ = app.run(cmd, json!({"track": id.0, key: format!("Bus {n}")}));
         }
     });
+}
+
+/// A typed fader level: a number of dB (clamped to the fader's −144…+12 dB) or `-inf`.
+pub fn parse_db(text: &str) -> Option<f32> {
+    let t = text.trim().trim_end_matches("dB").trim_end_matches("db").trim();
+    if t.eq_ignore_ascii_case("-inf") || t.eq_ignore_ascii_case("inf") {
+        return Some(-144.0);
+    }
+    let v: f32 = t.replace('−', "-").parse().ok()?;
+    v.is_finite().then(|| v.clamp(-144.0, 12.0))
 }
