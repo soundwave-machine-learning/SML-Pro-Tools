@@ -24,6 +24,8 @@ Documentation for SML Studio (the SoundCraft engine), version 0.5.0. Start with 
 | [DOCS_MANIFEST.json](DOCS_MANIFEST.json) | Which source and builds this documentation describes, what was verified how, what is pending, and which source files each chapter depends on. |
 | [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md) | Documentation history. |
 | [DOCS_MAINTENANCE.md](DOCS_MAINTENANCE.md) | The update procedure tied to code changes and packaging (`cargo xtask docs`, `cargo xtask docs-check`). |
+| [STYLE_GUIDE.md](STYLE_GUIDE.md) | Interface style guide for contributors: semantic colour tokens, typography, spacing, control states, workspace patterns. |
+| [polish_pass_01/POLISH_REPORT.md](polish_pass_01/POLISH_REPORT.md) | Interface polish pass 01: what changed per workspace, tests, before/after renders, gaps for native review. |
 | [manual_archive/](manual_archive/) | Earlier manual editions exactly as compiled into released builds. |
 | [hotfix_pass_01/HOTFIX_REPORT.md](hotfix_pass_01/HOTFIX_REPORT.md) | Hotfix Pass 01 (Split divider, + Add Track, control bar with BPM/Loop/Audio Setup): what changed, tests, evidence, pending Windows checks. |
 

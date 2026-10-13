@@ -1,0 +1,8 @@
+{"method":"engine.execute","params":{"command":"window.edit","params":{}}}
+{"method":"engine.execute","params":{"command":"loop.set","params":{"start":96000,"end":384000}}}
+{"method":"engine.execute","params":{"command":"options.loop_playback","params":{"value":true}}}
+{"method":"engine.execute","params":{"command":"edit.select","params":{"tracks":["Snare"],"start":200000,"end":300000}}}
+{"method":"engine.execute","params":{"command":"mix.record_arm","params":{"tracks":["Kick"],"value":true}}}
+{"method":"engine.execute","params":{"command":"mix.mute","params":{"tracks":["Hats"],"value":true}}}
+{"method":"engine.execute","params":{"command":"mix.solo","params":{"tracks":["Bass"],"value":true}}}
+{"steps":8}

@@ -1,0 +1,5 @@
+{"method":"engine.execute","params":{"command":"window.mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.view","params":{"view":2}}}
+{"method":"engine.execute","params":{"command":"mix.mute","params":{"tracks":["Hats"],"value":true}}}
+{"method":"engine.execute","params":{"command":"mix.solo","params":{"tracks":["Bass"],"value":true}}}
+{"steps":8}

@@ -3,6 +3,28 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
+## 2026-10-13 — revision 2026-10-13.3 — interface polish pass 01, source `59038e2`
+
+**Changed**
+- New [STYLE_GUIDE.md](STYLE_GUIDE.md): semantic colour tokens, type scale, metrics, control
+  states, workspace patterns, how to check a change.
+- [USER_GUIDE.md](USER_GUIDE.md):
+  - §3.5 control bar: segments, the recording status, the device status mark, icon buttons, the
+    layout buttons moving there on narrow windows.
+  - §6 Record layout panel sections; §8 reading the timeline (selection edges, selected and muted
+    clips, playhead).
+  - §13.1–13.2 strip order, state tags, inserts, snapshots.
+  - §18.1 Master cards; §20.1 the assistant's "ANSWERS FROM" line.
+  - §22 SML Studio Dark and Graphite.
+- [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) on-screen section and
+  [grok/GROK_BOT_INSTRUCTIONS.md](grok/GROK_BOT_INSTRUCTIONS.md): new control locations;
+  accessible names unchanged.
+- Report: [polish_pass_01/POLISH_REPORT.md](polish_pass_01/POLISH_REPORT.md).
+
+**Verified by:** source review against `59038e2`; `soundcraft-ui-egui` tests including
+`tests/interface_polish.rs`; full `cargo xtask ci` (731 passed); headless before/after renders.
+**Not verified:** anything on Windows or at the owner's display scale.
+
 ## 2026-10-13 — revision 2026-10-13.2 — Hotfix Pass 01, source `1d71089`
 
 **Changed**

@@ -1,0 +1,5 @@
+{"method":"engine.execute","params":{"command":"window.edit","params":{}}}
+{"method":"engine.execute","params":{"command":"edit.select","params":{"tracks":["Kick"]}}}
+{"method":"engine.execute","params":{"command":"mix.record_arm","params":{"tracks":["Kick"],"value":true}}}
+{"method":"engine.execute","params":{"command":"window.audio_setup","params":{"value":true}}}
+{"steps":8}

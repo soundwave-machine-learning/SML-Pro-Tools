@@ -187,10 +187,18 @@ The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
 them, confirm with `help.search` that the installed build has them: builds before Hotfix Pass 01
 (such as `b641b5a`) do not.
 
-**On screen (level B):** in Hotfix Pass 01 builds a control bar under the menu bar shows
-**⚙ Audio Setup**, the device summary, the **BPM** field, the time signature, **Click**,
-**Count Off**, **⟲ Loop** and **Loop: … ▾** in every layout (manual §3.5). The BPM field commits on
-Enter only; Escape cancels. The + at the right of the TRACKS header opens New Tracks.
+**On screen (level B):** in Hotfix Pass 01 and later builds a control bar under the menu bar holds,
+in grouped segments: transport (Mix and Master layouts), the **BPM** field and time signature,
+**Click** and **Count Off**, **Loop** (loop icon) with the loop range beside it, the recording
+status ("No track armed" / "Armed: <track> · <input>"), and **Audio Setup** (gear icon) with a
+device status mark (green dot running, amber ring waiting, red ✕ no output) (manual §3.5). The BPM
+field commits on Enter only; Escape cancels. The + at the right of the TRACKS header opens New
+Tracks. On narrow windows the layout buttons (Record · Edit · Mix · Master) move from the menu bar
+into the control bar. After the interface polish pass, Console strips read top to bottom: name
+and state tags (REC, IN, SOLO, MUTE, FAULT), inserts and slots, sends and I/O, pan and width,
+fader, then I / record and S / M buttons (manual §13.2). Accessible names did not change
+("⚙ Audio Setup", "⟲ Loop", "Recording status", "<track> strip name", "<track> state: …"), so
+find controls by those names when your tool reads them.
 Audio Setup (`window.audio_setup`) is where the owner picks the microphone/interface; device
 choices are not commands and are the owner's to make. Values Audio Setup shows as "Unknown" or
 "Not measured" are unknown: do not estimate them.

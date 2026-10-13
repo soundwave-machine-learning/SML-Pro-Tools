@@ -1,0 +1,3 @@
+{"method":"engine.execute","params":{"command":"window.edit","params":{}}}
+{"method":"ui.menu.invoke","params":{"id":"ui.bounce_dialog","path":"File > Bounce Mix..."}}
+{"steps":8}

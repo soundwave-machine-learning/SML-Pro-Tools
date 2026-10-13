@@ -154,20 +154,24 @@ build: read its own `MANIFEST.json` and the changelog.
 **Purpose:** the controls you need in every layout — tempo, time signature, loop and the audio
 device — in one place that never scrolls away.
 
-**Where:** the row directly under the menu bar, in the Edit, Mix, Record and Master layouts. On
-narrow windows it wraps onto a second row instead of hiding controls.
+**Where:** the row directly under the menu bar, in the Edit, Mix, Record and Master layouts. The
+controls are grouped into segments (transport, tempo, click, loop, recording status, audio
+device); on narrow windows whole segments move to a second row instead of hiding controls. In
+very narrow windows the layout buttons (Record · Edit · Mix · Master) move from the menu bar into
+the first segment, so they never cover the menus.
 
 | Control | What it does | Command |
 |---|---|---|
-| **⚙ Audio Setup** | Opens or closes Audio Setup (§4.1). | `window.audio_setup` |
-| Device summary (grey text) | "<host> · <device> · <rate> kHz · <frames> fr = <ms> ms" from the open stream, "… requested (not running yet)" before the first callback, or "No audio output — open Audio Setup". Hover: the input device and "Driver latency: Unknown". Click: opens Audio Setup. | — |
-| **■ Stop / ▶ Play / ● Record** and the position | Only in the Mix and Master layouts (Edit and Record have the transport in their toolbar). | `transport.*` |
+| **Audio Setup** (gear icon) | Opens or closes Audio Setup (§4.1). | `window.audio_setup` |
+| Device status mark and summary | A filled green dot: audio is running. An amber ring: a device is open but no audio callback yet. A red ✕: no audio output. The text reads "<host> · <device> · <rate> kHz · <frames> fr = <ms> ms" from the open stream, "… requested (not running yet)", or "No audio output — open Audio Setup". Hover: the input device and "Driver latency: Unknown". Click: opens Audio Setup. | — |
+| Recording status | "No track armed", "Armed: <track> · <input>" (red dot) or "Armed: N tracks", plus "I n" when n tracks monitor their input. Hover: every armed track and the input it records, the monitoring mode and the input device ("opens on the first record or arm" until it is open). Click: opens Audio Setup on the first armed track. Lit red while recording. | — |
+| **Stop / Play / Record** and the position | Only in the Mix and Master layouts (Edit and Record have the transport in their toolbar). Play lights green while playing, Record lights red while recording. | `transport.*` |
 | **BPM** field | The tempo in effect at the playhead (stopped: the selection start). Click, type a value from 5 to 1000 and press **Enter**: one undo step. **Escape** or clicking elsewhere cancels; typing never triggers shortcuts. Disabled while recording. | `event.tempo {bpm, at}` |
 | **MAP** badge | Shown when the session has more than one tempo change. The BPM field then edits only the change in effect at the playhead; the others are kept (the map is never flattened). | — |
 | Time signature (e.g. **4/4**) | Click: a popover with the numerator (1–64) and denominator (1–64); **Apply** changes the signature in effect at the playhead (one undo step), **Cancel** or clicking away changes nothing. | `event.meter` |
 | **Click**, **Count Off N** | Metronome and Count Off on/off (§6.4). | `options.click`, `options.countoff` |
-| **⟲ Loop** | Loop Playback on/off. Never starts the transport or recording. | `options.loop_playback` |
-| **Loop: … ▾** | The loop range ("not set", "selection", or start – end in the main counter format). Click for loop settings (§6.7). | `loop.*` |
+| **Loop** (loop icon) | Loop Playback on/off (lit blue when on). Never starts the transport or recording. | `options.loop_playback` |
+| Loop range (beside it, with ▾) | The loop range ("not set", "selection", or start – end in the main counter format). Click for loop settings (§6.7). | `loop.*` |
 
 **Limits:** changing the tempo moves bar and beat positions; audio clips keep their sample
 positions and are never stretched. Tempo and time signature cannot change during a take.
@@ -325,6 +329,15 @@ session without asking; save first.
 
 ## 6. Recording
 
+In the **Record** layout, the RECORD panel on the left has four parts:
+- **DEVICES:** the input and output devices and an **Audio Setup** button.
+- **TRACK:** the selected audio track, the input it records ("records In 1 of the input
+  device"), **Arm** / **Armed**, **Input monitor** and its real input level.
+- **MONITORING:** Tracking / Mixing / Hardware and Count Off.
+- **TRANSPORT:** Stop / Play / Record / Mixer.
+
+The control bar's recording status (§3.5) shows the same armed tracks and inputs in every layout.
+
 ### 6.1 Prepare a track
 
 **Steps:**
@@ -468,6 +481,15 @@ unchanged; source files are never modified. Each promotion is one undo step.
 remote can also rate takes. The listed chord Ctrl+Alt+0–5 does not work (Known issue K7).
 
 ## 8. Audio editing tools and edit modes
+
+**Reading the timeline:**
+- The edit selection is a blue tint with sharp edges at its start and end.
+- Selected clips have a blue outline.
+- A muted clip is dimmed, with a grey waveform and "muted ·" before its name.
+- While playing, the playhead is a red line with a dark edge (visible over bright clips) and a
+  marker on the rulers.
+- The loop range is the amber span on the Loop ruler (§6.7).
+
 
 ### 8.1 Edit modes
 Toolbar cells **SHUFFLE**, **SLIP**, **SPOT**, **GRID** (`edit.mode`; F2 Slip, F3 Spot, F4 Grid in
@@ -667,7 +689,7 @@ table has a row for it (Known issue K7); rebinding needs an imported shortcut fi
 **Window › Mix** (Ctrl+= also lands here; it does not toggle back, Known issue K6) opens the Mix
 window; **Window › Edit** returns. The Mix window header has **Console** (channel strips),
 **Visual** (soundstage) and **Split** (both) — command `mix.view`, stored with the session. The
-same header holds **Snapshot** A/B/C (§14.3), **Create Bus from Selection**, **Create FX Return**
+same header holds **Snapshots** A/B/C (§14.3; a stored slot is solid, an empty one is dim with a dot, "A·"), **Create Bus from Selection**, **Create FX Return**
 (§15) and, outside Console view, **Filter channels**. All views edit the same mixer; switching
 views never changes the sound.
 
@@ -679,6 +701,21 @@ share is a preference of this computer (`ui.json`), not part of the session; `ui
 {fraction: 0.1..0.9}` sets it and `{}` resets it.
 
 ### 13.2 Channel controls
+**Strip layout (Console), top to bottom:**
+1. **Identity:** the track colour bar, the name (click selects, double-click renames), then the
+   kind (audio, aux, inst…) and a text tag for each active state: **REC**, **IN** (input
+   monitoring), **SOLO**, **MUTE**, and **FAULT** for a missing or crashed plugin (hover for which).
+2. **Processing:** PREAMP, INSTRUMENT, inserts and SLOTS (when shown).
+3. **Sends and routing:** sends, I / O (input, output, automation mode) and the group.
+4. **Pan and width:** the pan knob(s) with their values, then "W n%" on stereo channels.
+5. **Fader and meter,** with the dB readout under the fader.
+6. **Channel actions:** I and record, then S and M.
+
+The selected strip has a lighter surface and an outline. An insert shows its plugin's name (hosted
+plugins by their id's last part); "byp …" with an amber edge means bypassed, "! …" with a red edge
+means the plugin is missing and passes audio through. On short screens the strips keep their full
+height and the Console scrolls.
+
 | Control | Where | Command | Range / notes |
 |---|---|---|---|
 | Fader | Console strip; Visual node up/down | `mix.volume {tracks?, db | delta_db}` | −144…+12 dB |
@@ -937,9 +974,15 @@ interface as hosted, not the sound. The SML plugins appear as AWAITING_EXTERNAL_
 ## 18. Mastering and export
 
 ### 18.1 The Master layout
-Menu-bar layout button **Master** (or `window.master`). It shows "MASTER", **Back to Mix**, the
-Master strip (its inserts are the mastering chain, applied exactly once), "Program and reference",
-and "Meters (offline over the program)" with **Measure**.
+Menu-bar layout button **Master** (or `window.master`). It shows "MASTER" and **Back to Mix**, the
+Master strip (its inserts are the mastering chain, applied exactly once), and three cards:
+- **PROGRAM AND REFERENCE**: the program source and the reference. When a reference is set, the
+  card states that A/B stores the setting only and plays no audio (Known issue K1).
+- **METERS (OFFLINE, OVER THE PROGRAM)**: **Measure**, then a table with sample peak, true peak,
+  integrated, short-term max and momentary max loudness, loudness range, correlation and mono
+  peak, each with its unit. Before the first measurement it says "Not measured yet".
+- **EXPORT**: **Bounce Mix…** opens the same dialog as File › Bounce Mix…, with a summary of what
+  an export does and refuses.
 
 ### 18.2 Program and reference
 - **Program:** by default the session mix. `mastering.program {source}` can set an imported stereo
@@ -1046,7 +1089,9 @@ operator (such as a Grok bot) controlling the app from outside; that is §25 and
 [Grok operator guide](grok/GROK_OPERATOR_GUIDE.md).
 
 ### 20.1 Open it and ask
-**Search › Assistant** opens the window "Assistant". Type into the field ("ask, or say what to do
+**Search › Assistant** opens the window "Assistant". Its first line, "ANSWERS FROM", says what
+answers: "grounded rules — no local model configured", or the local model with its address (and
+that it falls back to the rules if it fails); push-to-talk is enrolled phrases only. Type into the field ("ask, or say what to do
 (e.g. "mute Kick", "is the lead clipping?")") and press **Ask**. The status line says which answer
 source and speech features are on and "nothing leaves this machine". The phone's **Ask** box and
 the command `assistant.ask` use the same rules (but never the local model, §20.5).
@@ -1141,14 +1186,20 @@ to the Mix window; **Ctrl+Alt+L** runs "Move selection left", not Loop. In Studi
 ## 22. Themes, scaling and layouts
 
 - **Window › UI Customization** or **Setup › Appearance** (window "Appearance"): **Interface
-  scale** (75–150 %), **Reduce motion**, **Theme** (Dark, Light, High contrast, System, Custom),
+  scale** (75–150 %), **Reduce motion**, **Theme** (Dark, Graphite, Light, High contrast, System, Custom),
   **Auto-update configuration**, **Reset**, **Theme Editor…**. Interface scale and Reduce motion are
   not remembered after a restart.
+- **Dark** is "SML Studio Dark": charcoal surfaces, a restrained blue/cyan for selection and
+  keyboard focus, green for playback, red for recording and faults, amber for warnings.
+  **Graphite** is a softer dark alternative with a steel-teal accent; state colours mean the same
+  in both. `ui.theme {"mode": "graphite"}` selects it. The design rules are in
+  [STYLE_GUIDE.md](STYLE_GUIDE.md).
 - **Theme Editor:** colour per token, "Typography scale" (0.8–1.5), **Import…**, **Export…**,
   **Reset** (back to Dark). A theme must keep text readable (3:1 contrast) and record/solo/mute/clip
   states distinguishable, or it is refused with the reason. A broken saved theme never stops
   launch (you get Dark). Record, clip and overload states are also shown by shape or label.
-- **Layouts:** the menu-bar buttons **Record · Edit · Mix · Master** switch the four layouts of one
+- **Layouts:** the menu-bar buttons **Record · Edit · Mix · Master** (in the control bar when the
+  window is too narrow for them beside the menus; the session name shortens first) switch the four layouts of one
   window (`window.record`, `window.edit`, `window.mix`, `window.master`). Record docks the
   recording essentials beside the timeline; Master is the mastering workspace (§18). Switching
   changes nothing in the session.
