@@ -8,6 +8,7 @@ pub mod assistant_ui;
 pub mod control;
 pub mod control_bar;
 pub mod credits;
+pub mod detached_mixer;
 pub mod dialogs;
 pub mod docking;
 pub mod edit_window;
@@ -113,6 +114,9 @@ pub struct UiState {
     pub show_midi_editor: bool,
     pub show_universe: bool,
     pub narrow_mix: bool,
+    /// HF11: the Mixer in its own window, and that window's geometry (a UI preference).
+    #[serde(default)]
+    pub mixer_window: detached_mixer::MixerWindowPrefs,
     /// Mix window sections: inserts_ae, inserts_fj, sends_ae, sends_fj, io, comments, eq_curve, color.
     pub mix_views: Vec<String>,
     /// Edit window track-header columns: io, inserts_ae, sends_ae, comments, color.
@@ -289,6 +293,7 @@ impl Default for UiState {
             show_midi_editor: false,
             show_universe: false,
             narrow_mix: false,
+            mixer_window: detached_mixer::MixerWindowPrefs::default(),
             mix_views: vec!["inserts_ae".into(), "sends_ae".into(), "io".into(), "color".into()],
             edit_views: vec!["color".into()],
             plugin_windows: Vec::new(),
@@ -1820,10 +1825,12 @@ impl SoundApp {
         control_bar::show(self, ui);
         match self.ui.window {
             MainWindow::Edit => edit_window::show(self, ui),
+            MainWindow::Mix if self.ui.mixer_window.detached => detached_mixer::placeholder(self, ui),
             MainWindow::Mix => mix_window::show(self, ui),
             MainWindow::Record => layouts::record(self, ui),
             MainWindow::Master => layouts::master(self, ui),
         }
+        detached_mixer::show(self, &ctx);
         panels::floating(self, &ctx);
         windows::show(self, &ctx);
         video_window::show(self, &ctx);

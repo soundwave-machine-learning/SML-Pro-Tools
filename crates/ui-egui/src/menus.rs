@@ -22,6 +22,9 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.track_list", "Track List", "View > Other Displays > Track List", None),
     ("window.clip_list_view", "Clip List", "View > Other Displays > Clip List", None),
     ("window.narrow_mix", "Narrow Mix", "View > Narrow Mix", Some("Cmd+Alt+M")),
+    ("window.mix_detach", "Detach Mixer", "Window > Detach Mixer", None),
+    ("window.mix_dock", "Dock Mixer", "Window > Dock Mixer", None),
+    ("window.mix_window_status", "Mixer Window Status", "", None),
     ("window.session_info", "Session Info", "", None),
     ("window.recording", "Recording", "Window > Recording", None),
     ("window.record", "Record Layout", "Window > Record Layout", None),
@@ -374,6 +377,7 @@ fn checked_state(app: &SoundApp, path: &str, id: Option<&str>) -> bool {
         Some("window.track_list") => app.ui.show_tracks_list,
         Some("window.clip_list_view") | Some("window.clip_list") => app.ui.show_clip_list,
         Some("window.narrow_mix") => app.ui.narrow_mix,
+        Some("window.mix_detach") => app.ui.mixer_window.detached,
         Some("window.renderer") => app.extra.show_renderer,
         Some("window.ui_customization") => app.extra.show_ui_customization,
         Some("window.config_auto_update") => app.extra.auto_update_config,
@@ -599,6 +603,12 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         "window.clip_list" | "window.clip_list_view" => toggle(&mut app.ui.show_clip_list),
         "window.track_list" => toggle(&mut app.ui.show_tracks_list),
         "window.narrow_mix" => toggle(&mut app.ui.narrow_mix),
+        "window.mix_detach" => {
+            let on = p.get("value").and_then(Value::as_bool).unwrap_or(!app.ui.mixer_window.detached);
+            crate::detached_mixer::set_detached(app, on)
+        }
+        "window.mix_dock" => crate::detached_mixer::set_detached(app, false),
+        "window.mix_window_status" => crate::detached_mixer::status(app),
         "window.session_info" => toggle(&mut app.ui.show_session_info),
         "window.recording" => toggle(&mut app.ui.show_recording),
         "window.audio_health" => {

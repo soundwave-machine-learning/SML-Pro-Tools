@@ -204,3 +204,63 @@ fn hf09_fader_drag_fine_modifier_and_one_undo() {
     let fine = fader_db_to_pos(kick_db(&h)) - fader_db_to_pos(start2);
     assert!((fine - plain * 0.1).abs() < 0.01, "fine drag is 1/10: {fine} vs {plain}");
 }
+
+/// HF11: Window › Detach Mixer shows Edit in the main window and the Mixer in its own window at
+/// the same time (embedded here: the test harness has no native windows). Both read the one
+/// session: a mute in the Mixer is one command, one undo step, and the Edit track header shows
+/// it; a fader move there is one undo step. Dock brings it back without stopping the transport;
+/// the state is a UI preference that survives a save/load of the preferences.
+#[test]
+fn hf11_detached_mixer_shares_one_session_and_docks_back() {
+    let mut h = harness(1920.0, 1080.0, 1.0);
+    h.state_mut().run("window.mix", json!({})).unwrap();
+    h.run_steps(2);
+    // A tall Mixer window (as the owner would maximise it on the second display).
+    h.state_mut().ui.mixer_window.size = Some([1500.0, 1000.0]);
+    let st = h.state_mut().run("window.mix_detach", json!({})).unwrap();
+    assert_eq!(st["detached"], json!(true));
+    h.run_steps(6);
+    assert_eq!(h.state().ui.window, soundcraft_ui_egui::MainWindow::Edit, "the main window shows Edit");
+    // Edit (track headers) and the Mixer (strips) at once.
+    h.get_by_label("Kick strip name");
+    h.get_by_label("Kick volume");
+    assert!(h.query_by_label("Dock Mixer").is_some());
+    let rev = h.state().engine.revision;
+    let undo_before = h.state().engine.undo_label().map(str::to_string);
+    let kick_mute = |h: &Harness<'static, SoundApp>| h.state().engine.session().track_by_name("Kick").unwrap().mixer.mute;
+    assert!(!kick_mute(&h));
+    // The Mixer strip's M (strips are left to right in session order; Kick is the first).
+    let name = h.get_by_label("Kick strip name").rect();
+    // (Edit's track headers have M buttons too: the Mixer's is the one under the strip name.)
+    h.get_all_by_label("M")
+        .filter(|n| {
+            let r = n.rect();
+            r.center().x > name.min.x && r.center().x < name.max.x && r.min.y > name.max.y + 100.0
+        })
+        .min_by(|a, b| a.rect().min.y.total_cmp(&b.rect().min.y))
+        .expect("Kick M in the Mixer")
+        .click();
+    h.run_steps(3);
+    assert!(kick_mute(&h), "muted from the detached Mixer");
+    assert_eq!(h.state().engine.revision, rev + 1, "applied once");
+    assert_ne!(h.state().engine.undo_label().map(str::to_string), undo_before);
+    h.state_mut().run("edit.undo", json!({})).unwrap();
+    assert!(!kick_mute(&h), "one undo step");
+    // Transport keeps its state across docking.
+    h.state_mut().engine.transport.playing = true;
+    h.get_by_label("Dock Mixer").click();
+    h.run_steps(4);
+    assert!(!h.state().ui.mixer_window.detached);
+    assert!(h.state().engine.transport.playing, "docking does not stop the transport");
+    h.state_mut().engine.transport.playing = false;
+    // Detached state and geometry are preferences.
+    h.state_mut().run("window.mix_detach", json!({"value": true})).unwrap();
+    h.state_mut().ui.mixer_window.pos = Some([1940.0, 30.0]);
+    let saved: soundcraft_ui_egui::UiState = serde_json::from_str(&serde_json::to_string(&h.state().ui).unwrap()).unwrap();
+    assert!(saved.mixer_window.detached);
+    assert_eq!(saved.mixer_window.pos, Some([1940.0, 30.0]));
+    let status = h.state_mut().run("window.mix_window_status", json!({})).unwrap();
+    assert_eq!(status["detached"], json!(true));
+    h.state_mut().run("window.mix_dock", json!({})).unwrap();
+    assert_eq!(h.state_mut().run("window.mix_window_status", json!({})).unwrap()["detached"], json!(false));
+}

@@ -261,7 +261,7 @@ fn recording_status(app: &mut SoundApp, ui: &mut Ui) {
     }
 }
 
-fn transport(app: &mut SoundApp, ui: &mut Ui) {
+pub(crate) fn transport(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let playing = app.is_playing();
     let recording = app.engine.transport.recording;
