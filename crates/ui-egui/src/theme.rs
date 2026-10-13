@@ -49,10 +49,13 @@ pub enum ThemeMode {
     HighContrast,
     /// The user's validated theme file (`UiState.theme_custom`); Dark when none is loaded.
     Custom,
+    /// Built-in alternate dark palette: softer charcoal with a steel-teal accent, for long
+    /// sessions in dim rooms. Same token semantics as Dark.
+    Graphite,
 }
 
 impl ThemeMode {
-    pub const ALL: [Self; 5] = [Self::Dark, Self::Light, Self::HighContrast, Self::System, Self::Custom];
+    pub const ALL: [Self; 6] = [Self::Dark, Self::Graphite, Self::Light, Self::HighContrast, Self::System, Self::Custom];
 
     pub const fn label(self) -> &'static str {
         match self {
@@ -61,6 +64,7 @@ impl ThemeMode {
             Self::Dark => "Dark",
             Self::HighContrast => "High contrast",
             Self::Custom => "Custom",
+            Self::Graphite => "Graphite",
         }
     }
 
@@ -72,6 +76,7 @@ impl ThemeMode {
             Self::Dark => "dark",
             Self::HighContrast => "high_contrast",
             Self::Custom => "custom",
+            Self::Graphite => "graphite",
         }
     }
 
@@ -290,6 +295,9 @@ pub struct Tokens {
     /// Outline of selected ranges, rows and strips (with `selection` fill).
     #[serde(with = "rgba")]
     pub selection_stroke: Color32,
+    /// The loop range (Loop lane and loop markers).
+    #[serde(with = "rgba")]
+    pub loop_range: Color32,
 }
 
 impl Tokens {
@@ -381,6 +389,7 @@ impl Tokens {
         error: Color32::from_rgb(240, 92, 80),
         text_disabled: Color32::from_rgb(104, 108, 116),
         selection_stroke: Color32::from_rgb(86, 170, 226),
+        loop_range: Color32::from_rgb(232, 150, 52),
     };
 
     pub const LIGHT: Tokens = Tokens {
@@ -471,6 +480,7 @@ impl Tokens {
         error: Color32::from_rgb(190, 40, 36),
         text_disabled: Color32::from_rgb(150, 154, 162),
         selection_stroke: Color32::from_rgb(52, 110, 180),
+        loop_range: Color32::from_rgb(196, 112, 20),
     };
 
     /// The active palette.
@@ -568,6 +578,49 @@ impl Tokens {
         error: Color32::from_rgb(255, 60, 60),
         text_disabled: Color32::from_rgb(170, 170, 170),
         selection_stroke: Color32::from_rgb(255, 220, 0),
+        loop_range: Color32::from_rgb(255, 170, 0),
+    };
+
+    /// "Graphite": the alternate dark palette. Lifted, lower-contrast surfaces and a steel-teal
+    /// accent; state colours (record, playback, warnings, meters) are Dark's, so their meaning
+    /// never changes between palettes.
+    pub const GRAPHITE: Tokens = Tokens {
+        window_bg: Color32::from_rgb(34, 35, 37),
+        panel_bg: Color32::from_rgb(42, 43, 46),
+        panel_bg2: Color32::from_rgb(50, 52, 55),
+        toolbar_bg: Color32::from_rgb(38, 39, 42),
+        toolbar_group: Color32::from_rgb(30, 31, 33),
+        menu_bar: Color32::from_rgb(28, 29, 31),
+        border: Color32::from_rgb(18, 19, 20),
+        border_light: Color32::from_rgb(74, 77, 82),
+        button: Color32::from_rgb(62, 65, 70),
+        button_hi: Color32::from_rgb(78, 82, 88),
+        button_border: Color32::from_rgb(22, 23, 25),
+        strip_bg: Color32::from_rgb(48, 50, 53),
+        strip_section: Color32::from_rgb(40, 41, 44),
+        slot_bg: Color32::from_rgb(31, 32, 34),
+        surface_raised: Color32::from_rgb(47, 49, 52),
+        playlist_bg: Color32::from_rgb(39, 40, 43),
+        playlist_alt: Color32::from_rgb(43, 44, 47),
+        playlist_lane: Color32::from_rgb(35, 36, 38),
+        ruler_bg: Color32::from_rgb(44, 46, 49),
+        ruler_label_bg: Color32::from_rgb(44, 46, 49),
+        marker_ruler: Color32::from_rgb(50, 52, 55),
+        grid_line: Color32::from_rgb(55, 57, 61),
+        bar_line: Color32::from_rgb(72, 75, 81),
+        accent: Color32::from_rgb(52, 138, 148),
+        accent_dark: Color32::from_rgb(36, 96, 104),
+        focus: Color32::from_rgb(112, 202, 208),
+        selection: Color32::from_rgba_premultiplied(36, 84, 90, 112),
+        selection_stroke: Color32::from_rgb(100, 190, 196),
+        row_selected: Color32::from_rgb(44, 82, 88),
+        header_selected: Color32::from_rgb(50, 66, 72),
+        strip_selected: Color32::from_rgb(52, 70, 76),
+        insert_on: Color32::from_rgb(46, 74, 82),
+        text: Color32::from_rgb(220, 222, 224),
+        text_dim: Color32::from_rgb(164, 168, 174),
+        section_label: Color32::from_rgb(178, 182, 188),
+        ..Tokens::DARK
     };
 
     /// Every token by name, for the theme editor.
@@ -660,6 +713,7 @@ impl Tokens {
             ("error", &mut self.error),
             ("text_disabled", &mut self.text_disabled),
             ("selection_stroke", &mut self.selection_stroke),
+            ("loop_range", &mut self.loop_range),
         ]
     }
 }
@@ -773,6 +827,7 @@ pub fn resolve(ctx: &egui::Context, mode: ThemeMode, custom: Option<&ThemeData>)
         ThemeMode::Light => (true, Tokens::LIGHT),
         ThemeMode::Dark => (false, Tokens::DARK),
         ThemeMode::HighContrast => (false, Tokens::HIGH_CONTRAST),
+        ThemeMode::Graphite => (false, Tokens::GRAPHITE),
         ThemeMode::System => {
             if ctx.system_theme() == Some(egui::Theme::Light) {
                 (true, Tokens::LIGHT)
@@ -796,7 +851,7 @@ pub fn is_light() -> bool {
 pub fn wants_light(ctx: &egui::Context, mode: ThemeMode) -> bool {
     match mode {
         ThemeMode::Light => true,
-        ThemeMode::Dark | ThemeMode::HighContrast | ThemeMode::Custom => false,
+        ThemeMode::Dark | ThemeMode::HighContrast | ThemeMode::Custom | ThemeMode::Graphite => false,
         ThemeMode::System => ctx.system_theme() == Some(egui::Theme::Light),
     }
 }
@@ -948,7 +1003,12 @@ mod tests {
     /// applied; a broken saved theme falls back to Dark at launch.
     #[test]
     fn themes_are_validated_data_with_fallback() {
-        for (base, t) in [(ThemeMode::Dark, Tokens::DARK), (ThemeMode::Light, Tokens::LIGHT), (ThemeMode::HighContrast, Tokens::HIGH_CONTRAST)] {
+        for (base, t) in [
+            (ThemeMode::Dark, Tokens::DARK),
+            (ThemeMode::Light, Tokens::LIGHT),
+            (ThemeMode::HighContrast, Tokens::HIGH_CONTRAST),
+            (ThemeMode::Graphite, Tokens::GRAPHITE),
+        ] {
             validate(&ThemeData { format: THEME_FORMAT.into(), name: base.label().into(), base, tokens: t, typography_scale: 1.0 }).unwrap();
         }
         assert!(contrast(Tokens::HIGH_CONTRAST.text, Tokens::HIGH_CONTRAST.panel_bg) > 15.0);
@@ -987,7 +1047,7 @@ mod tests {
         assert_eq!(resolve(&ctx, ThemeMode::HighContrast, None), (false, Tokens::HIGH_CONTRAST));
         assert_eq!(resolve(&ctx, ThemeMode::Custom, Some(&d)).1, Tokens::DARK);
         let mut editable = Tokens::DARK;
-        assert_eq!(editable.fields_mut().len(), 87);
+        assert_eq!(editable.fields_mut().len(), 88);
         assert_eq!(ThemeMode::parse("high_contrast"), Some(ThemeMode::HighContrast));
     }
 

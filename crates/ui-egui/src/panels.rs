@@ -249,31 +249,56 @@ pub(crate) fn monitor_controls(app: &mut SoundApp, ui: &mut egui::Ui) {
 
 /// The Recording essentials (R08) shared by the Recording window and the Record layout.
 pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
+    use crate::control_bar::chip;
+    use crate::theme::{Tokens, size};
+    let t = Tokens::current();
+    let title = |ui: &mut egui::Ui, text: &str| {
+        ui.add_space(4.0);
+        ui.label(egui::RichText::new(text).font(crate::theme::bold(size::CAPTION)).color(t.section_label));
+    };
     {
+        title(ui, "DEVICES");
         let input = app
             .recorder
             .as_ref()
-            .map_or("opened on first record / arm".to_string(), |r| format!("{} — {} ch @ {} Hz", r.device_name, r.channels, r.sample_rate));
+            .map_or("opens on the first record or arm".to_string(), |r| format!("{} — {} ch @ {} Hz", r.device_name, r.channels, r.sample_rate));
         ui.label(format!("Input: {input}"));
-        let output = app.player.as_ref().map_or("none".to_string(), |p| {
-            if p.silent { "Offline / no audio device".to_string() } else { format!("{} @ {} Hz", p.device_name, p.device_rate) }
+        let (output, ok) = app.player.as_ref().map_or(("none — open Audio Setup".to_string(), false), |p| {
+            if p.silent { ("offline / no audio device".to_string(), false) } else { (format!("{} @ {} Hz", p.device_name, p.device_rate), true) }
         });
-        ui.label(format!("Output: {output}"));
-        ui.separator();
+        ui.label(egui::RichText::new(format!("Output: {output}")).color(if ok { t.text } else { t.warning }));
+        if chip(ui, Some("gear"), "Audio Setup", "Audio Setup (from Record)", app.ui.show_playback_engine, t.accent, true).clicked() {
+            app.ui.audio_focus_track = app.engine.session().edit.selected_tracks.first().copied();
+            app.ui.show_playback_engine = !app.ui.show_playback_engine;
+        }
+        title(ui, "TRACK");
         let sel = app.engine.session().edit.selected_tracks.first().copied();
         let track = sel.and_then(|t| app.engine.session().track(t).cloned()).filter(|t| t.kind == soundcraft_model::TrackKind::Audio);
         match track {
-            Some(t) => {
+            Some(tr) => {
+                let input = match &tr.mixer.input {
+                    soundcraft_model::Route::Hardware(h) => h.clone(),
+                    _ => "In 1".to_string(),
+                };
+                ui.label(egui::RichText::new(&tr.name).font(crate::theme::bold(size::BODY)));
+                ui.label(egui::RichText::new(format!("records {input} of the input device")).color(t.text_dim));
                 ui.horizontal(|ui| {
-                    ui.strong(&t.name);
-                    if ui.selectable_label(t.mixer.record_arm, "● Arm").clicked() {
-                        let _ = app.run("mix.record_arm", json!({"track": t.id.0}));
+                    let armed = tr.mixer.record_arm;
+                    if chip(ui, Some("record"), if armed { "Armed" } else { "Arm" }, "● Arm", armed, t.rec, true)
+                        .on_hover_text("Record enable")
+                        .clicked()
+                    {
+                        let _ = app.run("mix.record_arm", json!({"track": tr.id.0}));
                     }
-                    if ui.selectable_label(t.mixer.input_monitor, "Input monitor").on_hover_text("Software monitoring (off by default)").clicked() {
-                        let _ = app.run("mix.input_monitor", json!({"track": t.id.0}));
+                    if chip(ui, None, "Input monitor", "Input monitor", tr.mixer.input_monitor, t.input, true)
+                        .on_hover_text("Software monitoring (off by default)")
+                        .clicked()
+                    {
+                        let _ = app.run("mix.input_monitor", json!({"track": tr.id.0}));
                     }
                 });
-                let lvl = app.meters.get(&t.id).map_or(0.0, |m| m.level[0].max(m.level[1]));
+                // A real input level only; nothing is simulated.
+                let lvl = app.meters.get(&tr.id).map_or(0.0, |m| m.level[0].max(m.level[1]));
                 ui.add(egui::ProgressBar::new(lvl.clamp(0.0, 1.0)).text(if lvl > 0.0 {
                     format!("{:.1} dBFS", 20.0 * lvl.max(1e-6).log10())
                 } else {
@@ -281,14 +306,18 @@ pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
                 }));
             }
             None => {
-                ui.label("Select an audio track to arm it here.");
+                ui.label(egui::RichText::new("Select an audio track to arm it here.").color(t.text_dim));
             }
         }
+        title(ui, "MONITORING");
         ui.horizontal(|ui| {
-            ui.label("Monitoring:");
             let mode = app.engine.session().edit.value("monitor.mode", 1.0) as i64;
-            for (m, label) in [(0, "Tracking"), (1, "Mixing"), (2, "Hardware")] {
-                if ui.selectable_label(mode == m, label).clicked() {
+            for (m, label, tip) in [
+                (0, "Tracking", "Software monitoring through the mixer (currently the same processing as Mixing)"),
+                (1, "Mixing", "Software monitoring through the mixer (currently the same processing as Tracking)"),
+                (2, "Hardware", "Your interface's direct monitoring: SML Studio's input monitoring is off"),
+            ] {
+                if chip(ui, None, label, label, mode == m, t.accent, true).on_hover_text(tip).clicked() {
                     let id = ["tracking", "mixing", "hardware"][m as usize];
                     if let Err(e) = app.run("mix.monitor_mode", json!({"mode": id})) {
                         app.ui.status = e;
@@ -306,18 +335,20 @@ pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
                 let _ = app.run("setup.click_countoff", json!({"countoff_bars": bars}));
             }
         });
-        ui.separator();
+        title(ui, "TRANSPORT");
         ui.horizontal(|ui| {
-            if ui.button("■ Stop").clicked() {
+            let playing = app.is_playing();
+            let recording = app.engine.transport.recording;
+            if chip(ui, Some("stop"), "Stop", "■ Stop", false, t.button, true).clicked() {
                 let _ = app.run("transport.stop", json!({}));
             }
-            if ui.button("▶ Play").clicked() {
+            if chip(ui, Some("play"), "Play", "▶ Play", playing && !recording, t.playback, true).clicked() {
                 let _ = app.run("transport.play", json!({}));
             }
-            if ui.button("● Record").clicked() {
+            if chip(ui, Some("record"), "Record", "● Record", recording, t.rec, true).clicked() {
                 let _ = app.run("transport.record", json!({}));
             }
-            if ui.button("Mixer").clicked() {
+            if chip(ui, None, "Mixer", "Mixer", false, t.accent, true).clicked() {
                 crate::menus::invoke_menu(app, "window.mix", "");
             }
         });
@@ -326,8 +357,10 @@ pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
         {
             ui.label(format!("Capturing: {} frames to disk (dry)", r.captured_frames()));
         }
-        ui.label(egui::RichText::new("Recording is always dry: clip, insert, slot and fader processing never reach the file.").small());
-        ui.label(egui::RichText::new(app.autosave_summary()).small());
+        ui.label(
+            egui::RichText::new("Recording is always dry: clip, insert, slot and fader processing never reach the file.").small().color(t.text_dim),
+        );
+        ui.label(egui::RichText::new(app.autosave_summary()).small().color(t.text_dim));
         ui.separator();
         monitor_controls(app, ui);
     }

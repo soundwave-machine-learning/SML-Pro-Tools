@@ -75,61 +75,131 @@ pub fn record(app: &mut SoundApp, ui: &mut Ui) {
 /// reach an export; the status line says so.
 pub fn master(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
-    egui::Panel::top("master_banner").exact_size(40.0).frame(egui::Frame::NONE.fill(t.toolbar_bg).inner_margin(egui::Margin::same(8))).show(ui, |ui| {
-        ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("MASTER").font(bold(13.0)).color(t.header_text));
-            if ui.button("Back to Mix").clicked() {
-                let _ = app.run("window.mix", json!({}));
-            }
-            ui.label(egui::RichText::new("chain = Master track inserts (applied once) · reference and monitor controls are excluded from exports · meters: BS.1770-4 / EBU R128 / Tech 3342 (E07 checked, not certified)").font(regular(10.5)).color(t.text_dim));
-        });
-    });
+    egui::Panel::top("master_banner").exact_size(40.0).frame(egui::Frame::NONE.fill(t.toolbar_bg).inner_margin(egui::Margin::same(8))).show(
+        ui,
+        |ui| {
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new("MASTER").font(bold(13.0)).color(t.header_text));
+                if ui.button("Back to Mix").clicked() {
+                    let _ = app.run("window.mix", json!({}));
+                }
+                ui.label(
+                    egui::RichText::new(
+                        "The chain is the Master track's inserts (applied once). Reference and monitor controls never reach an export.",
+                    )
+                    .font(regular(11.0))
+                    .color(t.text_dim),
+                );
+            });
+        },
+    );
     egui::CentralPanel::default().frame(egui::Frame::NONE.fill(t.window_bg).inner_margin(egui::Margin::same(12))).show(ui, |ui| {
         let main = app.engine.session().tracks.iter().find(|x| x.kind == TrackKind::Master).map(|x| x.id);
         let snap = app.player.as_ref().filter(|_| app.engine.transport.playing).map(|p| p.meters());
+        let card = |ui: &mut Ui, title: &str, body: &mut dyn FnMut(&mut Ui)| {
+            egui::Frame::NONE
+                .fill(t.panel_bg)
+                .stroke(egui::Stroke::new(1.0, t.border))
+                .corner_radius(egui::CornerRadius::same(crate::theme::metric::RADIUS))
+                .inner_margin(egui::Margin::same(10))
+                .show(ui, |ui| {
+                    ui.set_width(ui.available_width().min(560.0));
+                    ui.label(egui::RichText::new(title).font(bold(crate::theme::size::CAPTION)).color(t.section_label));
+                    ui.add_space(4.0);
+                    body(ui);
+                });
+            ui.add_space(10.0);
+        };
         ui.horizontal_top(|ui| {
             match main {
                 Some(id) => crate::mix_window::strip(app, ui, id, snap.as_ref()),
-                None => { ui.label("This session has no Master track."); }
+                None => {
+                    ui.label("This session has no Master track.");
+                }
             }
-            ui.add_space(24.0);
-            ui.vertical(|ui| {
-                ui.label(egui::RichText::new("Program and reference").font(bold(12.0)));
-                let st = app.engine.execute("mastering.status", &json!({})).unwrap_or_default();
-                ui.label(format!("program: {}", st["program"].as_u64().map_or("session mix".to_string(), |s| format!("source {s}"))));
-                let reference = st["reference"].clone();
-                if reference.is_null() {
-                    ui.label("reference: none (Clip List › right-click an imported file › Use as reference)");
-                } else {
-                    let listening = reference["listening"].as_bool().unwrap_or(false);
-                    ui.horizontal(|ui| {
-                        ui.label(format!("reference: source {} at {:+.1} dB", reference["source"].as_u64().unwrap_or(0), reference["gain_db"].as_f64().unwrap_or(0.0)));
-                        if ui.selectable_label(listening, "A/B: listen to reference").clicked() {
-                            let _ = app.run("mastering.reference", json!({"listening": !listening}));
-                        }
-                        if ui.button("Level match").on_hover_text("audition gain only; never an export setting").clicked()
-                            && let Ok(m) = app.engine.execute("mastering.level_match", &json!({}))
-                        {
-                            let _ = app.run("mastering.reference", json!({"gain_db": m["gain_db"]}));
-                        }
-                        if ui.button("Clear").clicked() {
-                            let _ = app.run("mastering.reference", json!({"source": null}));
+            ui.add_space(16.0);
+            egui::ScrollArea::vertical().id_salt("master_cards").show(ui, |ui| {
+                ui.vertical(|ui| {
+                    card(ui, "PROGRAM AND REFERENCE", &mut |ui| {
+                        let st = app.engine.execute("mastering.status", &json!({})).unwrap_or_default();
+                        ui.label(format!("Program: {}", st["program"].as_u64().map_or("session mix".to_string(), |s| format!("source {s}"))));
+                        let reference = st["reference"].clone();
+                        if reference.is_null() {
+                            ui.label(egui::RichText::new("Reference: none (Clip List › right-click an imported file › Use as reference)").color(t.text_dim));
+                        } else {
+                            let listening = reference["listening"].as_bool().unwrap_or(false);
+                            ui.label(format!(
+                                "Reference: source {} at {:+.1} dB",
+                                reference["source"].as_u64().unwrap_or(0),
+                                reference["gain_db"].as_f64().unwrap_or(0.0)
+                            ));
+                            ui.horizontal(|ui| {
+                                if ui.selectable_label(listening, "A/B: listen to reference").clicked() {
+                                    let _ = app.run("mastering.reference", json!({"listening": !listening}));
+                                }
+                                if ui.button("Level match").on_hover_text("audition gain only; never an export setting").clicked()
+                                    && let Ok(m) = app.engine.execute("mastering.level_match", &json!({}))
+                                {
+                                    let _ = app.run("mastering.reference", json!({"gain_db": m["gain_db"]}));
+                                }
+                                if ui.button("Clear").clicked() {
+                                    let _ = app.run("mastering.reference", json!({"source": null}));
+                                }
+                            });
+                            // Known issue K1: be explicit rather than imply A/B plays audio.
+                            ui.label(
+                                egui::RichText::new("A/B stores the setting only: this build does not play the reference (manual known issue K1).")
+                                    .font(regular(crate::theme::size::SMALL))
+                                    .color(t.warning),
+                            );
                         }
                     });
-                }
-                ui.separator();
-                ui.label(egui::RichText::new("Meters (offline over the program)").font(bold(12.0)));
-                if ui.button("Measure").clicked() {
-                    app.ui.master_meters = app.engine.execute("mastering.meters", &json!({})).ok();
-                }
-                if let Some(m) = &app.ui.master_meters {
-                    for (k, unit) in [("sample_peak_db", "dBFS"), ("true_peak_db", "dBTP"), ("max_momentary_lufs", "LUFS (M max)"), ("max_short_term_lufs", "LUFS (S max)"), ("integrated_lufs", "LUFS (I)"), ("loudness_range_lu", "LU (LRA)"), ("correlation", "(−1..1)"), ("mono_peak_db", "dBFS mono")] {
-                        ui.label(format!("{}: {:.2} {unit}", k.replace('_', " "), m[k].as_f64().unwrap_or(f64::NAN)));
-                    }
-                }
-                ui.separator();
-                ui.label(egui::RichText::new("Export").font(bold(12.0)));
-                ui.label(egui::RichText::new("File › Bounce Mix…: format, bit depth (dither only on integer depths when chosen), rate (SRC stated), tail (auto/seconds), report JSON; refuses missing or failed plugins unless acknowledged; never adds a limiter, normaliser or dither on its own.").font(regular(10.5)).color(t.text_dim));
+                    card(ui, "METERS (OFFLINE, OVER THE PROGRAM)", &mut |ui| {
+                        ui.horizontal(|ui| {
+                            if ui.button("Measure").on_hover_text("Offline analysis of the program; nothing is processed or changed").clicked() {
+                                app.ui.master_meters = app.engine.execute("mastering.meters", &json!({})).ok();
+                            }
+                            ui.label(egui::RichText::new("BS.1770-4 / EBU R128 / Tech 3342 — checked, not certified").font(regular(crate::theme::size::SMALL)).color(t.text_dim));
+                        });
+                        match &app.ui.master_meters {
+                            None => {
+                                ui.label(egui::RichText::new("Not measured yet.").color(t.text_dim));
+                            }
+                            Some(m) => {
+                                egui::Grid::new("master_meter_grid").num_columns(3).spacing(vec2(12.0, 3.0)).show(ui, |ui| {
+                                    for (k, label, unit) in [
+                                        ("sample_peak_db", "Sample peak", "dBFS"),
+                                        ("true_peak_db", "True peak", "dBTP"),
+                                        ("integrated_lufs", "Integrated", "LUFS"),
+                                        ("max_short_term_lufs", "Short-term max", "LUFS"),
+                                        ("max_momentary_lufs", "Momentary max", "LUFS"),
+                                        ("loudness_range_lu", "Loudness range", "LU"),
+                                        ("correlation", "Correlation", "−1…1"),
+                                        ("mono_peak_db", "Mono peak", "dBFS"),
+                                    ] {
+                                        ui.label(label);
+                                        let v = m[k].as_f64();
+                                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                                            ui.label(
+                                                egui::RichText::new(v.map_or("—".to_string(), |v| format!("{v:.2}")))
+                                                    .font(crate::theme::mono(crate::theme::size::NUMERIC))
+                                                    .color(t.counter_text),
+                                            );
+                                        });
+                                        ui.label(egui::RichText::new(unit).color(t.text_dim));
+                                        ui.end_row();
+                                    }
+                                });
+                            }
+                        }
+                    });
+                    card(ui, "EXPORT", &mut |ui| {
+                        if ui.button("Bounce Mix…").on_hover_text("File › Bounce Mix…").clicked() {
+                            crate::menus::invoke_menu(app, "ui.bounce_dialog", "File > Bounce Mix...");
+                        }
+                        ui.label(egui::RichText::new("Format, bit depth (dither only on integer depths when chosen), rate (SRC stated), tail (auto/seconds), report JSON. Refuses missing or failed plugins unless acknowledged; never adds a limiter, normaliser or dither on its own.").font(regular(crate::theme::size::SMALL)).color(t.text_dim));
+                    });
+                });
             });
         });
     });

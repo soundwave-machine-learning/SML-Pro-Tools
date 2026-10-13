@@ -332,7 +332,7 @@ fn loop_lane(app: &mut SoundApp, ui: &mut Ui, painter: &egui::Painter, s: &Sessi
     let recording = app.engine.transport.recording;
     painter.rect_filled(row.shrink2(vec2(0.0, 1.0)), 0.0, t.marker_ruler.gamma_multiply(0.8));
     let shown = app.ui.loop_drag.map(|d| d.preview).or(s.edit.loop_range);
-    let accent = if on { Color32::from_rgb(232, 150, 52) } else { t.text_dim };
+    let accent = if on { t.loop_range } else { t.text_dim };
     let handle_x = shown.map(|r| (x_of(s, tl, r.start), x_of(s, tl, r.end)));
     if let (Some(r), Some((x0, x1))) = (shown, handle_x) {
         let span = Rect::from_min_max(pos2(x0.max(row.min.x - 20.0), row.min.y + 2.0), pos2(x1.min(row.max.x + 20.0), row.max.y - 2.0));
@@ -800,6 +800,14 @@ fn track_row(app: &mut SoundApp, ui: &mut Ui, id: TrackId, row: Rect, tl: Rect) 
         let x1 = x_of(&s, tl, sel.end).min(lane.max.x);
         if x1 > x0 {
             painter.rect_filled(Rect::from_min_max(pos2(x0, lane.min.y), pos2(x1, lane.max.y)), 0.0, t.selection);
+            // Crisp edges show exactly where the range starts and ends (fill alone blurs on clips).
+            for (x, visible) in
+                [(x_of(&s, tl, sel.start), x_of(&s, tl, sel.start) >= lane.min.x), (x_of(&s, tl, sel.end), x_of(&s, tl, sel.end) <= lane.max.x)]
+            {
+                if visible {
+                    painter.line_segment([pos2(x, lane.min.y), pos2(x, lane.max.y)], Stroke::new(1.0, t.selection_stroke));
+                }
+            }
         }
     }
     lane_interaction(app, ui, &track, lane, tl);
@@ -1234,6 +1242,7 @@ fn grid_lines(painter: &egui::Painter, s: &Session, tl: Rect, lane: Rect) {
 }
 
 fn draw_clip(app: &SoundApp, painter: &egui::Painter, s: &Session, track: &Track, clip: &Clip, tl: Rect, lane: Rect, dim: bool) {
+    let t = Tokens::current();
     let x0 = x_of(s, tl, clip.start);
     let x1 = x_of(s, tl, clip.end()).max(x0 + 1.0);
     let r = Rect::from_min_max(pos2(x0, lane.min.y + 1.0), pos2(x1, lane.max.y - 1.0));
@@ -1246,21 +1255,29 @@ fn draw_clip(app: &SoundApp, painter: &egui::Painter, s: &Session, track: &Track
     let (mut body, bar, mut wave) = clip_colors(color, selected);
     if clip.muted || dim {
         body = body.gamma_multiply(0.45);
-        wave = Color32::from_rgb(70, 70, 70);
+        wave = t.text_disabled;
     }
     let body = if s.edit.flag("view.clip.transparency") { body.gamma_multiply(0.55) } else { body };
-    painter.rect(r, CornerRadius::same(2), body, Stroke::new(1.0, Color32::from_rgb(10, 10, 10)), StrokeKind::Inside);
+    painter.rect(
+        r,
+        CornerRadius::same(2),
+        body,
+        if selected { Stroke::new(1.5, t.selection_stroke) } else { Stroke::new(1.0, t.border) },
+        StrokeKind::Inside,
+    );
     let name_h = if lane.height() >= 40.0 && s.edit.flag("view.clip.name") { 13.0 } else { 0.0 };
     if name_h > 0.0 {
         let nb = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + name_h));
-        painter.rect_filled(nb, CornerRadius { nw: 2, ne: 2, sw: 0, se: 0 }, if clip.muted { Color32::from_rgb(70, 70, 70) } else { bar });
+        painter.rect_filled(nb, CornerRadius { nw: 2, ne: 2, sw: 0, se: 0 }, if clip.muted { t.button } else { bar });
         let name_clip = nb.intersect(lane);
+        // A muted clip says so in its name bar (not only by being grey).
+        let name = if clip.muted { format!("muted · {}", clip.name) } else { clip.name.clone() };
         painter.with_clip_rect(name_clip).text(
             pos2(nb.min.x.max(lane.min.x) + 4.0, nb.center().y),
             Align2::LEFT_CENTER,
-            &clip.name,
+            name,
             bold(10.5),
-            Color32::from_rgb(12, 12, 12),
+            if clip.muted { t.text_dim } else { t.text_dark },
         );
     }
     let body_r = Rect::from_min_max(pos2(r.min.x, r.min.y + name_h), r.max);
@@ -2126,7 +2143,14 @@ fn overlay(app: &mut SoundApp, ui: &mut Ui, tl: Rect, area: Rect) {
     }
     if app.is_playing() {
         let x = x_of(s, tl, app.position());
+        // A dark underlay keeps the playhead visible over bright clips; a head marks it on the rulers.
+        painter.line_segment([pos2(x, area.min.y), pos2(x, area.max.y)], Stroke::new(3.5, t.border.gamma_multiply(0.8)));
         painter.line_segment([pos2(x, area.min.y), pos2(x, area.max.y)], Stroke::new(1.5, t.playhead));
+        painter.add(Shape::convex_polygon(
+            vec![pos2(x - 6.0, area.min.y), pos2(x + 6.0, area.min.y), pos2(x, area.min.y + 8.0)],
+            t.playhead,
+            Stroke::new(1.0, t.border),
+        ));
         // Session reads first (owned copies), then the layout mutation: the
         // two borrow disjoint fields.
         let pos = app.position();

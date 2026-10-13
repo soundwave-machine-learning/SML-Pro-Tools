@@ -589,7 +589,11 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
     let running = app.is_playing() || app.engine.transport.recording;
     let rate = app.engine.session().sample_rate.hz();
     egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
-        ui.label(egui::RichText::new("Basic").strong());
+        ui.label(
+            egui::RichText::new("DEVICES")
+                .font(crate::theme::bold(crate::theme::size::CAPTION))
+                .color(crate::theme::Tokens::current().section_label),
+        );
         ui.label(
             egui::RichText::new(
                 "Audio host: the platform default (WASAPI on Windows). ASIO is not in this build (it needs Steinberg's SDK at build time).",
@@ -741,7 +745,12 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
 /// The selected track's recording input: which channel(s) of the input device it records.
 /// This is per track (`track.input`), separate from choosing the device itself.
 fn selected_track_input(app: &mut SoundApp, ui: &mut egui::Ui) {
-    ui.label(egui::RichText::new("Selected track input").strong());
+    ui.label(
+        egui::RichText::new("SELECTED TRACK INPUT")
+            .font(crate::theme::bold(crate::theme::size::CAPTION))
+            .color(crate::theme::Tokens::current().section_label),
+    )
+    .on_hover_text("Which input of the device this track records (Selected track input)");
     let track = {
         let s = app.engine.session();
         app.ui
@@ -790,7 +799,7 @@ fn selected_track_input(app: &mut SoundApp, ui: &mut egui::Ui) {
             // A one-input device may feed a stereo track (the same signal on both sides).
             if first > ch || (ch > 1 && first + width - 1 > ch) {
                 ui.colored_label(
-                    egui::Color32::from_rgb(230, 110, 90),
+                    crate::theme::Tokens::current().error,
                     format!(
                         "{current} is not available on the open input device ({ch} channel(s)): recording will refuse rather than use another input."
                     ),
@@ -1178,6 +1187,22 @@ fn assistant_window(app: &mut SoundApp, ctx: &egui::Context) {
     let mut open = app.ui.show_assistant;
     let t = Tokens::current();
     win(ctx, &mut open, "Assistant", vec2(760.0, 560.0), |ui| {
+        // Runtime status first: what actually answers, so nothing implies an unconfigured model.
+        let model = app.engine.voice.model.clone();
+        ui.horizontal_wrapped(|ui| {
+            ui.label(egui::RichText::new("ANSWERS FROM").font(crate::theme::bold(crate::theme::size::CAPTION)).color(t.section_label));
+            match &model {
+                Some(m) => {
+                    ui.label(egui::RichText::new(format!("local model {} at {}", m.model, m.url)).color(t.text));
+                    ui.label(egui::RichText::new("(falls back to the grounded rules if it fails)").color(t.text_dim));
+                }
+                None => {
+                    ui.label(egui::RichText::new("grounded rules — no local model configured").color(t.text));
+                }
+            }
+            ui.label(egui::RichText::new("· push-to-talk: enrolled phrases only").color(t.text_dim));
+        });
+        ui.add_space(2.0);
         ui.horizontal(|ui| {
             let r = ui.add(
                 egui::TextEdit::singleline(&mut app.ui.assistant_input)

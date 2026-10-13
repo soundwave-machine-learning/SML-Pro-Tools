@@ -993,10 +993,13 @@ fn vendor_menus(ui: &mut Ui, mut list: Vec<MenuPlugin>, none: &str) -> Option<St
     let mut picked = None;
     egui::ScrollArea::vertical().id_salt("vendors").max_height(max_h).show(ui, |ui| {
         for v in vendors {
-            ui.menu_button(if v.is_empty() { "Unknown vendor" } else { v }, |ui| {
+            // "Vendor (n)": the count comes from the list already in hand (no scan, no loading).
+            let n = list.iter().filter(|p| p.vendor == v).count();
+            let label = format!("{} ({n})", if v.is_empty() { "Unknown vendor" } else { v });
+            ui.menu_button(label, |ui| {
                 egui::ScrollArea::vertical().id_salt("plugins").max_height(max_h).show(ui, |ui| {
                     for p in list.iter().filter(|p| p.vendor == v) {
-                        if ui.button(&p.name).clicked() {
+                        if ui.button(&p.name).on_hover_text(&p.id).clicked() {
                             picked = Some(p.id.clone());
                         }
                     }
