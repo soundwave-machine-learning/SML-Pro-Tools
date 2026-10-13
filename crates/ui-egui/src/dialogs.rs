@@ -180,9 +180,13 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     .to_string();
     let enter = ctx.input(|i| i.key_pressed(egui::Key::Enter));
     let esc = ctx.input(|i| i.key_pressed(egui::Key::Escape));
+    // The New Tracks dialog needs room for its full-width Name row (HF04).
+    let min_width = if matches!(d, Dialog::NewTracks { .. }) { 460.0 } else { 0.0 };
+    let has_master = app.engine.session().tracks.iter().any(|t| t.kind == soundcraft_model::TrackKind::Master);
     egui::Window::new(egui::RichText::new(&title).font(bold(13.0)))
         .collapsible(false)
         .resizable(false)
+        .min_width(min_width)
         .anchor(Align2::CENTER_CENTER, vec2(0.0, -80.0))
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
@@ -201,9 +205,19 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                             .selected_text(soundcraft_model::TrackKind::from_id(kind).map_or("Audio Track", |k| k.label()))
                             .show_ui(ui, |ui| {
                                 for k in soundcraft_model::TrackKind::ALL {
-                                    if ui.selectable_label(kind == k.id(), k.label()).clicked() {
+                                    // Main is the session's managed output: never offer a second
+                                    // one by accident (HF02).
+                                    let duplicate_main = k == soundcraft_model::TrackKind::Master && has_master;
+                                    let r = ui
+                                        .add_enabled(!duplicate_main, egui::Button::selectable(kind == k.id(), k.label()))
+                                        .on_disabled_hover_text("This session already has a Master Fader (Main)");
+                                    if r.clicked() {
                                         *kind = k.id().to_string();
                                         *name = k.default_name().to_string();
+                                        // Buses default to stereo unless the user chooses otherwise.
+                                        if k == soundcraft_model::TrackKind::Aux && format == "Mono" {
+                                            *format = "Stereo".into();
+                                        }
                                     }
                                 }
                             });
@@ -215,8 +229,14 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                                 ui.selectable_value(timebase, "ticks".to_string(), "Ticks");
                             },
                         );
-                        ui.label("Name:");
-                        ui.add(egui::TextEdit::singleline(name).desired_width(140.0));
+                    });
+                    // HF04: Name on its own full-width row, so it is never squeezed at the right
+                    // edge; long names scroll inside the field and are stored in full.
+                    ui.horizontal(|ui| {
+                        let label = ui.label("Name:");
+                        let w = ui.available_width().max(280.0);
+                        ui.add_sized([w, 24.0], egui::TextEdit::singleline(name).hint_text("e.g. Lead Vocal").id_salt("nt_name"))
+                            .labelled_by(label.id);
                     });
                     if buttons(ui, "Create", enter) {
                         action =

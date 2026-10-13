@@ -163,6 +163,10 @@ pub struct UiState {
     pub remote_bind: String,
     #[serde(default)]
     pub remote_autostart: bool,
+    /// Mix window Split view: share of the height given to the Visual pane (HF01). Saved with
+    /// the interface preferences; an invalid value falls back to the default when used.
+    #[serde(default = "default_mix_split")]
+    pub mix_split: f32,
     #[serde(default)]
     pub shortcut_profile: shortcut_profiles::Profile,
     #[serde(default)]
@@ -282,6 +286,7 @@ impl Default for UiState {
             monitor: MonitorState::default(),
             remote_bind: default_remote_bind(),
             remote_autostart: false,
+            mix_split: default_mix_split(),
             shortcut_profile: shortcut_profiles::Profile::default(),
             shortcut_base: shortcut_profiles::Profile::default(),
             shortcut_overrides: std::collections::BTreeMap::new(),
@@ -405,6 +410,10 @@ pub enum Gesture {
     Listen {
         track: TrackId,
     },
+}
+
+fn default_mix_split() -> f32 {
+    mix_window::SPLIT_DEFAULT
 }
 
 fn default_remote_bind() -> String {

@@ -6,18 +6,40 @@ use egui::{Align2, Color32, Rect, Sense, Stroke, Ui, pos2, vec2};
 use serde_json::json;
 use soundcraft_time::format_position;
 
-fn panel_header(ui: &mut Ui, title: &str) {
+/// HF02: the "+" at the right of the TRACKS header. It opens the existing New Tracks dialog,
+/// exactly as Track › New... and the active profile's shortcut do.
+fn add_track_button(app: &mut SoundApp, ui: &mut Ui, header: Rect) {
+    let t = Tokens::current();
+    let r = Rect::from_center_size(pos2(header.max.x - 15.0, header.center().y), vec2(24.0, 18.0));
+    let chord = app.shortcut_table().iter().find(|e| e.command == "track.new" && e.params.is_null()).map(|e| e.chord.clone());
+    let tip = match chord.map(|c| crate::shortcuts::shortcut_label(&c, ui.ctx().os() == egui::os::OperatingSystem::Mac)) {
+        Some(c) if !c.is_empty() => format!("Add Track… ({c}) — audio, aux/bus, MIDI, instrument, VCA, folder; mono or stereo"),
+        _ => "Add Track… — audio, aux/bus, MIDI, instrument, VCA, folder; mono or stereo".to_string(),
+    };
+    let resp = ui.interact(r, ui.id().with("add-track"), Sense::click()).on_hover_text(tip);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Add Track"));
+    let fill = if resp.hovered() { t.accent } else { t.panel_bg2 };
+    ui.painter().rect(r, 3.0, fill, Stroke::new(1.0, t.border), egui::StrokeKind::Inside);
+    ui.painter().text(r.center(), Align2::CENTER_CENTER, "+", bold(15.0), t.header_text);
+    if resp.clicked() {
+        crate::menus::invoke_menu(app, "track.new", "Track > New...");
+    }
+}
+
+fn panel_header(ui: &mut Ui, title: &str) -> Rect {
     let t = Tokens::current();
     let (r, _) = ui.allocate_exact_size(vec2(ui.available_width(), 22.0), Sense::hover());
     ui.painter().rect_filled(r, 0.0, t.panel_bg2);
     ui.painter().text(pos2(r.min.x + 8.0, r.center().y), Align2::LEFT_CENTER, title, bold(11.5), t.header_text);
     ui.painter().line_segment([pos2(r.min.x, r.max.y), pos2(r.max.x, r.max.y)], Stroke::new(1.0, t.border));
+    r
 }
 
 pub fn tracks_and_groups(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let total = ui.available_height();
-    panel_header(ui, "TRACKS");
+    let header = panel_header(ui, "TRACKS");
+    add_track_button(app, ui, header);
     let tracks: Vec<(u64, String, bool, [u8; 3], bool)> = {
         let s = app.engine.session();
         s.tracks.iter().map(|x| (x.id.0, x.name.clone(), !x.hidden, x.color, s.edit.selected_tracks.contains(&x.id))).collect()

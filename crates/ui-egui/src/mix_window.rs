@@ -33,14 +33,19 @@ pub(crate) fn content(app: &mut SoundApp, ui: &mut Ui) {
     let console = |app: &mut SoundApp, ui: &mut Ui| {
         // Both directions: strips keep a 560 pt minimum height, so on short screens (e.g.
         // 1366×768 at 150 %, or the Split view) the faders are reached by scrolling, not clipped.
-        egui::ScrollArea::both().id_salt("console").auto_shrink([false, false]).show(ui, |ui| {
-            ui.horizontal_top(|ui| {
-                ui.spacing_mut().item_spacing.x = 1.0;
-                for id in &ids {
-                    strip(app, ui, *id, snap.as_ref());
-                }
+        // Scroll bars always shown: a pane shorter than the strips must look scrollable (HF01).
+        egui::ScrollArea::both()
+            .id_salt("console")
+            .auto_shrink([false, false])
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysVisible)
+            .show(ui, |ui| {
+                ui.horizontal_top(|ui| {
+                    ui.spacing_mut().item_spacing.x = 1.0;
+                    for id in &ids {
+                        strip(app, ui, *id, snap.as_ref());
+                    }
+                });
             });
-        });
     };
     let visual = |app: &mut SoundApp, ui: &mut Ui| {
         ui.horizontal_top(|ui| {
@@ -55,13 +60,78 @@ pub(crate) fn content(app: &mut SoundApp, ui: &mut Ui) {
     match view {
         crate::visual_mixer::MixView::Console => console(app, ui),
         crate::visual_mixer::MixView::Visual => visual(app, ui),
-        crate::visual_mixer::MixView::Split => {
-            let h = ui.available_height();
-            ui.allocate_ui(egui::vec2(ui.available_width(), (h * 0.45).max(220.0)), |ui| visual(app, ui));
-            ui.separator();
-            console(app, ui);
-        }
+        crate::visual_mixer::MixView::Split => split(app, ui, &visual, &console),
     }
+}
+
+/// Default share of the Split view's height given to the Visual pane.
+pub const SPLIT_DEFAULT: f32 = 0.45;
+/// Height of the draggable divider between the panes (logical points; also its hit area).
+pub const SPLIT_DIVIDER: f32 = 10.0;
+const SPLIT_MIN_VISUAL: f32 = 140.0;
+const SPLIT_MIN_CONSOLE: f32 = 160.0;
+
+/// A saved split share made usable: finite and within 10–90 % (anything else → the default).
+pub fn clamp_split(f: f32) -> f32 {
+    if f.is_finite() && (0.1..=0.9).contains(&f) { f } else { SPLIT_DEFAULT }
+}
+
+/// Visual and Console pane heights for a Split view of height `total` and preferred share `frac`.
+/// Each pane keeps its minimum while there is room for both; on tiny windows they share the
+/// height proportionally. The divider's own height is subtracted first.
+pub fn split_heights(total: f32, frac: f32) -> (f32, f32) {
+    let usable = (total - SPLIT_DIVIDER).max(0.0);
+    let (min_v, min_c) =
+        if usable >= SPLIT_MIN_VISUAL + SPLIT_MIN_CONSOLE { (SPLIT_MIN_VISUAL, SPLIT_MIN_CONSOLE) } else { (usable * 0.4, usable * 0.6) };
+    let v = (usable * clamp_split(frac)).clamp(min_v, (usable - min_c).max(min_v));
+    (v, usable - v)
+}
+
+/// HF01: Visual over Console in two bounded panes with a draggable divider. Each pane clips to
+/// its own rectangle; the Console scrolls inside its pane. Moving the divider changes only the
+/// saved share (`ui.json` `mix_split`), never the session.
+fn split(app: &mut SoundApp, ui: &mut Ui, visual: &dyn Fn(&mut SoundApp, &mut Ui), console: &dyn Fn(&mut SoundApp, &mut Ui)) {
+    let full = ui.available_rect_before_wrap();
+    let (vh, _) = split_heights(full.height(), app.ui.mix_split);
+    let visual_rect = Rect::from_min_size(full.min, egui::vec2(full.width(), vh));
+    let divider = Rect::from_min_size(pos2(full.min.x, visual_rect.max.y), egui::vec2(full.width(), SPLIT_DIVIDER));
+    let console_rect = Rect::from_min_max(pos2(full.min.x, divider.max.y), full.max);
+    let pane = |app: &mut SoundApp, ui: &mut Ui, r: Rect, f: &dyn Fn(&mut SoundApp, &mut Ui), salt: &str| {
+        ui.scope_builder(egui::UiBuilder::new().id_salt(salt).max_rect(r).layout(egui::Layout::top_down(egui::Align::Min)), |ui| {
+            ui.set_clip_rect(r.intersect(ui.clip_rect()));
+            f(app, ui);
+        });
+    };
+    pane(app, ui, visual_rect, visual, "split-visual");
+    let resp = ui
+        .interact(divider, ui.id().with("mix-split-divider"), Sense::click_and_drag())
+        .on_hover_cursor(egui::CursorIcon::ResizeVertical)
+        .on_hover_text("Drag to resize the Visual and Console panes · double-click or right-click to reset");
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, true, "Mixer split divider"));
+    if resp.dragged()
+        && let Some(p) = resp.interact_pointer_pos()
+    {
+        let usable = (full.height() - SPLIT_DIVIDER).max(1.0);
+        app.ui.mix_split = ((p.y - full.min.y - SPLIT_DIVIDER / 2.0) / usable).clamp(0.1, 0.9);
+    }
+    if resp.double_clicked() {
+        app.ui.mix_split = SPLIT_DEFAULT;
+    }
+    resp.context_menu(|ui| {
+        if ui.button("Reset split").clicked() {
+            app.ui.mix_split = SPLIT_DEFAULT;
+            ui.close();
+        }
+    });
+    let t = Tokens::current();
+    let active = resp.hovered() || resp.dragged();
+    ui.painter().rect_filled(divider, 0.0, if active { t.group_border } else { t.toolbar_bg });
+    let c = divider.center();
+    for dx in [-12.0, 0.0, 12.0] {
+        ui.painter().circle_filled(pos2(c.x + dx, c.y), 1.6, if active { t.text } else { t.text_dim });
+    }
+    pane(app, ui, console_rect, console, "split-console");
+    ui.advance_cursor_after_rect(full);
 }
 
 /// Format of the destination a track's output feeds (the main mix, a bus, or stereo).

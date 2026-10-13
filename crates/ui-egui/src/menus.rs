@@ -9,6 +9,7 @@ use soundcraft_engine::catalog;
 pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("ui.dock", "Arrange Panel", "", None),
     ("ui.dock.reset", "Reset Panel Layout", "Window > Reset Panel Layout", None),
+    ("ui.mix_split", "Mixer Split Size", "", None),
     ("window.mix", "Mix", "Window > Mix", Some("Cmd+=")),
     ("window.edit", "Edit", "Window > Edit", Some("Cmd+=")),
     ("window.toggle_mix_edit", "Toggle Mix/Edit", "", Some("Cmd+=")),
@@ -741,6 +742,15 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
                 },
                 None => json!({"text": text}),
             }
+        }
+        "ui.mix_split" => {
+            // HF01: the Split view's Visual share; {fraction: 0.1..0.9} or {reset: true} / {}.
+            match p.get("fraction").and_then(Value::as_f64) {
+                Some(f) if (0.1..=0.9).contains(&f) => app.ui.mix_split = f as f32,
+                Some(f) => return Some(Err(format!("`fraction` must be within 0.1..0.9, not {f}"))),
+                None => app.ui.mix_split = crate::mix_window::SPLIT_DEFAULT,
+            }
+            json!({"fraction": app.ui.mix_split})
         }
         "ui.theme_reset" => {
             app.ui.theme_custom = None;
