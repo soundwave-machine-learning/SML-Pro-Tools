@@ -10,6 +10,7 @@
 //! soundcraft-cli app [--port P] METHOD [JSON]     call a running app's control channel
 //! soundcraft-cli mcp [--connect PORT] [--demo]    MCP server on stdio
 //! soundcraft-cli token <path|show|rotate|revoke>  the control channel's token (HF21)
+//! soundcraft-cli serve [--port P] [--demo]        authenticated control server over a headless engine (SDK tests)
 //! soundcraft-cli parity [--write PATH]            parity report (markdown)
 //! soundcraft-cli plugins                          list built-in plugins
 //! ```
@@ -74,6 +75,7 @@ fn main() -> ExitCode {
         "app" => app(&rest),
         "mcp" => mcp(&rest),
         "token" => token(&rest),
+        "serve" => serve(&rest),
         "parity" => parity(&rest),
         // Isolated plugin-scan worker (R07): loads ONE bundle in this process and prints its
         // descriptors as JSON; a crash takes only this process down.
@@ -424,6 +426,39 @@ fn token(args: &[String]) -> ExitCode {
             Err(e) => fail(e),
         },
         Some(other) => fail(format!("token {other}: use path, show, rotate or revoke")),
+    }
+}
+
+/// The app's authenticated control server (protocol 2) over a headless engine: the same
+/// admission, bounds and token file as `soundcraft --control`, without a window or audio. For the
+/// SDKs' end-to-end tests and scripts; `ui.*` methods answer that they need the desktop app.
+fn serve(args: &[String]) -> ExitCode {
+    use std::sync::{Arc, Mutex};
+    let port = arg_value(args, "--port").and_then(|p| p.parse::<u16>().ok()).unwrap_or(0);
+    let Some(token_path) = soundcraft_automation::auth::default_token_path() else {
+        return fail("no settings folder (SOUNDCRAFT_CONFIG_DIR is empty)");
+    };
+    let e = if args.iter().any(|a| a == "--demo") { soundcraft_engine::demo::demo_engine() } else { Engine::default() };
+    let backend = Arc::new(Mutex::new(Headless::new(e)));
+    let dispatch: soundcraft_automation::server::Dispatch = Arc::new(move |method: String, params: Value| {
+        let r = match backend.lock() {
+            Ok(mut b) => b.call(&method, params),
+            Err(_) => Err("engine unavailable".into()),
+        };
+        match r {
+            Ok(v) => json!({"ok": true, "result": v}),
+            Err(e) => json!({"ok": false, "code": "error", "error": e}),
+        }
+    });
+    match soundcraft_automation::server::start(port, token_path.clone(), soundcraft_automation::server::Limits::default(), dispatch) {
+        Ok(actual) => {
+            outln!("SOUNDCRAFT_CONTROL_PORT={actual}");
+            outln!("token file: {}", token_path.display());
+            loop {
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            }
+        }
+        Err(e) => fail(e),
     }
 }
 

@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://soundcraft.local/sdk/schema/sml-control-v2.schema.json",
+  "title": "SML Studio control protocol 2 (one JSON object per line, UTF-8, at most 1 MiB)",
+  "$defs": {
+    "id": { "description": "Chosen by the client; echoed in the reply. null only in replies to unparseable input.", "type": ["integer", "string", "null"] },
+    "authRequest": {
+      "type": "object",
+      "description": "Must be the first message of every connection, within 10 s.",
+      "required": ["id", "method", "params"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "const": "auth" },
+        "params": {
+          "type": "object",
+          "required": ["token", "protocol"],
+          "properties": {
+            "token": { "type": "string", "pattern": "^smlc_[0-9a-f]{64}$", "description": "Secret. Never log it." },
+            "protocol": { "const": 2 },
+            "client": { "type": "string", "maxLength": 64 }
+          }
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "description": "Any method after auth: engine.execute {command, params}, engine.commands, session.inspect, ui.* (desktop app only).",
+      "required": ["id", "method"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "method": { "type": "string" },
+        "params": { "type": "object" }
+      }
+    },
+    "okReply": {
+      "type": "object",
+      "required": ["ok", "result"],
+      "properties": { "id": { "$ref": "#/$defs/id" }, "ok": { "const": true }, "result": {} }
+    },
+    "authResult": {
+      "type": "object",
+      "required": ["protocol", "app_version", "authenticated"],
+      "properties": { "protocol": { "const": 2 }, "app_version": { "type": "string" }, "authenticated": { "const": true } }
+    },
+    "errorReply": {
+      "type": "object",
+      "required": ["ok", "code", "error"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "ok": { "const": false },
+        "code": {
+          "enum": ["auth_required", "unauthorized", "protocol", "busy", "bad_request", "error", "timeout", "closed"],
+          "description": "auth_required: first message was not auth (the text explains the token migration). unauthorized: missing, wrong or revoked token. protocol: version mismatch. busy: too many connections. bad_request: not JSON / too large. error: the command ran and refused. timeout: the app did not answer in time (the request was not cancelled). closed: the app is closing."
+        },
+        "error": { "type": "string" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/authRequest" },
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/okReply" },
+    { "$ref": "#/$defs/errorReply" }
+  ]
+}
