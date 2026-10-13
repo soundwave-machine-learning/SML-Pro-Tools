@@ -3,7 +3,7 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
-## 2026-10-13 — revision 2026-10-13.6 — Hotfix Pass 03, source `f98af69`
+## 2026-10-13 — revision 2026-10-13.6 — Hotfix Pass 03, source `9baf4de`
 
 **Changed**
 - [USER_GUIDE.md](USER_GUIDE.md):
@@ -16,7 +16,7 @@ how it was verified. The verification state itself lives in [DOCS_MANIFEST.json]
   - §6.3: what a punch keeps, and the "before take" playlist. §6.6: the recording-guard message.
   - §13.4, §16.1: Master mute and where it sits in Main's signal order.
   - §18.1, §18.2, §18.4, §24 E: reference A/B listening, and MP3/AAC export (encoders, limits,
-    verification).
+    verification, Windows N/KN Media Feature Pack).
   - §23.2: Recover Autosave refuses while recording.
   - §25.2: token, auth handshake, limits, External Control window, `soundcraft-cli token`,
     migration, no replay. §25.4: guard. §25.5 (new): SDKs.

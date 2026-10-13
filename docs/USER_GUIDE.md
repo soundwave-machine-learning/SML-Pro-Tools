@@ -1,7 +1,7 @@
 # SML Studio user manual
 
 Product: SML Studio (the SoundCraft engine), version 0.5.0. This is the one authoritative manual.
-Documented source: branch `fable/recording-core` at Hotfix Pass 03 (code commit `f98af69`). Hotfix Pass 03 adds a recording guard against session replacement (§6.6), non-destructive punch (§6.3), a working Master mute (§13.4), working reference A/B listening (§18.2), the WASAPI Exclusive and WASAPI Low Latency driver types (§4.1, §4.6), menu entries for every main window with scrolling menus (§1), MP3 and AAC (M4A) export on Windows (§18.4), an authenticated control channel (§25.2) and local Python/JavaScript SDKs (§25.5); builds made before it (such as `f6deab2`) do not have them. Hotfix Pass 02 (code `30df4a9`) added plugin scan jobs and scan diagnostics (§17.1), the driver type and honest buffer reporting in Audio Setup (§4.1, §4.6), dragging clips to other tracks (§8.4), the Edit window's bottom bar (§22), the new fader handling (§13.2) and the detachable Mixer window (§13.5); builds made before it (such as `4d8749f`) do not have them. Hotfix Pass 01 (code `1d71089`) added the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1) — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
+Documented source: branch `fable/recording-core` at Hotfix Pass 03 (code commit `9baf4de`). Hotfix Pass 03 adds a recording guard against session replacement (§6.6), non-destructive punch (§6.3), a working Master mute (§13.4), working reference A/B listening (§18.2), the WASAPI Exclusive and WASAPI Low Latency driver types (§4.1, §4.6), menu entries for every main window with scrolling menus (§1), MP3 and AAC (M4A) export on Windows (§18.4), an authenticated control channel (§25.2) and local Python/JavaScript SDKs (§25.5); builds made before it (such as `f6deab2`) do not have them. Hotfix Pass 02 (code `30df4a9`) added plugin scan jobs and scan diagnostics (§17.1), the driver type and honest buffer reporting in Audio Setup (§4.1, §4.6), dragging clips to other tracks (§8.4), the Edit window's bottom bar (§22), the new fader handling (§13.2) and the detachable Mixer window (§13.5); builds made before it (such as `4d8749f`) do not have them. Hotfix Pass 01 (code `1d71089`) added the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1) — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
 Verification status, applicable builds and history: [DOCS_MANIFEST.json](DOCS_MANIFEST.json), [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md).
 Every command named here exists in this build; parameters and chords for all of them: [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md).
 
@@ -1217,7 +1217,9 @@ reach an export. The parameter `source` is documented but ignored (Known issue K
 
 **MP3 and AAC (Hotfix 03, Windows only):** `file.bounce_mix {path: "mix.mp3" | "mix.m4a", bitrate?,
 mode?: "cbr", metadata?: {title?, originator?}, …}` uses the encoders built into Windows (Media Foundation), so
-nothing extra is installed and no codec licence is accepted on your behalf.
+nothing extra is installed and no codec licence is accepted on your behalf. Windows N/KN editions
+have Media Foundation only after installing the Media Feature Pack (Settings › Apps › Optional
+features); without it MP3/M4A are greyed out with that reason and everything else works.
 | | MP3 | AAC-LC in M4A |
 |---|---|---|
 | Bit rates (kbps, constant) | 128, 160, 192, 224, 256, **320** (default) | 96, 128, 160, **192** (default) |
