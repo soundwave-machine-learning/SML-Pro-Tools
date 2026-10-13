@@ -131,6 +131,20 @@ Renders show layout only. They do not show native DPI, font hinting, pointer fee
 4. A dense cluster's chip names only the first channel ("Snare +6"). The others are in its list,
    tooltip and accessible name, not on the canvas.
 
-## Candidate
+## Candidate (staged, not installed)
 
-_Filled in after the build._
+Built with `OUT=dist/refine01-windows bash packaging/windows/cross-build.sh`. This is the GNU
+cross-build (`x86_64-pc-windows-gnu`, rustc 1.97.0, release, `--locked`): WASAPI only, unsigned,
+no installer, with the documentation bundle at revision 2026-10-13.4. Source `4d8749f` (clean
+tree). Program code is identical to `3aa6554`; the compiled-in manual is the one at `4d8749f`.
+
+| Artifact | SHA-256 |
+|---|---|
+| `soundcraft-0.5.0-windows-x64-gnu-portable.zip` | `115666bd39f2650cae6f67b10e2d030b7bc1cd3b079b12dced18c0fc32ef90a7` |
+| `soundcraft.exe` (inside) | `a79cf45f45e1321df6f05c4f2ac12edadaf1073ee59f6543ea0c238eefe37f80` |
+| `soundcraft-cli.exe` (inside) | `fb50823b4ce9118332827c5f4fdef152ad27112c14ff3db9476770113b93ac1b` |
+| `MANIFEST.json` (beside the zip) | `1bab5415af6085885eb1d54e6bcad19152c55577a8f762300a5adc4e336da176` |
+
+**Not installed.** The installed Hotfix Pass 01 candidate was not touched. To try this build,
+extract it into a new folder and run it there; it shares `%APPDATA%\SoundCraft`, including the
+density preference. Reference A/B in this build is still the **open defect K1**.

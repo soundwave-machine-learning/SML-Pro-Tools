@@ -33,6 +33,23 @@
   "known_builds": [
     {
       "version": "0.5.0",
+      "commit": "4d8749f822a872bfaa121c7c807a328b04910e31",
+      "program_code_identical_to": "3aa655460c2a12f8eeb53ee503687b5f88583189",
+      "documentation": "this edition (UI refinement pass 01; compiled-in manual = USER_GUIDE.md at 4d8749f)",
+      "artifacts": [
+        {
+          "name": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+          "sha256": "115666bd39f2650cae6f67b10e2d030b7bc1cd3b079b12dced18c0fc32ef90a7",
+          "files": {
+            "soundcraft.exe": "a79cf45f45e1321df6f05c4f2ac12edadaf1073ee59f6543ea0c238eefe37f80",
+            "soundcraft-cli.exe": "fb50823b4ce9118332827c5f4fdef152ad27112c14ff3db9476770113b93ac1b"
+          },
+          "notes": "UI refinement pass 01 candidate, staged for review (not installed); unsigned GNU cross-build; not yet run on Windows; reference A/B is open defect K1"
+        }
+      ]
+    },
+    {
+      "version": "0.5.0",
       "commit": "4154aa8a7124355d2ec205fcade6ace7c7c491c2",
       "program_code_identical_to": "59038e20c2d608f5371bda361881f20cf1848268",
       "documentation": "this edition (interface polish pass 01; compiled-in manual = USER_GUIDE.md at 4154aa8)",
