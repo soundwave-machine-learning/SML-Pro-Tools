@@ -1,14 +1,21 @@
 //! The Edit window toolbar.
 
+use crate::SoundApp;
 use crate::theme::{Tokens, bold, mono, regular};
 use crate::widgets::icon_button;
-use crate::{SoundApp, icons};
 use egui::{Align2, Color32, CornerRadius, Rect, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 use serde_json::json;
 use soundcraft_model::{EditMode, Tool};
 use soundcraft_time::{TimeFormat, format_length, format_position};
 
-pub const HEIGHT: f32 = 78.0;
+/// HF08: the Edit window's controls are in two fixed rows that never scroll. Above the tracks,
+/// the editing tools (edit modes, tools, audio tools, zoom); below them, the bottom bar
+/// (transport, counters, Nudge, grid, output meter). When a row is too narrow for every group,
+/// the groups that do not fit go into its labelled overflow menu ("More tools…", "More
+/// controls ▾"), lowest priority first; the transport and Nudge are the last to go.
+pub const HEIGHT: f32 = 60.0;
+/// Height of the bottom bar.
+pub const BOTTOM_HEIGHT: f32 = 34.0;
 
 /// RC09 keyboard fallback, stated where Nudge is used: the toolkit cannot tell keypad − from
 /// the main-row − (only keypad + is distinguishable), so plain −/+ nudge whenever no text field,
@@ -24,169 +31,174 @@ fn group(ui: &mut Ui, w: f32, h: f32, add: impl FnOnce(&mut Ui, Rect)) {
     add(&mut child, r);
 }
 
-/// Where the always-reachable toolbar controls were drawn last frame (RC09 evidence and tests).
+/// Where the always-reachable controls were drawn last frame (RC09/HF08 evidence and tests).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ToolbarLayout {
-    /// The window was narrower than the full row: Nudge and transport are pinned on the right.
-    pub compact: bool,
-    /// Natural width of the full row (measured on a full-row frame; 0 until then).
-    pub full_width: f32,
-    /// Natural width of the Nudge panel (measured with the full row).
-    pub nudge_width: f32,
-    /// Natural width of the transport group (measured with the full row).
-    pub transport_width: f32,
-    /// Narrower still (e.g. the Record layout beside its panel on a compact window): the pinned
-    /// Nudge and transport would leave the tools almost no room, so the toolbar uses two rows —
-    /// the scrolling groups on top at full width, Nudge and transport underneath.
-    pub stacked: bool,
-    /// Stacked and still too narrow for Nudge and transport side by side: the transport is drawn
-    /// in the control bar instead (as in the Mix and Master layouts), never hidden.
-    pub transport_moved: bool,
+    /// The top (editing tools) row.
+    pub visible: Rect,
+    /// The bottom bar.
+    pub bottom: Rect,
+    /// The edit tools and audio tools groups (`Rect::NOTHING` when in the overflow menu).
+    pub tools: Rect,
     pub transport: Rect,
     pub nudge: Rect,
-    /// The edit tools and audio tools groups (in compact mode they come first in the strip).
-    pub tools: Rect,
-    /// The area the toolbar had.
-    pub visible: Rect,
+    /// Groups in each row's overflow menu this frame (0: everything is in view).
+    pub top_overflow: u8,
+    pub bottom_overflow: u8,
 }
 
 impl Default for ToolbarLayout {
     fn default() -> Self {
         ToolbarLayout {
-            compact: false,
-            full_width: 0.0,
-            nudge_width: 0.0,
-            transport_width: 0.0,
-            stacked: false,
-            transport_moved: false,
+            visible: Rect::NOTHING,
+            bottom: Rect::NOTHING,
+            tools: Rect::NOTHING,
             transport: Rect::NOTHING,
             nudge: Rect::NOTHING,
-            tools: Rect::NOTHING,
-            visible: Rect::NOTHING,
+            top_overflow: 0,
+            bottom_overflow: 0,
         }
     }
 }
 
-/// Height of the toolbar panel: one row, or two when stacked (see [`ToolbarLayout::stacked`]).
-pub fn height(app: &SoundApp) -> f32 {
-    if app.toolbar_layout.stacked { 2.0 * HEIGHT - 6.0 } else { HEIGHT }
+/// Height of the top (editing tools) row.
+pub fn height(_app: &SoundApp) -> f32 {
+    HEIGHT
 }
 
-/// The groups that scroll in the compact layouts, most-used first.
-fn scrolling_groups(app: &mut SoundApp, ui: &mut Ui, layout: &mut ToolbarLayout) {
-    ui.horizontal(|ui| {
+type Draw = fn(&mut SoundApp, &mut Ui);
+
+/// One group of a row: its key (for the remembered width), a first-frame width estimate, its
+/// caption in the overflow menu, and how to draw it.
+struct Item {
+    key: &'static str,
+    est: f32,
+    caption: &'static str,
+    draw: Draw,
+}
+
+/// Lays out `items` (drawn in this order) in the row: groups are kept in `priority` order while
+/// they fit; the others go into a menu named `more`. Returns each drawn group's rect (by index;
+/// `Rect::NOTHING` when in the menu or not drawn) and how many went into the menu.
+fn row(app: &mut SoundApp, ui: &mut Ui, id: &str, items: &[Item], priority: &[usize], more: &str, force_first: bool) -> (Vec<Rect>, u8) {
+    const GAP: f32 = 8.0;
+    let width = |ui: &Ui, it: &Item| ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new((id, it.key)))).unwrap_or(it.est);
+    let avail = ui.available_width() - 16.0;
+    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new((id, "avail")), avail));
+    // Narrow rows get a small "…" menu button (same accessible name).
+    let narrow = avail < 600.0;
+    let more_w = if narrow { 30.0 } else { 120.0 };
+    let fit = |reserve: f32| {
+        let mut shown = vec![false; items.len()];
+        let mut used = reserve;
+        for (k, &i) in priority.iter().enumerate() {
+            if let Some(it) = items.get(i) {
+                let w = width(ui, it) + GAP;
+                if used + w <= avail || (force_first && k == 0) {
+                    used += w;
+                    if let Some(s) = shown.get_mut(i) {
+                        *s = true;
+                    }
+                }
+            }
+        }
+        shown
+    };
+    let mut shown = fit(0.0);
+    if shown.iter().any(|s| !s) {
+        shown = fit(more_w);
+    }
+    let mut rects = vec![Rect::NOTHING; items.len()];
+    let hidden: Vec<usize> = (0..items.len()).filter(|i| !shown.get(*i).copied().unwrap_or(false)).collect();
+    ui.horizontal_centered(|ui| {
         ui.add_space(8.0);
-        ui.spacing_mut().item_spacing.x = 8.0;
-        // Most-used first, so the tools stay in view on common laptop widths;
-        // the edit modes also have F1–F4.
-        layout.tools = tool_groups(app, ui);
-        edit_modes(app, ui);
-        counters(app, ui);
-        grid_nudge(app, ui);
-        zoom_group(app, ui);
-        tempo_meter(app, ui);
-        output_meter(app, ui);
+        ui.spacing_mut().item_spacing.x = GAP;
+        // On a narrow row the menu comes first, so it can never be pushed off the edge.
+        let more_menu = |app: &mut SoundApp, ui: &mut Ui| {
+            if hidden.is_empty() {
+                return;
+            }
+            let r = ui.menu_button(if narrow { "…" } else { more }, |ui| {
+                for &i in &hidden {
+                    let Some(it) = items.get(i) else { continue };
+                    ui.label(
+                        egui::RichText::new(it.caption).font(crate::theme::bold(crate::theme::size::CAPTION)).color(Tokens::current().section_label),
+                    );
+                    let r = ui.scope(|ui| ui.horizontal(|ui| (it.draw)(app, ui))).response.rect;
+                    ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new((id, it.key)), r.width()));
+                    ui.separator();
+                }
+            });
+            let name = more.trim_end_matches('…').to_string();
+            r.response.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, &name));
+            r.response.on_hover_text("Controls that do not fit this window width; nothing here is hidden for good");
+        };
+        if narrow {
+            more_menu(app, ui);
+        }
+        for (i, it) in items.iter().enumerate() {
+            if !shown.get(i).copied().unwrap_or(false) {
+                continue;
+            }
+            let r = ui.scope(|ui| (it.draw)(app, ui)).response.rect;
+            ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new((id, it.key)), r.width()));
+            if let Some(slot) = rects.get_mut(i) {
+                *slot = r;
+            }
+        }
+        if !narrow {
+            more_menu(app, ui);
+        }
     });
+    (rects, hidden.len() as u8)
 }
 
+/// The top row: the editing tools, next to the tracks.
 pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let full = ui.max_rect();
     ui.painter().rect_filled(full, 0.0, t.toolbar_bg);
-    ui.add_space(4.0);
+    let items = [
+        Item { key: "modes", est: 112.0, caption: "EDIT MODE", draw: edit_modes },
+        Item { key: "tools", est: 306.0, caption: "TOOLS", draw: tools },
+        Item { key: "audio_tools", est: 364.0, caption: "AUDIO TOOLS", draw: audio_tools },
+        Item { key: "zoom", est: 128.0, caption: "ZOOM", draw: zoom_group },
+    ];
+    // Tools first; audio tools, edit modes (F1–F4) and zoom (shortcuts too) give way first.
+    let (rects, hidden) = row(app, ui, "edit_top", &items, &[1, 2, 0, 3], "More tools…", false);
     let mut layout = app.toolbar_layout;
     layout.visible = full;
-    // RC09: when the row does not fit (e.g. 1366×768 at 150 %), transport/record and the active
-    // Nudge are pinned on the right where they are always visible; only the other groups
-    // scroll, most-used first. The row's natural width is learned from a full-row frame.
-    layout.compact = layout.full_width > 0.0 && full.width() < layout.full_width;
-    // Pinned groups plus a usable 250-point strip do not fit: two rows.
-    let pinned = layout.transport_width + layout.nudge_width + 32.0;
-    layout.stacked = layout.compact && layout.nudge_width > 0.0 && full.width() < pinned + 250.0;
-    layout.transport_moved = false;
-    if layout.stacked {
-        let top = Rect::from_min_size(full.min, vec2(full.width(), HEIGHT - 2.0));
-        let bottom = Rect::from_min_max(pos2(full.min.x, top.max.y), pos2(full.max.x, full.min.y + 2.0 * HEIGHT - 6.0));
-        ui.scope_builder(egui::UiBuilder::new().max_rect(top).layout(egui::Layout::left_to_right(egui::Align::Min)), |ui| {
-            ui.add_space(4.0);
-            egui::ScrollArea::horizontal().id_salt("edit_toolbar_stacked").auto_shrink([false, true]).show(ui, |ui| {
-                scrolling_groups(app, ui, &mut layout);
-            });
-        });
-        layout.transport_moved = full.width() < pinned;
-        if layout.transport_moved {
-            // Nudge keeps the second row (scrolling only below its own width); the transport is
-            // in the control bar this frame.
-            layout.transport = Rect::NOTHING;
-            ui.scope_builder(egui::UiBuilder::new().max_rect(bottom).layout(egui::Layout::left_to_right(egui::Align::Min)), |ui| {
-                ui.add_space(8.0);
-                egui::ScrollArea::horizontal().id_salt("edit_toolbar_nudge").auto_shrink([false, true]).show(ui, |ui| {
-                    layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
-                });
-            });
-        } else {
-            ui.scope_builder(egui::UiBuilder::new().max_rect(bottom).layout(egui::Layout::right_to_left(egui::Align::Min)), |ui| {
-                ui.spacing_mut().item_spacing.x = 8.0;
-                ui.add_space(8.0);
-                layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
-                layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
-            });
-        }
-        ui.advance_cursor_after_rect(Rect::from_min_max(full.min, bottom.max));
-    } else if !layout.compact {
-        let out = egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
-            ui.horizontal(|ui| {
-                ui.add_space(8.0);
-                ui.spacing_mut().item_spacing.x = 8.0;
-                edit_modes(app, ui);
-                zoom_group(app, ui);
-                layout.tools = tool_groups(app, ui);
-                counters(app, ui);
-                grid_nudge(app, ui);
-                layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
-                layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
-                tempo_meter(app, ui);
-                output_meter(app, ui);
-            });
-        });
-        layout.full_width = out.content_size.x + 16.0;
-        layout.nudge_width = layout.nudge.width();
-        layout.transport_width = layout.transport.width();
-    } else {
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            ui.add_space(8.0);
-            layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
-            // Exactly its natural width, so the scrolling groups keep the rest of the row.
-            let nw = if layout.nudge_width > 0.0 { layout.nudge_width } else { 400.0 };
-            layout.nudge = ui
-                .allocate_ui_with_layout(vec2(nw, ui.available_height()), egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                    ui.set_max_width(nw);
-                    nudge_panel(app, ui);
-                })
-                .response
-                .rect;
-            ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
-                egui::ScrollArea::horizontal().id_salt("edit_toolbar_compact").auto_shrink([false, true]).show(ui, |ui| {
-                    scrolling_groups(app, ui, &mut layout);
-                });
-            });
-        });
-    }
+    layout.tools = match (rects.get(1).copied(), rects.get(2).copied()) {
+        (Some(a), Some(b)) if a != Rect::NOTHING && b != Rect::NOTHING => a.union(b),
+        (Some(a), _) => a,
+        _ => Rect::NOTHING,
+    };
+    layout.top_overflow = hidden;
     app.toolbar_layout = layout;
 }
 
-/// The edit tools and the audio tools side by side; returns their area.
-fn tool_groups(app: &mut SoundApp, ui: &mut Ui) -> Rect {
-    ui.scope(|ui| {
-        ui.horizontal_top(|ui| {
-            ui.spacing_mut().item_spacing.x = 8.0;
-            tools(app, ui);
-            audio_tools(app, ui);
-        })
-    })
-    .response
-    .rect
+/// The bottom bar: locate buttons, transport, counters, Nudge, grid and the output meter.
+pub fn show_bottom(app: &mut SoundApp, ui: &mut Ui) {
+    let t = Tokens::current();
+    let full = ui.max_rect();
+    ui.painter().rect_filled(full, 0.0, t.toolbar_bg);
+    ui.painter().line_segment([full.left_top(), full.right_top()], Stroke::new(1.0, t.border));
+    let items = [
+        Item { key: "locate", est: 120.0, caption: "LOCATE", draw: locate },
+        Item { key: "transport", est: 240.0, caption: "TRANSPORT", draw: transport },
+        Item { key: "counters", est: 380.0, caption: "COUNTERS", draw: counters },
+        Item { key: "nudge", est: 300.0, caption: "NUDGE", draw: nudge_panel },
+        Item { key: "grid", est: 150.0, caption: "GRID", draw: grid_nudge },
+        Item { key: "meter", est: 48.0, caption: "OUTPUT", draw: output_meter },
+    ];
+    // The transport is always in the bar (Record is never hidden).
+    let (rects, hidden) = row(app, ui, "edit_bottom", &items, &[1, 3, 2, 0, 4, 5], "More controls…", true);
+    let mut layout = app.toolbar_layout;
+    layout.bottom = full;
+    layout.transport = rects.get(1).copied().unwrap_or(Rect::NOTHING);
+    layout.nudge = rects.get(3).copied().unwrap_or(Rect::NOTHING);
+    layout.bottom_overflow = hidden;
+    app.toolbar_layout = layout;
 }
 
 fn edit_modes(app: &mut SoundApp, ui: &mut Ui) {
@@ -392,6 +404,8 @@ fn fmt_pos(app: &SoundApp, at: i64, f: TimeFormat) -> String {
     format_position(at, f, s.sample_rate, &s.tempo, s.frame_rate, s.timecode_start)
 }
 
+/// Main counter (click: format; the sub counter shows on hover) and the selection's Start / End
+/// / Length, in one row.
 fn counters(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let (main_fmt, sub_fmt, sel) = {
@@ -399,64 +413,53 @@ fn counters(app: &mut SoundApp, ui: &mut Ui) {
         (s.edit.main_counter, s.edit.sub_counter.unwrap_or(TimeFormat::Samples), s.edit.selection)
     };
     let pos = app.position();
-    let (r, _) = ui.allocate_exact_size(vec2(318.0, 64.0), Sense::hover());
-    ui.painter().rect(r, CornerRadius::same(4), t.counter_bg, Stroke::new(1.0, t.counter_border), StrokeKind::Inside);
-    let main_r = Rect::from_min_max(r.min, pos2(r.min.x + 180.0, r.min.y + 44.0));
-    let txt = fmt_pos(app, pos, main_fmt);
-    ui.painter().text(pos2(main_r.max.x - 18.0, main_r.center().y), Align2::RIGHT_CENTER, txt, mono(26.0), t.counter_text);
-    let resp = ui.interact(main_r, ui.id().with("main_counter"), Sense::click());
-    icons::draw(ui.painter(), Rect::from_center_size(pos2(main_r.max.x - 9.0, main_r.center().y), vec2(10.0, 10.0)), "triangle_down", t.text_dim);
-    egui::Popup::menu(&resp).show(|ui| {
-        for f in TimeFormat::ALL {
-            if ui.selectable_label(main_fmt == f, f.label()).clicked() {
-                let _ = app.run("view.main_counter", json!({"format": f.id()}));
+    crate::theme::group_frame().fill(t.counter_bg).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 6.0;
+            let main = egui::Button::new(egui::RichText::new(fmt_pos(app, pos, main_fmt)).font(mono(16.0)).color(t.counter_text)).frame(false);
+            let sub = fmt_pos(app, pos, sub_fmt);
+            let resp =
+                ui.add(main).on_hover_text(format!("Main counter (click to choose the time format)\nSub counter: {sub} ({})", sub_fmt.label()));
+            resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, "Main counter"));
+            egui::Popup::menu(&resp).show(|ui| {
+                for f in TimeFormat::ALL {
+                    if ui.selectable_label(main_fmt == f, f.label()).clicked() {
+                        let _ = app.run("view.main_counter", json!({"format": f.id()}));
+                    }
+                }
+            });
+            let s = app.engine.session();
+            for (label, val) in [
+                ("Start", fmt_pos(app, sel.start, main_fmt)),
+                ("End", fmt_pos(app, sel.end, main_fmt)),
+                ("Length", format_length(sel.start, sel.len(), main_fmt, s.sample_rate, &s.tempo, s.frame_rate)),
+            ] {
+                ui.spacing_mut().item_spacing.x = 3.0;
+                ui.label(egui::RichText::new(label).font(regular(10.0)).color(t.counter_label));
+                ui.label(egui::RichText::new(val).font(mono(11.0)).color(t.counter_text));
+                ui.add_space(3.0);
             }
-        }
+        });
     });
-    // Start / End / Length.
-    let s = app.engine.session();
-    let rows = [
-        ("Start", fmt_pos(app, sel.start, main_fmt)),
-        ("End", fmt_pos(app, sel.end, main_fmt)),
-        ("Length", format_length(sel.start, sel.len(), main_fmt, s.sample_rate, &s.tempo, s.frame_rate)),
-    ];
-    for (i, (label, val)) in rows.iter().enumerate() {
-        let y = r.min.y + 10.0 + i as f32 * 13.0;
-        ui.painter().text(pos2(r.min.x + 214.0, y), Align2::RIGHT_CENTER, *label, regular(11.0), t.counter_label);
-        ui.painter().text(pos2(r.max.x - 8.0, y), Align2::RIGHT_CENTER, val, mono(11.0), t.counter_text);
-    }
-    // Sub counter row.
-    let y = r.max.y - 11.0;
-    ui.painter().line_segment([pos2(r.min.x + 6.0, r.max.y - 21.0), pos2(r.max.x - 6.0, r.max.y - 21.0)], Stroke::new(1.0, t.counter_rule));
-    ui.painter().text(pos2(r.min.x + 10.0, y), Align2::LEFT_CENTER, "Sub", regular(11.0), t.counter_label);
-    ui.painter().text(pos2(r.min.x + 150.0, y), Align2::RIGHT_CENTER, fmt_pos(app, pos, sub_fmt), mono(11.0), t.counter_text);
-    let st = if app.engine.is_dirty() { "modified" } else { "saved" };
-    let dev = app.player.as_ref().map_or("no audio engine", |p| if p.silent { "silent clock" } else { "audio on" });
-    ui.painter().text(pos2(r.max.x - 8.0, y), Align2::RIGHT_CENTER, format!("{st} · {dev}"), regular(10.0), t.text_dim);
 }
 
+/// Grid lines toggle and the grid value.
 fn grid_nudge(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
-    let (grid, nudge, lines) = {
+    let (grid, lines) = {
         let e = &app.engine.session().edit;
-        (e.grid, e.nudge, e.grid_lines)
+        (e.grid, e.grid_lines)
     };
-    let (r, _) = ui.allocate_exact_size(vec2(170.0, 64.0), Sense::hover());
-    ui.painter().rect(r, CornerRadius::same(4), t.counter_bg, Stroke::new(1.0, t.counter_border), StrokeKind::Inside);
-    let gl = Rect::from_min_size(pos2(r.min.x + 6.0, r.min.y + 8.0), vec2(48.0, 16.0));
-    ui.painter().rect_filled(gl, 1.0, if lines { t.mode_on } else { t.counter_off });
-    ui.painter().text(gl.center(), Align2::CENTER_CENTER, "Grid", bold(11.0), if lines { t.mode_on_text } else { t.mode_off_text });
-    if ui.interact(gl, ui.id().with("grid_lines"), Sense::click()).on_hover_text("Show grid lines").clicked() {
-        let _ = app.run("view.grid_lines", json!({}));
-    }
-    let gr = Rect::from_min_max(pos2(r.min.x + 60.0, r.min.y + 6.0), pos2(r.max.x - 4.0, r.min.y + 26.0));
-    ui.painter().text(pos2(gr.max.x - 14.0, gr.center().y), Align2::RIGHT_CENTER, grid.label(), mono(11.0), t.counter_text);
-    let gresp = ui.interact(gr, ui.id().with("grid_value"), Sense::click());
-    value_menu(app, &gresp, "view.grid");
-    // The nudge value lives in the dedicated NUDGE group (separate from Grid); the legacy
-    // grid-style nudge value (`view.nudge` / `edit.nudge`) is no longer shown here.
-    let _ = nudge;
-    icons::draw(ui.painter(), Rect::from_center_size(pos2(gr.max.x - 6.0, gr.center().y), vec2(10.0, 10.0)), "triangle_down", t.text_dim);
+    crate::theme::group_frame().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 4.0;
+            if crate::control_bar::chip(ui, None, "Grid", "Grid lines", lines, t.mode_on, true).on_hover_text("Show grid lines").clicked() {
+                let _ = app.run("view.grid_lines", json!({}));
+            }
+            let resp = crate::control_bar::chip_menu(ui, &grid.label(), "Grid value", true).on_hover_text("Grid value");
+            value_menu(app, &resp, "view.grid");
+        });
+    });
 }
 
 /// Steps the dedicated Nudge value through the SML presets (Ctrl+Alt+Num±).
@@ -474,16 +477,23 @@ pub fn cycle_nudge_value(app: &mut SoundApp, dir: i64) {
     }
 }
 
-/// The always-visible dedicated NUDGE group: value, unit, target, arrows and the exact
-/// displacement readout (e.g. "10 ms = 480 smp"). Separate from the Grid value.
+/// The dedicated NUDGE group in one row: arrows, value, unit (with the 1 smp / 1 ms / 10 ms
+/// presets) and target; the exact displacement ("= 480.00 smp @ 48.0 kHz") shows on hover. Separate from the Grid value.
 fn nudge_panel(app: &mut SoundApp, ui: &mut Ui) {
     use soundcraft_model::{NudgeTarget, NudgeUnit};
     let p = app.engine.session().edit.nudge_panel.clone();
     let sr = app.engine.session().sample_rate.as_f64();
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing.y = 2.0;
+    let readout = match p.unit {
+        NudgeUnit::Ticks => format!("{:.0} ticks (tempo map)", p.value),
+        _ => {
+            let smp = soundcraft_engine::nudge_step_samples(app.engine.session()).unwrap_or(0.0);
+            format!("= {smp:.2} smp @ {:.1} kHz", sr / 1000.0)
+        }
+    };
+    crate::theme::group_frame().show(ui, |ui| {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("NUDGE").strong().small());
+            ui.spacing_mut().item_spacing.x = 4.0;
+            ui.label(egui::RichText::new("NUDGE").strong().small()).on_hover_text(&readout);
             if ui.small_button("◀").on_hover_text(NUDGE_EARLIER_HELP).clicked()
                 && let Err(e) = app.run("nudge.apply", json!({"direction": -1}))
             {
@@ -495,38 +505,29 @@ fn nudge_panel(app: &mut SoundApp, ui: &mut Ui) {
                 app.ui.status = e;
             }
             let mut v = p.value;
-            if ui.add(egui::DragValue::new(&mut v).range(0.001..=100_000.0).speed(0.1).max_decimals(3)).changed() {
+            if ui.add(egui::DragValue::new(&mut v).range(0.001..=100_000.0).speed(0.1).max_decimals(3)).on_hover_text(&readout).changed() {
                 let _ = app.run("nudge.set", json!({"value": v}));
             }
-            egui::ComboBox::from_id_salt("nudge_unit").selected_text(p.unit.label()).width(64.0).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("nudge_unit").selected_text(p.unit.label()).width(56.0).show_ui(ui, |ui| {
                 for u in [NudgeUnit::Samples, NudgeUnit::Milliseconds, NudgeUnit::Seconds, NudgeUnit::Ticks, NudgeUnit::Frames] {
                     if ui.selectable_label(p.unit == u, u.label()).clicked() {
                         let _ = app.run("nudge.set", json!({"unit": u.label()}));
                     }
                 }
+                ui.separator();
+                for (v, u, label) in [(1.0, "samples", "1 smp"), (1.0, "ms", "1 ms"), (10.0, "ms", "10 ms")] {
+                    if ui.button(label).clicked() {
+                        let _ = app.run("nudge.set", json!({"value": v, "unit": u}));
+                    }
+                }
             });
-        });
-        ui.horizontal(|ui| {
-            egui::ComboBox::from_id_salt("nudge_target").selected_text(p.target.label()).width(130.0).show_ui(ui, |ui| {
+            egui::ComboBox::from_id_salt("nudge_target").selected_text(p.target.label()).width(110.0).show_ui(ui, |ui| {
                 for tg in NudgeTarget::ALL {
                     if ui.selectable_label(p.target == tg, tg.label()).clicked() {
                         let _ = app.run("nudge.set", json!({"target": tg.id()}));
                     }
                 }
             });
-            for (v, u, label) in [(1.0, "samples", "1 smp"), (1.0, "ms", "1 ms"), (10.0, "ms", "10 ms")] {
-                if ui.small_button(label).clicked() {
-                    let _ = app.run("nudge.set", json!({"value": v, "unit": u}));
-                }
-            }
-            let readout = match p.unit {
-                NudgeUnit::Ticks => format!("{:.0} ticks (tempo map)", p.value),
-                _ => {
-                    let smp = soundcraft_engine::nudge_step_samples(app.engine.session()).unwrap_or(0.0);
-                    format!("= {smp:.2} smp @ {:.1} kHz", sr / 1000.0)
-                }
-            };
-            ui.label(egui::RichText::new(readout).small());
         });
     });
 }
@@ -554,120 +555,66 @@ fn value_menu(app: &mut SoundApp, resp: &egui::Response, cmd: &str) {
     });
 }
 
+/// Return to Zero, Rewind, Fast Forward, Go to End.
+fn locate(app: &mut SoundApp, ui: &mut Ui) {
+    crate::theme::group_frame().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            for (icon, cmd, tip) in [
+                ("rtz", "transport.rtz", "Return to Zero (Home)"),
+                ("rewind", "transport.rewind", "Rewind"),
+                ("ffwd", "transport.fast_forward", "Fast Forward"),
+                ("end", "transport.go_to_end", "Go to End (End)"),
+            ] {
+                if icon_button(ui, vec2(26.0, 22.0), icon, false, tip).clicked() {
+                    let _ = app.run(cmd, json!({}));
+                }
+            }
+        });
+    });
+}
+
+/// Stop / Play / Record (the same named buttons as the control bar's) and Loop Playback. Never
+/// in the overflow menu; on a narrow bar the three are drawn as icons (same names and tooltips).
 fn transport(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let playing = app.is_playing();
     let recording = app.engine.transport.recording;
     let looped = app.engine.session().edit.loop_playback;
-    group(ui, 176.0, 64.0, |ui, _| {
-        ui.vertical(|ui| {
-            ui.spacing_mut().item_spacing = vec2(3.0, 4.0);
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                if icon_button(ui, vec2(38.0, 28.0), "loop", looped, "Loop Playback (Cmd+Shift+L)").clicked() {
-                    let _ = app.run("options.loop_playback", json!({}));
-                }
-                let (r, resp) = ui.allocate_exact_size(vec2(38.0, 28.0), Sense::click());
-                ui.painter().rect(
-                    r,
-                    CornerRadius::same(3),
-                    if resp.hovered() { t.button_hi } else { t.button },
-                    Stroke::new(1.0, t.button_border),
-                    StrokeKind::Inside,
-                );
-                icons::draw(ui.painter(), r.shrink(5.0), "stop", if playing { t.text } else { t.accent });
-                if resp.on_hover_text("Stop (Space)").clicked() {
-                    let _ = app.run("transport.stop", json!({}));
-                }
-                let (r, resp) = ui.allocate_exact_size(vec2(38.0, 28.0), Sense::click());
-                ui.painter().rect(
-                    r,
-                    CornerRadius::same(3),
-                    if playing {
-                        Color32::from_rgb(40, 90, 50)
-                    } else if resp.hovered() {
-                        t.button_hi
-                    } else {
-                        t.button
-                    },
-                    Stroke::new(1.0, t.button_border),
-                    StrokeKind::Inside,
-                );
-                icons::draw(ui.painter(), r.shrink(5.0), "play", if playing { Color32::from_rgb(120, 255, 140) } else { t.counter_text });
-                if resp.on_hover_text("Play (Space)").clicked() {
-                    let _ = app.run("transport.play", json!({}));
-                }
-                let (r, resp) = ui.allocate_exact_size(vec2(38.0, 28.0), Sense::click());
-                ui.painter().rect(
-                    r,
-                    CornerRadius::same(3),
-                    if recording {
-                        Color32::from_rgb(110, 30, 30)
-                    } else if resp.hovered() {
-                        t.button_hi
-                    } else {
-                        t.button
-                    },
-                    Stroke::new(1.0, t.button_border),
-                    StrokeKind::Inside,
-                );
-                icons::draw(ui.painter(), r.shrink(5.0), "record", t.rec);
-                if resp.on_hover_text("Record (Cmd+Space)").clicked() {
-                    let _ = app.run("transport.record", json!({}));
-                }
-            });
-            ui.horizontal(|ui| {
-                ui.spacing_mut().item_spacing.x = 3.0;
-                for (icon, cmd, tip) in [
-                    ("rtz", "transport.rtz", "Return to Zero (Home)"),
-                    ("rewind", "transport.rewind", "Rewind"),
-                    ("ffwd", "transport.fast_forward", "Fast Forward"),
-                    ("end", "transport.go_to_end", "Go to End (End)"),
-                ] {
-                    if icon_button(ui, vec2(38.0, 22.0), icon, false, tip).clicked() {
-                        let _ = app.run(cmd, json!({}));
-                    }
-                }
-            });
+    let narrow = ui.ctx().data(|d| d.get_temp::<f32>(egui::Id::new(("edit_bottom", "avail")))).is_some_and(|w| w < 700.0);
+    let label = |s: &'static str| if narrow { "" } else { s };
+    crate::theme::group_frame().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = 3.0;
+            if crate::control_bar::chip(ui, Some("stop"), label("Stop"), "■ Stop", false, t.button, true).on_hover_text("Stop (Space)").clicked() {
+                let _ = app.run("transport.stop", json!({}));
+            }
+            if crate::control_bar::chip(ui, Some("play"), label("Play"), "▶ Play", playing && !recording, t.playback, true)
+                .on_hover_text("Play (Space)")
+                .clicked()
+            {
+                let _ = app.run("transport.play", json!({}));
+            }
+            if crate::control_bar::chip(ui, Some("record"), label("Record"), "● Record", recording, t.rec, true)
+                .on_hover_text("Record (Cmd+Space)")
+                .clicked()
+            {
+                let _ = app.run("transport.record", json!({}));
+            }
+            if icon_button(ui, vec2(26.0, 22.0), "loop", looped, "Loop Playback (Cmd+Shift+L)").clicked() {
+                let _ = app.run("options.loop_playback", json!({}));
+            }
         });
     });
 }
 
-fn tempo_meter(app: &mut SoundApp, ui: &mut Ui) {
-    let t = Tokens::current();
-    let (bpm, meter, countoff, click, bars) = {
-        let s = app.engine.session();
-        let tick = s.tempo.samples_to_ticks(app.position(), s.sample_rate);
-        let m = s.tempo.meter_at_tick(tick);
-        (s.tempo.tempo_at_tick(tick), format!("{}/{}", m.numerator, m.denominator), s.edit.countoff, s.edit.click, s.edit.countoff_bars)
-    };
-    let (r, _) = ui.allocate_exact_size(vec2(150.0, 64.0), Sense::hover());
-    ui.painter().rect(r, CornerRadius::same(4), t.counter_bg, Stroke::new(1.0, t.counter_border), StrokeKind::Inside);
-    let co = Rect::from_min_size(pos2(r.min.x + 6.0, r.min.y + 6.0), vec2(64.0, 15.0));
-    ui.painter().rect_filled(co, 1.0, if countoff { t.mode_on } else { t.counter_off });
-    ui.painter().text(co.center(), Align2::CENTER_CENTER, "Count Off", bold(10.0), if countoff { t.mode_on_text } else { t.mode_off_text });
-    if ui.interact(co, ui.id().with("countoff"), Sense::click()).clicked() {
-        let _ = app.run("options.countoff", json!({}));
-    }
-    ui.painter().text(pos2(r.max.x - 8.0, co.center().y), Align2::RIGHT_CENTER, format!("{bars} bars"), mono(11.0), t.counter_text);
-    ui.painter().text(pos2(r.min.x + 70.0, r.min.y + 32.0), Align2::RIGHT_CENTER, "Meter", regular(11.0), t.counter_label);
-    ui.painter().text(pos2(r.max.x - 8.0, r.min.y + 32.0), Align2::RIGHT_CENTER, meter, mono(11.0), t.counter_text);
-    ui.painter().text(pos2(r.min.x + 70.0, r.min.y + 48.0), Align2::RIGHT_CENTER, "Tempo", regular(11.0), t.counter_label);
-    icons::draw(ui.painter(), Rect::from_center_size(pos2(r.min.x + 82.0, r.min.y + 48.0), vec2(13.0, 13.0)), "note", t.counter_text);
-    ui.painter().text(pos2(r.max.x - 8.0, r.min.y + 48.0), Align2::RIGHT_CENTER, format!("{bpm:.4}"), mono(11.0), t.counter_text);
-    let clk = Rect::from_min_size(pos2(r.min.x + 6.0, r.min.y + 40.0), vec2(18.0, 18.0));
-    icons::draw(ui.painter(), clk, "click", if click { t.counter_text } else { t.text_dim });
-    if ui.interact(clk, ui.id().with("click"), Sense::click()).on_hover_text("Click").clicked() {
-        let _ = app.run("options.click", json!({}));
-    }
-}
-
+/// The main output level, two horizontal bars.
 fn output_meter(app: &mut SoundApp, ui: &mut Ui) {
-    let (r, _) = ui.allocate_exact_size(vec2(26.0, 64.0), Sense::hover());
+    let (r, _) = ui.allocate_exact_size(vec2(48.0, 22.0), Sense::hover());
     let m = app.main_meter;
-    let w = (r.width() - 6.0) / 2.0;
+    let h = (r.height() - 2.0) / 2.0;
     for c in 0..2 {
-        let rr = Rect::from_min_size(pos2(r.min.x + 2.0 + c as f32 * (w + 2.0), r.min.y), vec2(w, r.height()));
+        let rr = Rect::from_min_size(pos2(r.min.x, r.min.y + c as f32 * (h + 2.0)), vec2(r.width(), h));
         crate::widgets::meter(ui, rr, m.level[c], m.hold[c], m.clip);
     }
 }
@@ -677,8 +624,8 @@ fn output_meter(app: &mut SoundApp, ui: &mut Ui) {
 mod tests {
     use super::*;
 
-    /// Renders the Edit toolbar alone in a `w`×`h` (logical points) screen, twice (the first
-    /// frame learns the row's natural width), and returns where things landed.
+    /// Renders the Edit window's two rows alone in a `w`×`h` (logical points) screen, a few
+    /// frames (the first learns the group widths), and returns where things landed.
     fn layout_at(w: f32, h: f32, light: bool) -> ToolbarLayout {
         let mut app = SoundApp::new(soundcraft_engine::Engine::default(), None, crate::Services::default());
         let ctx = egui::Context::default();
@@ -686,79 +633,53 @@ mod tests {
         ctx.set_visuals(if light { egui::Visuals::light() } else { egui::Visuals::dark() });
         let raw = || egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(w, h))), ..Default::default() };
         for _ in 0..4 {
-            let hgt = height(&app);
             let mut out = ctx.run_ui(raw(), |ui| {
-                egui::Panel::top("edit_toolbar").exact_size(hgt).frame(egui::Frame::NONE).show(ui, |ui| show(&mut app, ui));
+                egui::Panel::top("edit_toolbar").exact_size(HEIGHT).frame(egui::Frame::NONE).show(ui, |ui| show(&mut app, ui));
+                egui::Panel::bottom("edit_bottom_bar").exact_size(BOTTOM_HEIGHT).frame(egui::Frame::NONE).show(ui, |ui| show_bottom(&mut app, ui));
             });
             out.textures_delta.clear();
         }
         app.toolbar_layout
     }
 
-    /// The Record layout on a compact window leaves the toolbar about 611 points (911 minus the
-    /// 300-point RECORD panel): the toolbar stacks — tools strip on top at full width, Nudge and
-    /// transport fully visible underneath, nothing overlapping. Wider windows keep one row.
-    #[test]
-    fn narrow_toolbar_stacks_without_hiding_nudge_or_transport() {
-        for w in [520.0, 611.0] {
-            let l = layout_at(w, 512.0, false);
-            assert!(l.compact && l.stacked, "{w}: stacked {l:?}");
-            // 611: Nudge and transport share the second row; 520: the transport is in the
-            // control bar (asserted in tests/interface_polish.rs) and Nudge keeps the row.
-            assert_eq!(l.transport_moved, w < 600.0, "{w}: {l:?}");
-            let pinned: &[(&str, Rect)] = if l.transport_moved { &[("nudge", l.nudge)] } else { &[("transport", l.transport), ("nudge", l.nudge)] };
-            for (name, r) in pinned {
-                assert!(r.width() > 20.0 && r.min.x >= 0.0 && r.max.x <= w + 0.5, "{w} {name} fully on screen: {r:?}");
-                assert!(r.min.y >= HEIGHT - 8.0 && r.max.y <= 2.0 * HEIGHT, "{w} {name} on the second row: {r:?}");
-            }
-            assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}: transport and Nudge do not overlap");
-            assert!(l.tools.min.y < HEIGHT - 8.0 && l.tools.min.x < 40.0, "{w}: tools lead the first row: {l:?}");
-            assert!(!l.tools.intersects(l.nudge), "{w}: tools never under Nudge");
-        }
-        for w in [911.0, 1366.0, 2560.0] {
-            assert!(!layout_at(w, 768.0, false).stacked, "{w}: one row");
-        }
-    }
-
-    /// RC09: at 1366×768 at 150 % (911×512 logical points) the transport/record group and the
-    /// active Nudge panel are fully on screen without scrolling; at 1920×1080 and 2560×1440 the
-    /// normal full row is used and they are on screen too. Light and dark themes alike.
+    /// HF08 (keeps RC09's intent): transport and Nudge are fully on screen, never overlapping,
+    /// at 1366×768 at 150 % (911×512), 1280, 1366, 1920 and 2560 points, light and dark; the
+    /// tools lead the top row; nothing is in an overflow menu from 1366 points up.
     #[test]
     fn transport_and_nudge_are_reachable_on_small_screens() {
-        for (w, h, compact) in [
-            (1366.0 / 1.5, 768.0 / 1.5, true),
-            (1280.0, 720.0, true),
-            (1366.0, 768.0, true),
-            (1500.0, 900.0, true),
-            (1920.0, 1080.0, true),
-            (2560.0, 1440.0, false),
-        ] {
+        for (w, h) in [(1366.0 / 1.5, 768.0 / 1.5), (1280.0, 720.0), (1366.0, 768.0), (1920.0, 1080.0), (2560.0, 1440.0)] {
             for light in [false, true] {
                 let l = layout_at(w, h, light);
-                println!("{w}x{h} light {light}: {l:?}");
-                assert_eq!(l.compact, compact, "{w}x{h}: compact layout {l:?}");
                 for (name, r) in [("transport", l.transport), ("nudge", l.nudge)] {
-                    assert!(r.width() > 20.0 && r.height() > 20.0, "{w}x{h} {name} drawn: {r:?}");
+                    assert!(r.width() > 20.0 && r.height() > 10.0, "{w}x{h} {name} drawn: {r:?}");
                     assert!(
-                        r.min.x >= 0.0 && r.max.x <= w + 0.5 && r.max.y <= HEIGHT + 0.5,
-                        "{w}x{h} {name} on screen: {r:?} (visible {:?})",
-                        l.visible
+                        r.min.x >= 0.0 && r.max.x <= w + 0.5 && r.min.y >= l.bottom.min.y - 0.5 && r.max.y <= h + 0.5,
+                        "{w}x{h} {name} in the bottom bar: {r:?} {l:?}"
                     );
                 }
                 assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}x{h}: transport and Nudge do not overlap");
-                if compact {
-                    assert!(l.nudge.min.x >= 250.0, "{w}x{h}: the other groups keep a scrollable strip: {l:?}");
-                }
-                // From 1366 points wide the edit and audio tools are fully in view as well;
-                // narrower, they come first in the scrolling strip.
-                assert!(l.tools.min.y <= 5.0, "{w}x{h}: tool groups top-aligned like the others: {l:?}");
+                assert!(l.tools.min.x >= 0.0 && l.tools.max.x <= w + 0.5 && l.tools.max.y <= HEIGHT + 0.5, "{w}x{h}: tools in the top row {l:?}");
                 if w >= 1366.0 {
-                    assert!(
-                        l.tools.width() > 300.0 && l.tools.min.x >= 0.0 && l.tools.max.x <= l.nudge.min.x.min(w),
-                        "{w}x{h}: tools in view: {l:?}"
-                    );
+                    assert_eq!((l.top_overflow, l.bottom_overflow), (0, 0), "{w}x{h}: everything in view {l:?}");
                 }
             }
         }
+    }
+
+    /// The Record layout beside its 300-point panel (611 points) and the minimum window at 150 %
+    /// (340 points beside the panel): one row each, no scrolling; groups that do not fit are in
+    /// the overflow menus, and the transport stays in the bar.
+    #[test]
+    fn narrow_rows_overflow_instead_of_scrolling() {
+        for w in [611.0, 340.0] {
+            let l = layout_at(w, 512.0, false);
+            assert!(l.top_overflow > 0 && l.bottom_overflow > 0, "{w}: overflow used {l:?}");
+            assert!(l.transport.width() > 20.0 && l.transport.min.x >= 0.0 && l.transport.max.x <= w + 0.5, "{w}: transport in the bar {l:?}");
+        }
+        let l = layout_at(611.0, 512.0, false);
+        assert!(l.tools.width() > 20.0 && l.tools.max.x <= 611.5, "611: tools in the top row {l:?}");
+        assert!(l.nudge.width() > 20.0 && l.nudge.max.x <= 611.5, "611: Nudge stays in the bar {l:?}");
+        // At the extreme minimum the tools group (306 points) is in the "More tools" menu.
+        assert_eq!(layout_at(340.0, 400.0, false).tools, Rect::NOTHING);
     }
 }

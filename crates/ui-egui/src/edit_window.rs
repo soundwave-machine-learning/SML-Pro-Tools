@@ -67,8 +67,16 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         .exact_size(toolbar::height(app))
         .frame(egui::Frame::NONE.fill(t.toolbar_bg))
         .show(ui, |ui| toolbar::show(app, ui));
-    egui::Panel::bottom("edit_status").exact_size(22.0).frame(egui::Frame::NONE.fill(t.toolbar_bg)).show(ui, |ui| status_bar(app, ui));
-    egui::Panel::bottom("lower_dock_tabs").exact_size(22.0).frame(egui::Frame::NONE.fill(t.panel_bg2)).show(ui, |ui| dock_tabs(app, ui));
+    // HF08: the status line carries the lower-dock tabs at its left (one 22-point row instead of
+    // two); the bottom bar sits right above it.
+    egui::Panel::bottom("edit_status").exact_size(22.0).frame(egui::Frame::NONE.fill(t.toolbar_bg)).show(ui, |ui| {
+        let tabs_end = dock_tabs(app, ui);
+        status_bar(app, ui, tabs_end);
+    });
+    egui::Panel::bottom("edit_bottom_bar")
+        .exact_size(toolbar::BOTTOM_HEIGHT)
+        .frame(egui::Frame::NONE.fill(t.toolbar_bg))
+        .show(ui, |ui| toolbar::show_bottom(app, ui));
     if app.ui.show_universe {
         egui::Panel::top("universe").exact_size(64.0).frame(egui::Frame::NONE.fill(Tokens::current().universe_bg)).show(ui, |ui| universe(app, ui));
     }
@@ -115,7 +123,8 @@ fn universe(app: &mut SoundApp, ui: &mut Ui) {
     }
 }
 
-fn dock_tabs(app: &mut SoundApp, ui: &mut Ui) {
+/// The lower-dock tabs; returns where they end.
+fn dock_tabs(app: &mut SoundApp, ui: &mut Ui) -> f32 {
     let t = Tokens::current();
     let r = ui.max_rect();
     let mut x = r.min.x + 10.0;
@@ -130,14 +139,17 @@ fn dock_tabs(app: &mut SoundApp, ui: &mut Ui) {
             ui.painter().rect_filled(tr, 3.0, t.accent_dark);
         }
         ui.painter().galley(pos2(tr.min.x + 8.0, tr.center().y - g.size().y * 0.5), g, Color32::WHITE);
-        if ui.interact(tr, ui.id().with(("dock", label)), Sense::click()).clicked() {
+        let resp = ui.interact(tr, ui.id().with(("dock", label)), Sense::click());
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, on, label));
+        if resp.clicked() {
             let _ = app.run(id, json!({}));
         }
         x = tr.max.x + 6.0;
     }
+    x
 }
 
-fn status_bar(app: &mut SoundApp, ui: &mut Ui) {
+fn status_bar(app: &mut SoundApp, ui: &mut Ui, left_x: f32) {
     let t = Tokens::current();
     let r = ui.max_rect();
     let s = app.engine.session();
@@ -153,7 +165,7 @@ fn status_bar(app: &mut SoundApp, ui: &mut Ui) {
         s.tracks.len(),
         app.ui.status
     );
-    ui.painter().text(pos2(r.min.x + 10.0, r.center().y), Align2::LEFT_CENTER, left, regular(11.0), t.text_dim);
+    ui.painter().text(pos2(left_x + 6.0, r.center().y), Align2::LEFT_CENTER, left, regular(11.0), t.text_dim);
     let undo = app.engine.undo_label().map_or(String::new(), |l| format!("Undo {l}"));
     ui.painter().text(
         pos2(r.max.x - 10.0, r.center().y),

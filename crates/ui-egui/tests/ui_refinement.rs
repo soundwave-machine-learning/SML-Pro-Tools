@@ -161,6 +161,10 @@ fn mixer_density_is_a_persisted_preference_and_compact_stays_readable() {
     assert_eq!(mix_values(&h), before, "density never changes the mix");
 }
 
+/// Updated by Hotfix Pass 02 (HF08), same intent: in the Record layout the transport and Nudge
+/// stay reachable and never overlap the tools. The scrolling/stacked toolbar this test first
+/// checked is gone: the tools are in a fixed top row, the transport and Nudge in the fixed
+/// bottom bar, and what does not fit is in a labelled overflow menu instead of a scroll strip.
 #[test]
 fn compact_record_toolbar_keeps_nudge_and_transport_reachable() {
     // 911×512 = 1366×768 at 150 %; 640×400 = the minimum window (960×600) at 150 %.
@@ -169,28 +173,23 @@ fn compact_record_toolbar_keeps_nudge_and_transport_reachable() {
         h.state_mut().run("window.record", json!({})).unwrap();
         h.run_steps(8);
         let l = h.state().toolbar_layout;
-        assert!(l.nudge.width() > 20.0 && l.nudge.min.x >= 0.0 && l.nudge.min.x < w, "{w}x{hgt}: Nudge drawn {l:?}");
-        assert!(l.tools.min.x >= l.visible.min.x && l.tools.min.x < w, "{w}x{hgt}: tools strip starts in view {l:?}");
-        if l.stacked {
-            // Two rows: the tools strip (full width) above, Nudge below — never the same row.
-            assert!(l.tools.max.y <= l.nudge.min.y + 1.0 && !l.tools.intersects(l.nudge), "{w}x{hgt}: rows {l:?}");
-        } else {
-            // One row: the visible part of the scrolling strip ends where Nudge begins.
-            assert!(l.tools.min.x < l.nudge.min.x, "{w}x{hgt}: tools strip before Nudge {l:?}");
-        }
-        if l.transport_moved {
-            // The transport is in the control bar (as in Mix and Master), above the toolbar.
-            // (The RECORD panel has its own Play too; the control bar's is the topmost.)
-            let play = h.get_all_by_label("▶ Play").map(|n| n.rect()).min_by(|a, b| a.min.y.total_cmp(&b.min.y)).unwrap();
-            assert!(play.max.y <= l.visible.min.y + 1.0 && play.max.x <= w, "{w}x{hgt}: Play in the control bar {play:?}");
-        } else {
-            assert!(l.transport.min.x >= 0.0 && l.transport.max.x <= w + 0.5, "{w}x{hgt}: transport in the toolbar {l:?}");
+        assert!(
+            l.transport.width() > 20.0 && l.transport.min.x >= 0.0 && l.transport.max.x <= w + 0.5,
+            "{w}x{hgt}: transport in the bottom bar {l:?}"
+        );
+        assert!(l.transport.min.y >= l.bottom.min.y - 0.5 && l.transport.max.y <= hgt + 0.5, "{w}x{hgt}: transport at the bottom {l:?}");
+        if w >= 900.0 {
+            assert!(l.nudge.width() > 20.0 && l.nudge.max.x <= w + 0.5, "{w}x{hgt}: Nudge in the bar {l:?}");
             assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}x{hgt}: no overlap");
+            assert!(l.tools.width() > 20.0 && l.tools.max.y <= l.visible.max.y + 0.5, "{w}x{hgt}: tools in the top row {l:?}");
+        } else {
+            // The minimum window: Nudge and the tools are one click away, in the labelled menus.
+            h.get_by_label("More controls");
+            h.get_by_label("More tools");
         }
-        if (911.0..1000.0).contains(&w) {
-            assert!(l.stacked, "{w}x{hgt}: Record toolbar stacks beside the RECORD panel");
-            assert!(l.nudge.max.x <= w + 0.5, "{w}x{hgt}: Nudge fully visible {l:?}");
-        }
+        // Stop / Play / Record are named buttons wherever they are drawn.
+        h.get_all_by_label("▶ Play").next().expect("Play");
+        h.get_all_by_label("● Record").next().expect("Record");
     }
 }
 
