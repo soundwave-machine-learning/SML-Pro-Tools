@@ -105,6 +105,8 @@ export class Client {
       this.close();
       if (e instanceof CommandError && (e.code === "unauthorized" || e.code === "auth_required")) throw new AuthError("the app refused the control token (missing, wrong or revoked)");
       if (e instanceof CommandError && e.code === "protocol") throw new ProtocolError(e.message);
+      if (e instanceof CommandError && /unknown method/.test(e.message) && /auth/.test(e.message))
+        throw new ProtocolError("this SML Studio speaks control protocol 1 (a build before Hotfix 03, without authentication); this SDK needs protocol 2");
       throw e;
     }
     return this;

@@ -184,8 +184,14 @@ fn compact_record_toolbar_keeps_nudge_and_transport_reachable() {
             assert!(l.tools.width() > 20.0 && l.tools.max.y <= l.visible.max.y + 0.5, "{w}x{hgt}: tools in the top row {l:?}");
         } else {
             // The minimum window: Nudge and the tools are one click away, in the labelled menus.
-            h.get_by_label("More controls");
+            // Hotfix 03 baseline audit: open the menu and prove Nudge is really in it.
             h.get_by_label("More tools");
+            assert_eq!(h.query_all_by_label("NUDGE").count(), 0, "{w}x{hgt}: Nudge is not in the bar here");
+            h.get_by_label("More controls").click();
+            h.run_steps(4);
+            assert!(h.query_all_by_label("NUDGE").count() > 0, "{w}x{hgt}: Nudge reachable from More controls");
+            h.key_press(egui::Key::Escape);
+            h.run_steps(2);
         }
         // Stop / Play / Record are named buttons wherever they are drawn.
         h.get_all_by_label("▶ Play").next().expect("Play");

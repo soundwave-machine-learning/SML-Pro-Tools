@@ -62,6 +62,25 @@ class Sdk(unittest.TestCase):
             with self.assertRaises(sml_studio.ProtocolError):
                 sml_studio.Client(PORT).connect()
 
+    def test_protocol_1_app_is_named(self):
+        """A Hotfix 02 (protocol 1) app answers `auth` with "unknown method"; the SDK says why."""
+        import sml_studio
+        srv = socket.socket()
+        srv.bind(("127.0.0.1", 0))
+        srv.listen(1)
+
+        def old_app():
+            conn, _ = srv.accept()
+            conn.recv(65536)
+            conn.sendall(b'{"id":1,"ok":false,"error":"unknown method `auth`"}\n')
+            conn.close()
+
+        threading.Thread(target=old_app, daemon=True).start()
+        with self.assertRaises(sml_studio.ProtocolError) as e:
+            sml_studio.Client(srv.getsockname()[1], token="smlc_" + "a" * 64).connect()
+        self.assertIn("protocol 1", str(e.exception))
+        srv.close()
+
     def test_timeout_is_typed_and_not_retried(self):
         import sml_studio
         srv = socket.socket()

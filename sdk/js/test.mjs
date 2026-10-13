@@ -46,6 +46,14 @@ await t("timeout is typed and the request is not replayed", async () => {
   srv.close();
 });
 
+await t("a protocol 1 (Hotfix 02) app is named", async () => {
+  const srv = net.createServer((s) => s.once("data", () => s.end('{"id":1,"ok":false,"error":"unknown method `auth`"}\n')));
+  await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+  const c = new Client(srv.address().port, { token: "smlc_" + "a".repeat(64) });
+  await assert.rejects(c.connect(), (e) => e instanceof ProtocolError && /protocol 1/.test(e.message));
+  srv.close();
+});
+
 await t("protocol errors are typed", async () => {
   assert.ok(new ProtocolError("x") instanceof Error);
 });

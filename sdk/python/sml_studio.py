@@ -144,6 +144,8 @@ class Client:
                 raise AuthError("the app refused the control token (missing, wrong or revoked)") from None
             if e.code == "protocol":
                 raise ProtocolError(str(e)) from None
+            if "unknown method" in str(e) and "auth" in str(e):
+                raise ProtocolError("this SML Studio speaks control protocol 1 (a build before Hotfix 03, without authentication); this SDK needs protocol 2") from None
             raise
         except SmlError:
             self.close()
