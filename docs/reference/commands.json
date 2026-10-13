@@ -21,7 +21,7 @@
     "control_methods": 16,
     "engine_commands": 538,
     "mcp_tools": 17,
-    "ui_commands": 93
+    "ui_commands": 94
   },
   "engine_commands": [
     {
@@ -8455,6 +8455,14 @@
     {
       "id": "ui.mix_split",
       "label": "Mixer Split Size",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "",
+      "pro_tools": null,
+      "studio_one": null
+    },
+    {
+      "id": "ui.mix_density",
+      "label": "Mixer Density",
       "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
       "menu": "",
       "pro_tools": null,

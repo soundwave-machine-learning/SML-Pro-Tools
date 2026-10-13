@@ -67,7 +67,7 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Built-in effects (EQ, compressor, reverb…) | **Not available** | No plugin ships with the app |
 | SML plugins (Channel EQ, Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align) | **Not available**: separate projects | Listed as AWAITING_EXTERNAL_PLUGIN |
 | Mastering meters (true peak, LUFS, LRA), level-match measurement | Implemented; checked against analytic and independent (FFmpeg) results, not certified | §18 |
-| Reference playback (A/B listening) inside the app | **Not available** (button stores a setting; no audio plays) | Known issue K1 (§26) |
+| Reference playback (A/B listening) inside the app | **Open defect** (the button stores a setting; no reference audio plays) | Known issue K1 (§26); defect record `docs/refinement_pass_01/REFERENCE_AB_DEFECT.md` |
 | Export: WAV/AIFF/FLAC, 16/24/32f, dither, rate conversion, tails, report | Implemented | No MP3/AAC export |
 | Phone remote (plain HTTP on your network) | Implemented; pending target check with a real phone | No HTTPS, no phone microphone |
 | Internal assistant: grounded answers, previewed plans | Implemented | §20 |
@@ -165,7 +165,7 @@ the first segment, so they never cover the menus.
 | **Audio Setup** (gear icon) | Opens or closes Audio Setup (§4.1). | `window.audio_setup` |
 | Device status mark and summary | A filled green dot: audio is running. An amber ring: a device is open but no audio callback yet. A red ✕: no audio output. The text reads "<host> · <device> · <rate> kHz · <frames> fr = <ms> ms" from the open stream, "… requested (not running yet)", or "No audio output — open Audio Setup". Hover: the input device and "Driver latency: Unknown". Click: opens Audio Setup. | — |
 | Recording status | "No track armed", "Armed: <track> · <input>" (red dot) or "Armed: N tracks", plus "I n" when n tracks monitor their input. Hover: every armed track and the input it records, the monitoring mode and the input device ("opens on the first record or arm" until it is open). Click: opens Audio Setup on the first armed track. Lit red while recording. | — |
-| **Stop / Play / Record** and the position | Only in the Mix and Master layouts (Edit and Record have the transport in their toolbar). Play lights green while playing, Record lights red while recording. | `transport.*` |
+| **Stop / Play / Record** and the position | In the Mix and Master layouts (Edit and Record have the transport in their toolbar), and in Edit/Record when the toolbar is too narrow to keep it beside Nudge (§22). Play lights green while playing, Record lights red while recording. | `transport.*` |
 | **BPM** field | The tempo in effect at the playhead (stopped: the selection start). Click, type a value from 5 to 1000 and press **Enter**: one undo step. **Escape** or clicking elsewhere cancels; typing never triggers shortcuts. Disabled while recording. | `event.tempo {bpm, at}` |
 | **MAP** badge | Shown when the session has more than one tempo change. The BPM field then edits only the change in effect at the playhead; the others are kept (the map is never flattened). | — |
 | Time signature (e.g. **4/4**) | Click: a popover with the numerator (1–64) and denominator (1–64); **Apply** changes the signature in effect at the playhead (one undo step), **Cancel** or clicking away changes nothing. | `event.meter` |
@@ -235,7 +235,9 @@ use another input." If the app ever reported "No audio input: …", Record answe
 no audio input device" until you pick an input here.
 
 **Meter:** an input meter appears only for an armed or input-monitored track and shows the real
-input ("input: no signal" when silent). No test signal is ever generated.
+input level ("input −12.3 dBFS"). With no signal the bar is empty and says "input: no signal",
+or "input: no signal (input device not open)" before the input opens. No test signal is ever
+generated.
 
 **Limits:** SML Studio cannot control your interface's preamp gain, phantom power, direct-monitor
 mix or headphone mix. If the input runs at a different rate than the session, takes are resampled
@@ -332,7 +334,8 @@ session without asking; save first.
 In the **Record** layout, the RECORD panel on the left has four parts:
 - **DEVICES:** the input and output devices and an **Audio Setup** button.
 - **TRACK:** the selected audio track, the input it records ("records In 1 of the input
-  device"), **Arm** / **Armed**, **Input monitor** and its real input level.
+  device"), **Arm** / **Armed**, **Input monitor** and its real input level (an empty bar
+  reading "input: no signal" when there is none).
 - **MONITORING:** Tracking / Mixing / Hardware and Count Off.
 - **TRANSPORT:** Stop / Play / Record / Mixer.
 
@@ -732,6 +735,23 @@ hides (view only) and edits values numerically; double-click a name to rename. A
 destination ("→ Vocal Bus +1 send"; muted sends not counted) and a red **CLIP** tag shows while a
 meter clips.
 
+**Visual view labels:**
+- Each channel's name sits beside its node, placed so that no two labels overlap and no label
+  covers a node. When the nearby places are taken, a label moves further away with a thin line
+  to its node. Muted and soloed channels add [M] / [S].
+- Channels whose nodes sit on top of each other (the same pan and nearly the same gain) share one
+  label, such as "Snare +3". Click it to list every one of them with its gain, pan and width,
+  then choose one to select it. A selected node is drawn on top, so a drag at that spot moves the
+  channel you chose.
+- Hovering a node shows a card with its gain, pan, width and states. The line above the stage
+  shows the current selection.
+- None of this changes any value: positions still come only from gain, pan and width.
+
+**Density (Console and Split):** **Comfortable** (wide strips, full captions) or **Compact**
+(narrow strips: short captions such as "INS A-E", names ending in "…" with the full name on hover,
+width shown as "100%"). It is a preference of this computer (`ui.json`), the same one as
+**View › Narrow Mix**, and is set with `ui.mix_density {"density": "comfortable" | "compact"}`.
+
 **Undo:** fader, pan, width, mute and solo changes are undoable (a fader drag is one step).
 
 ### 13.3 Mix profile and pan law
@@ -977,7 +997,8 @@ interface as hosted, not the sound. The SML plugins appear as AWAITING_EXTERNAL_
 Menu-bar layout button **Master** (or `window.master`). It shows "MASTER" and **Back to Mix**, the
 Master strip (its inserts are the mastering chain, applied exactly once), and three cards:
 - **PROGRAM AND REFERENCE**: the program source and the reference. When a reference is set, the
-  card states that A/B stores the setting only and plays no audio (Known issue K1).
+  card says "OPEN DEFECT": A/B stores the setting only and plays no audio (Known issue K1).
+  Without a reference it says how to set one (`mastering.reference`; there is no menu entry).
 - **METERS (OFFLINE, OVER THE PROGRAM)**: **Measure**, then a table with sample peak, true peak,
   integrated, short-term max and momentary max loudness, loudness range, correlation and mono
   peak, each with its unit. Before the first measurement it says "Not measured yet".
@@ -990,10 +1011,11 @@ Master strip (its inserts are the mastering chain, applied exactly once), and th
 - **Reference:** `mastering.reference {source, gain_db?}` registers an imported file as the
   reference; **Level match** (`mastering.level_match`) measures both integrated loudnesses and
   stores an audition gain; **Clear** removes it.
-- **Not available: listening to the reference inside the app.** "A/B: listen to reference" stores a
-  setting, but no reference audio plays in this build (Known issue K1). The on-screen hint
-  "Clip List › right-click › Use as reference" names a menu item that does not exist; use the
-  command. Compare by ear in another player at the level-matched gain (§24 walkthrough E).
+- **Open defect: listening to the reference inside the app does not work.** "A/B: listen to
+  reference" stores a setting, but no reference audio reaches the speakers (Known issue K1).
+  The Master card says "OPEN DEFECT". There is no menu entry for choosing a reference; use the
+  command (the card now says so). Compare by ear in another player at the level-matched gain
+  (§24 walkthrough E).
 - When a program file is set, Meters and Level match measure that file **without** the Master
   chain.
 
@@ -1208,6 +1230,10 @@ to the Mix window; **Ctrl+Alt+L** runs "Move selection left", not Loop. In Studi
 - **Window › Reset Panel Layout** restores the default docking.
 - When the window is narrow (for example 1366×768 at 150 % scaling), the Edit toolbar keeps the
   transport and Nudge pinned on the right and scrolls the other groups, tools first.
+- Narrower still (the Record layout beside its RECORD panel on such a window), the toolbar uses two
+  rows: the tools and other groups on top at full width, Nudge (and the transport, if it fits)
+  below. If the transport does not fit beside Nudge, Stop / Play / Record move into the control
+  bar (§3.5), as in the Mix layout. Nothing is hidden.
 
 ## 23. Autosave, recovery and troubleshooting
 
@@ -1378,8 +1404,8 @@ target check. The SML plugin family is not available yet.
    source stays in the session); run `mastering.reference {source: <id>}`.
 3. **Measure:** **Measure** (or `mastering.meters`) for the program; `mastering.level_match` gives
    `program_lufs`, `reference_lufs` and the gain that would match the reference to the program.
-4. **Listen at matched loudness, outside the app:** in-app reference playback is **not available**
-   (K1). Export your master (step 6), then play it and the reference in another player with the
+4. **Listen at matched loudness, outside the app:** in-app reference playback is an **open
+   defect** (K1: the A/B button plays no reference audio). Export your master (step 6), then play it and the reference in another player with the
    reference turned down (or up) by the level-match gain. Judge tone, depth, dynamics and
    translation at equal loudness: louder is not better, and loudness is not quality.
 5. **Targets (*starting point*, check your distributor's current specification):** many streaming
@@ -1454,7 +1480,7 @@ documented so that you and any operator can work around them. Workarounds in bra
 
 | # | Issue |
 |---|---|
-| K1 | Mastering reference audio never plays: "A/B: listen to reference" only stores a setting. Level match and meters do work. [Compare in another player at the level-matched gain, §24 E.] The hint "Clip List › right-click › Use as reference" names a menu item that does not exist. |
+| K1 | **Open functional defect:** mastering reference audio never plays. "A/B: listen to reference" only stores a setting; nothing feeds the reference to the monitor output. Level match and meters do work. [Compare in another player at the level-matched gain, §24 E.] Source path and reproduction: `docs/refinement_pass_01/REFERENCE_AB_DEFECT.md`. There is no menu entry for choosing a reference (use `mastering.reference`). |
 | K2 | Master track: mute has no effect; all Master inserts run before the fader even if set Post; `mix.signal_flow` for Master lists stages Main does not have. |
 | K3 | Monitoring modes Tracking and Mixing behave identically (only Hardware changes processing); "Low Latency Monitoring" does nothing. |
 | K4 | SML Remote "Start with the app" does not start the service at launch. [Press Start.] |

@@ -1,0 +1,15 @@
+## K1 reference A/B — code search, 2026-10-13T04:33:38Z, source 0029f79152b961832ea8796b0ab8118340ae4698 + working tree
+
+$ grep -rn "\.listening" crates --include=*.rs   # who reads the A/B flag
+crates/ui-egui/tests/ui_refinement.rs:214:/// reference" stores `mastering.reference.listening = true`, but nothing feeds the reference to
+crates/ui-egui/tests/ui_refinement.rs:238:    assert_eq!(h.state().engine.session().mastering.reference.as_ref().map(|r| r.listening), Some(true), "the setting is stored");
+crates/engine/src/cmd/mastering.rs:53:                        let (gain_db, listening) = prev.map_or((0.0, false), |r| (r.gain_db, r.listening));
+crates/engine/src/cmd/mastering.rs:60:                        r.listening = l;
+
+$ grep -rn "aux()\." crates apps --include=*.rs   # who feeds the monitor-only path
+crates/ui-egui/src/assistant_ui.rs:189:            p.aux().clear();
+crates/ui-egui/src/assistant_ui.rs:272:                player.aux().push_speech(&speech, soundcraft_speech::SPEECH_RATE, player.device_rate);
+
+$ grep -rn "\.solo\.store\|set_gain_db(" crates apps --include=*.rs   # who switches the program off / sets reference gain
+crates/playback/src/lib.rs:164:    pub fn set_gain_db(&self, db: f32) {
+crates/playback/src/lib.rs:1401:        aux.set_gain_db(-6.0);

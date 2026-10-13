@@ -1,0 +1,6 @@
+{"method":"engine.execute","params":{"command":"window.mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.view","params":{"view":0}}}
+{"method":"engine.execute","params":{"command":"window.narrow_mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.record_arm","params":{"tracks":["Kick"],"value":true}}}
+{"method":"engine.execute","params":{"command":"mix.mute","params":{"tracks":["Hats"],"value":true}}}
+{"steps":10}

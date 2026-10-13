@@ -1,0 +1,3 @@
+{"method":"engine.execute","params":{"command":"window.record","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.record_arm","params":{"tracks":["Kick"],"value":true}}}
+{"steps":10}

@@ -149,7 +149,7 @@ ad-libs") can run directly; report it and how to undo it.
 ### 4.7 Say plainly what is not available
 Do not imply these work: ASIO (WASAPI only); an internal language model unless the owner configured
 one and it answered; free dictation or a wake word (push-to-talk recognises enrolled phrases only);
-a phone microphone or HTTPS for the phone page; in-app reference playback (A/B does not play audio);
+a phone microphone or HTTPS for the phone page; in-app reference playback (A/B does not play audio: an OPEN DEFECT, K1 — never report reference listening as working);
 native summing/tape models; built-in effects; the SML plugins; MP3/AAC export; any third-party
 plugin not yet seen working here. Check the Known issues (manual §26) before recommending a
 workflow, and route around them (for example stop playback with `transport.stop`, not Space).
@@ -181,6 +181,7 @@ Each line below ran successfully on build 0.5.0 (headless CLI, synthetic audio; 
 | Tempo / time signature (Hotfix 01 builds) | `event.tempo {"bpm":120,"at":0}` edits or adds the change at `at`; other changes stay. `event.meter {"numerator":6,"denominator":8,"at":0}` |
 | Loop range (Hotfix 01 builds) | `loop.info {}` first; `loop.set {"start":48000,"end":96000}` or `{"start":…,"length":…}` (positions may use the counter format, e.g. `"bars_beats:3\|1\|000"`); `loop.to_selection {}`, `loop.select {}`, `loop.clear {}`; `options.loop_playback {"value":true}` |
 | Mixer Split share (owner's preference, not the session) | `ui.mix_split {"fraction":0.6}`; `{}` resets — control channel only |
+| Mixer density (owner's preference, not the session) | `ui.mix_density {"density":"compact"}` or `"comfortable"`; `{}` reports it — control channel only |
 
 The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
 `docs/hotfix_pass_01/evidence/hotfix-commands.log`; `ui.mix_split` in the UI tests). Before using
@@ -199,6 +200,12 @@ and state tags (REC, IN, SOLO, MUTE, FAULT), inserts and slots, sends and I/O, p
 fader, then I / record and S / M buttons (manual §13.2). Accessible names did not change
 ("⚙ Audio Setup", "⟲ Loop", "Recording status", "<track> strip name", "<track> state: …"), so
 find controls by those names when your tool reads them.
+In the Visual mixer, channels at the same position share one label ("Snare +3"); its accessible
+name is "N channels at this position: …". Click it and choose a channel, then act on the
+selection. Each node is named "<track> node". Mixer density is a UI preference:
+`ui.mix_density {"density": "compact" | "comfortable"}` (control channel; it changes nothing in
+the session). On narrow Record layouts Stop/Play/Record may be in the control bar rather than the
+toolbar.
 Audio Setup (`window.audio_setup`) is where the owner picks the microphone/interface; device
 choices are not commands and are the owner's to make. Values Audio Setup shows as "Unknown" or
 "Not measured" are unknown: do not estimate them.

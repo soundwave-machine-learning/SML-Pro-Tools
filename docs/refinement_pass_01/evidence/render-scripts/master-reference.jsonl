@@ -1,0 +1,4 @@
+{"method":"engine.execute","params":{"command":"mastering.reference","params":{"source":2}}}
+{"method":"engine.execute","params":{"command":"mastering.reference","params":{"listening":true}}}
+{"method":"engine.execute","params":{"command":"window.master","params":{}}}
+{"steps":10}

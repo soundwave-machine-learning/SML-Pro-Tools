@@ -41,4 +41,4 @@ Control-channel methods (JSON lines over TCP to the running desktop app; [contro
 
 MCP tools (`soundcraft-cli mcp`, optionally `--connect PORT` to the running app; [mcp.md](../mcp.md)): `list_commands`, `execute`, `batch`, `inspect_session`, `new_session`, `open_session`, `save_session`, `import_audio`, `bounce_mix`, `parity`, `screenshot`, `ui_inspect`, `ui_set`, `menu_invoke`, `click`, `drag`, `key`.
 
-Counts: 538 engine commands (259 undoable, 16 destructive by the registry's rule, 4 disabled), 93 UI-layer commands.
+Counts: 538 engine commands (259 undoable, 16 destructive by the registry's rule, 4 disabled), 94 UI-layer commands.

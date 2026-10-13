@@ -3,6 +3,26 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
+## 2026-10-13 — revision 2026-10-13.4 — UI refinement pass 01, source `3aa6554`
+
+**Changed**
+- [USER_GUIDE.md](USER_GUIDE.md):
+  - §4.2 and §6: the input level bar text.
+  - §13.1: Visual view labels, clusters of coincident channels, the detail card, and the
+    Comfortable/Compact density (`ui.mix_density`).
+  - §22: the stacked toolbar and the transport moving to the control bar.
+  - Reference A/B is now described as an **open functional defect** (K1) in §2, §18.1, §18.2,
+    §24 E and §26. There is no menu entry for choosing a reference.
+- [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) and
+  [grok/GROK_BOT_INSTRUCTIONS.md](grok/GROK_BOT_INSTRUCTIONS.md): cluster chips, `ui.mix_density`,
+  the control-bar transport, and K1 never to be reported as working.
+- New: [refinement_pass_01/REFINEMENT_REPORT.md](refinement_pass_01/REFINEMENT_REPORT.md) and
+  [refinement_pass_01/REFERENCE_AB_DEFECT.md](refinement_pass_01/REFERENCE_AB_DEFECT.md).
+
+**Verified by:** source review against `3aa6554`; `tests/ui_refinement.rs` and all UI suites;
+before/after renders.
+**Not verified:** anything on Windows; reference audio (open defect).
+
 ## 2026-10-13 — revision 2026-10-13.3 — interface polish pass 01, source `59038e2`
 
 **Changed**

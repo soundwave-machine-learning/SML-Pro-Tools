@@ -1,0 +1,5 @@
+{"method":"engine.execute","params":{"command":"window.mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.view","params":{"view":1}}}
+{"method":"engine.execute","params":{"command":"edit.select","params":{"tracks":["Snare"]}}}
+{"method":"engine.execute","params":{"command":"mix.mute","params":{"tracks":["Hats"],"value":true}}}
+{"steps":10}
