@@ -660,6 +660,7 @@ fn sync_dir(dir: &Path) {
 
 /// Open a `.scraft` session and decode its audio files (missing files are reported, not fatal).
 pub fn open_session(e: &mut Engine, path: &str) -> Result<Vec<String>> {
+    e.check_session_replace("open session")?;
     let text = std::fs::read_to_string(path).map_err(|err| EngineError::Io(format!("{path}: {err}")))?;
     let mut s = Session::from_json(&text).map_err(|err| EngineError::Io(err.to_string()))?;
     let dir = Path::new(path).parent().map(Path::to_path_buf).unwrap_or_default();
@@ -774,6 +775,24 @@ pub fn armed_input_channels(s: &Session, device_channels: usize) -> Vec<bool> {
 }
 
 pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, rate: u32) -> Result<Vec<soundcraft_model::ClipId>> {
+    add_recording_kept(e, start, channels, rate, soundcraft_time::Range::new(Samples::MIN, Samples::MAX))
+}
+
+/// HF17: places a capture that began at session position `start`, keeping only the part inside
+/// `keep` (the punch range, or from the record point on). Pre-roll, count-off and post-roll are
+/// timing only: the clip is trimmed to `keep` *before* it is placed, so existing clips outside
+/// `keep` are never touched (their placement, offsets, fades and gain stay exactly as they were),
+/// and the capture file keeps every recorded frame (the trim is non-destructive). When the new take
+/// covers existing material, the track's playlist as it was before the take is kept as an
+/// alternate playlist ("<track>.NN before take"), so the replaced material stays reachable. The
+/// whole placement is one undo step ("Record"); nothing is removed before the replacement exists.
+pub fn add_recording_kept(
+    e: &mut Engine,
+    start: Samples,
+    channels: Vec<Vec<f32>>,
+    rate: u32,
+    keep: soundcraft_time::Range,
+) -> Result<Vec<soundcraft_model::ClipId>> {
     // Channels no armed track records may be empty (read back selectively).
     let frames = channels.iter().map(Vec::len).max().unwrap_or(0);
     if frames == 0 {
@@ -795,6 +814,7 @@ pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, ra
         return Err(EngineError::BadParams("record".into(), problems.join("; ")));
     }
     let before = e.session_arc();
+    let was_dirty = e.is_dirty();
     let mut out = Vec::new();
     let take_no = e.session().sources.len() + 1;
     for (tid, first, n, name) in armed {
@@ -806,8 +826,37 @@ pub fn add_recording(e: &mut Engine, start: Samples, channels: Vec<Vec<f32>>, ra
         let src = add_source(s, &clip_name, buf, None, FileFormat::Wav);
         let len = s.source(src).map_or(0, |x| i64::try_from(x.frames).unwrap_or(0));
         let cid = s.new_clip_id();
-        crate::edit::place_clip(s, tid, Clip::audio(cid, clip_name, src, 0, start, len));
+        let mut clip = Clip::audio(cid, clip_name, src, 0, start, len);
+        // Trim to `keep` first (the media keeps the roll audio; the clip just does not play it).
+        let Some(placed) = clip.range().intersect(&keep).filter(|r| !r.is_empty()) else { continue };
+        if placed.start > clip.start {
+            clip.trim_start_to(placed.start);
+        }
+        if placed.end < clip.end() {
+            clip.trim_end_to(placed.end);
+        }
+        // Material the take replaces stays reachable as an alternate playlist.
+        let covers_material = s.track(tid).is_some_and(|t| t.clips().iter().any(|c| c.range().overlaps(&placed)));
+        if covers_material && let Some(t) = s.track(tid) {
+            let mut kept: Vec<Clip> = t.clips().to_vec();
+            let label = format!("{}.{:02} before take {take_no:02}", t.name, t.playlists.len() + 1);
+            for c in &mut kept {
+                c.id = s.new_clip_id();
+            }
+            if let Some(t) = s.track_mut(tid) {
+                t.playlists.push(soundcraft_model::Playlist { name: label, clips: kept });
+            }
+        }
+        crate::edit::place_clip(s, tid, clip);
         out.push(cid);
+    }
+    if out.is_empty() {
+        // The capture did not reach the kept range: nothing changes (no empty undo step).
+        e.restore_document(before);
+        if !was_dirty {
+            e.mark_clean();
+        }
+        return Ok(out);
     }
     e.push_undo("Record", before);
     Ok(out)

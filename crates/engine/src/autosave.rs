@@ -323,6 +323,8 @@ pub struct Recovered {
 /// Opens a recovered generation into the engine (media decoded like a normal open); the engine
 /// has no path afterwards, so the user chooses where to save.
 pub fn open_recovered(e: &mut Engine, r: Recovered) -> Result<Vec<String>> {
+    // HF18: never replace the session under a take being recorded.
+    e.check_session_replace("Recover Autosave")?;
     let missing = crate::io::open_session(e, &r.path.to_string_lossy())?;
     e.path = None;
     e.mark_dirty();

@@ -51,7 +51,18 @@ pub enum EngineError {
     Unsupported(String),
     #[error("internal error in `{0}`: {1}")]
     Internal(String, String),
+    /// HF18: refused because a take is being captured (the take is never cut short to allow it).
+    #[error("`{0}` is refused while recording: {1}")]
+    Recording(String, String),
 }
+
+/// HF18: commands that replace or discard the open session. They are refused by the engine
+/// itself (every caller: menus, shortcuts, control channel, MCP, assistant, CLI scripts) while a
+/// take is being captured, including its count-off and pre-roll.
+pub const SESSION_REPLACING_COMMANDS: &[&str] = &["session.new", "session.open", "session.close", "session.revert"];
+
+/// The message for a refused session replacement or recovery while recording.
+pub const RECORDING_GUARD_MESSAGE: &str = "a take is being recorded. Stop the transport so the take is finished and placed, save the session if you want to keep it, then try again. Nothing was changed and the take continues.";
 
 pub type Result<T> = std::result::Result<T, EngineError>;
 
@@ -292,9 +303,26 @@ impl Engine {
 
     /// Run a command by id. Never panics: escaped panics become `EngineError::Internal` and the
     /// document is restored.
+    /// HF18: why the open session may not be replaced or recovered over right now, if it may not.
+    pub fn session_replace_blocked(&self) -> Option<&'static str> {
+        self.transport.recording.then_some(RECORDING_GUARD_MESSAGE)
+    }
+
+    /// HF18: `Err` when the session may not be replaced now (`what` names the request).
+    pub fn check_session_replace(&self, what: &str) -> Result<()> {
+        match self.session_replace_blocked() {
+            Some(why) => Err(EngineError::Recording(what.to_string(), why.to_string())),
+            None => Ok(()),
+        }
+    }
+
     pub fn execute(&mut self, id: &str, params: &Value) -> Result<Value> {
         self.merge_key = None;
         let spec = find_command(id).ok_or_else(|| EngineError::UnknownCommand(id.to_string()))?;
+        if SESSION_REPLACING_COMMANDS.contains(&id) {
+            // Checked before anything runs: a refusal changes nothing.
+            self.check_session_replace(id)?;
+        }
         if let Err(reason) = (spec.enabled)(self) {
             // A call that names its targets (tracks, clips, a range) does not need a selection;
             // the command itself validates them.

@@ -516,6 +516,9 @@ pub struct SoundApp {
     /// Background plugin scanning (R06).
     pub plugin_scan: plugin_scan::Scanner,
     record_start: Samples,
+    /// HF17: where the take may start replacing material (the record point; pre-roll and
+    /// count-off before it are timing only).
+    record_point: Samples,
     /// Punch range to trim the take to (pre/post-roll recordings).
     punch: Option<Range>,
     /// Count Off: the record point the current take starts at (audio before it is trimmed off).
@@ -608,6 +611,7 @@ impl SoundApp {
             player,
             recorder: None,
             record_start: 0,
+            record_point: 0,
             punch: None,
             countoff_at: None,
             recorder_failed: false,
@@ -995,6 +999,7 @@ impl SoundApp {
         if already_playing {
             // Punch in on the fly at the current playhead.
             self.record_start = self.position();
+            self.record_point = self.record_start;
             self.punch = None;
             return;
         }
@@ -1002,6 +1007,7 @@ impl SoundApp {
         let sel = e.selection;
         if e.loop_record && !sel.is_empty() {
             self.record_start = sel.start;
+            self.record_point = sel.start;
             self.punch = None;
             self.start_play(sel.start, None, Some(sel));
         } else {
@@ -1021,6 +1027,7 @@ impl SoundApp {
                 }
             }
             self.record_start = from;
+            self.record_point = self.countoff_at.unwrap_or(sel.start);
             self.punch = (!sel.is_empty()).then_some(sel);
             let end = (!sel.is_empty()).then_some(sel.end + post);
             self.start_play(from, end, None);
@@ -1216,6 +1223,8 @@ impl SoundApp {
 
     /// Opens a recovery point (the newest valid generation of its store) as an unsaved session.
     pub fn open_recovery_point(&mut self, point: &RecoveryPoint) -> Result<(), String> {
+        // HF18: refused while recording (checked first; the take, recorder and session are untouched).
+        self.engine.check_session_replace("Recover Autosave").map_err(|e| e.to_string())?;
         let r = point.store.recover().ok_or("no valid generation in this store")?;
         if let Some(p) = &self.player {
             p.stop();
@@ -1235,6 +1244,9 @@ impl SoundApp {
 
     /// Recovers an unfinished take to its durable frames and imports it on a new track at 0.
     pub fn recover_take(&mut self, take: &soundcraft_playback::capture::UnfinishedTake) -> Result<(), String> {
+        // HF18/K21: a take being recorded is listed as unfinished; recovering it would shorten
+        // the file being written.
+        self.engine.check_session_replace("Recover a take").map_err(|e| e.to_string())?;
         let rep = soundcraft_playback::capture::recover(&take.media).map_err(|e| e.to_string())?;
         let r = self.run("file.import_audio", json!({"path": take.media.to_string_lossy(), "at": 0}));
         r.map_err(|e| e.to_string())?;
@@ -1430,20 +1442,15 @@ impl SoundApp {
             self.ui.status = format!("Loop-recorded {made} take(s){note}");
             return;
         }
-        match soundcraft_engine::io::add_recording(&mut self.engine, start, take.channels, rate) {
+        // HF17: only the punch range (or, without one, from the record point on) replaces
+        // material; pre-roll, count-off and post-roll are timing. One undo step.
+        self.countoff_at = None;
+        let keep = match self.punch.take() {
+            Some(p) => p,
+            None => Range::new(self.record_point, Samples::MAX),
+        };
+        match soundcraft_engine::io::add_recording_kept(&mut self.engine, start, take.channels, rate, keep) {
             Ok(ids) => {
-                if let Some(at) = self.countoff_at.take() {
-                    soundcraft_engine::io::trim_takes_to_start(&mut self.engine, &ids, at);
-                }
-                if let Some(p) = self.punch.take() {
-                    // Keep only the punch range of each new take (merged into the Record undo step).
-                    let clip_ids: Vec<u64> = ids.iter().map(|c| c.0).collect();
-                    let _ = self.engine.execute_merged(
-                        "edit.trim_to_fill_selection",
-                        &serde_json::json!({"clips": clip_ids, "start": p.start, "end": p.end}),
-                        "record",
-                    );
-                }
                 let session_rate = self.engine.session().sample_rate.hz();
                 self.ui.status = if rate == session_rate {
                     format!("Recorded {} clip(s)", ids.len())
