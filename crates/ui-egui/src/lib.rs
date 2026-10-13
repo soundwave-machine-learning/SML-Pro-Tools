@@ -658,6 +658,12 @@ impl SoundApp {
         if let Some(r) = menus::run_ui_command(self, id, &params) {
             return r;
         }
+        if starts_plugin_scan(id, &params) {
+            // HF12: a recovery point before plugin binaries are loaded, even in worker processes.
+            if let Err(e) = self.recovery_snapshot_now() {
+                log::warn!("recovery point before the plugin scan: {e}");
+            }
+        }
         if id.starts_with("session.save") || id.starts_with("file.bounce") {
             // Third-party plugins keep state the session can't see: store it first.
             self.capture_plugin_states();
@@ -1085,6 +1091,32 @@ impl SoundApp {
             Err(e) => self.autosave_state.last_error = Some(format!("autosave thread: {e}")),
         }
         self.autosave_state.pending = self.autosave_job.is_some();
+    }
+
+    /// Writes a recovery point now (HF12: before a plugin scan) when the session has unsaved
+    /// changes, into the same rolling autosave store as the timer does. The named session file is
+    /// never written and the session stays modified. `Ok(None)`: nothing to protect (no changes,
+    /// or no autosave folder).
+    pub fn recovery_snapshot_now(&mut self) -> Result<Option<u64>, String> {
+        let Some(dir) = self.autosave_dir.clone() else { return Ok(None) };
+        if !self.engine.is_dirty() || self.last_snapshot_revision == Some(self.engine.revision) {
+            return Ok(None);
+        }
+        if !self.is_playing() && !self.engine.transport.recording {
+            self.capture_plugin_states();
+        }
+        let req = soundcraft_engine::autosave::SnapshotRequest {
+            session: self.engine.session_arc(),
+            revision: self.engine.revision,
+            plugin_state_age_s: Some(0),
+        };
+        let store = soundcraft_engine::autosave::Store::for_session(&dir, &self.engine.session().name);
+        let c = store.snapshot(&req).map_err(|e| e.to_string())?;
+        self.last_snapshot_revision = Some(self.engine.revision);
+        self.autosave_state.last_ok_unix = Some(c.generation.unix_time);
+        self.autosave_state.last_generation = Some(c.generation.number);
+        self.autosave_state.last_error = None;
+        Ok(Some(c.generation.number))
     }
 
     /// One line for the status areas: last successful recovery point, lag, failure.
@@ -1832,6 +1864,15 @@ fn feed_meter(d: &mut MeterDisplay, peak: [f32; 2], gr: f32, dt: f32) {
         d.hold = d.level;
     }
     d.gr = if gr > d.gr { gr } else { d.gr * fall };
+}
+
+/// Whether command `id` starts a plugin scan job (a recovery point is taken first, HF12).
+pub fn starts_plugin_scan(id: &str, params: &Value) -> bool {
+    match id {
+        "engine.plugin_scan_start" | "engine.plugin_scan_retry" => true,
+        "engine.vst3_plugins" | "engine.clap_plugins" => params.get("rescan").and_then(Value::as_bool).unwrap_or(false),
+        _ => false,
+    }
 }
 
 #[cfg(test)]

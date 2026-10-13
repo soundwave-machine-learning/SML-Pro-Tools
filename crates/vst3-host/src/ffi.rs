@@ -219,6 +219,7 @@ fn open_library(bundle: &Path, exe: &Path) -> Result<(libloading::Library, Optio
         // SAFETY: loading a shared library runs its static initialisers. That is inherent to
         // hosting plugins; we only load files found in VST3 plugin folders or named explicitly.
         let lib = unsafe { UnixLib::open(Some(exe), RTLD_NOW | RTLD_LOCAL) }.map_err(|e| e.to_string())?;
+        crate::trace_stage("module_entry ModuleEntry");
         type ModuleEntry = unsafe extern "C" fn(*mut c_void) -> bool;
         // SAFETY: `ModuleEntry` is the VST3-mandated Linux entry with this signature.
         let entry = unsafe { lib.get::<ModuleEntry>(b"ModuleEntry\0") }.ok().map(|s| *s);
@@ -250,6 +251,7 @@ fn open_library(bundle: &Path, exe: &Path) -> Result<(libloading::Library, Optio
             type InitDll = unsafe extern "system" fn() -> bool;
             // SAFETY: `InitDll` is the VST3-mandated Windows entry with this signature.
             if let Ok(f) = unsafe { lib.get::<InitDll>(b"InitDll\0") } {
+                crate::trace_stage("module_entry InitDll");
                 // SAFETY: called once after loading, as the spec requires.
                 if !unsafe { f() } {
                     return Err("InitDll failed".into());
@@ -273,6 +275,7 @@ fn open_library(bundle: &Path, exe: &Path) -> Result<(libloading::Library, Optio
             if let Some(f) = entry
                 && bundle.is_dir()
             {
+                crate::trace_stage("module_entry bundleEntry");
                 use std::os::unix::ffi::OsStrExt;
                 let bytes = bundle.as_os_str().as_bytes();
                 let len = isize::try_from(bytes.len()).map_err(|_| "path too long".to_string())?;
@@ -394,7 +397,9 @@ impl Bundle {
 
     fn open(path: &Path, entered_on: EntryThread) -> Result<Bundle, Vst3Error> {
         let err = |m: String| Vst3Error::Load(path.display().to_string(), m);
+        crate::trace_stage("locate_binary");
         let exe = scan::bundle_binary(path).ok_or_else(|| err("no loadable binary".into()))?;
+        crate::trace_stage("load_library");
         let (lib, exit) = open_library(path, &exe).map_err(err)?;
         // The module entry ran: balance it before giving up on the module.
         let fail = |m: String| {
@@ -404,6 +409,7 @@ impl Bundle {
             }
             err(m)
         };
+        crate::trace_stage("get_factory");
         // SAFETY: `GetPluginFactory` is the VST3-mandated export with this signature.
         let get = match unsafe { lib.get::<GetFactory>(b"GetPluginFactory\0") } {
             Ok(sym) => *sym,
@@ -420,8 +426,10 @@ impl Bundle {
     /// Releases the factory, then runs the module exit, as the VST3 SDK's own host does.
     fn exit(self) {
         let Bundle { factory, exit, .. } = self;
+        crate::trace_stage("release_factory");
         drop(factory);
         if let Some(f) = exit {
+            crate::trace_stage("module_exit");
             // SAFETY: balanced with the entry that ran when the module was loaded; called once
             // (`self` is consumed), after every instance is gone (each holds an `Arc` to the
             // bundle) and the factory released. The code stays mapped (`_lib` is never closed).
@@ -438,18 +446,22 @@ impl Bundle {
     fn factory_vendor(&self) -> String {
         // SAFETY: `PFactoryInfo` is plain data (char arrays and an int); all-zero is valid.
         let mut info: sb::PFactoryInfo = unsafe { std::mem::zeroed() };
+        crate::trace_stage("factory_info");
         // SAFETY: valid factory; `info` is a writable struct of the right type.
         if ok(unsafe { self.factory.getFactoryInfo(&mut info) }) { read_c8(&info.vendor) } else { String::new() }
     }
 
     /// Every class this binary exports.
     pub fn classes(&self) -> Vec<RawClass> {
+        crate::trace_stage("count_classes");
         // SAFETY: valid factory.
         let n = unsafe { self.factory.countClasses() }.clamp(0, MAX_CLASSES);
+        crate::trace_stage("query_factory2");
         let f2 = self.factory.cast::<sb::IPluginFactory2>();
         let vendor = self.factory_vendor();
         let mut out = Vec::new();
         for i in 0..n {
+            crate::trace_stage(&format!("class_info {i}/{n}"));
             if let Some(f2) = &f2 {
                 // SAFETY: plain data; all-zero is valid.
                 let mut c: sb::PClassInfo2 = unsafe { std::mem::zeroed() };

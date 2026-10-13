@@ -935,6 +935,14 @@ impl Plugin for SandboxPlugin {
 /// `dirs` are extra plugin search folders (the host's). `SML_SANDBOX_FAULT=crash:<n>|hang:<n>`
 /// injects a fault after `n` processed blocks (fault tests only). Returns the exit code.
 pub fn worker_main(inner: &str, dirs: &[PathBuf]) -> i32 {
+    let code = worker_loop(inner, dirs);
+    // The plugin instance is gone (dropped with the loop). Run the module exits here: on
+    // Windows `std::process::exit` skips the C exit handlers that would otherwise run them.
+    soundcraft_vst3_host::shutdown();
+    code
+}
+
+fn worker_loop(inner: &str, dirs: &[PathBuf]) -> i32 {
     let mut fault_spec = std::env::var("SML_SANDBOX_FAULT").ok();
     for d in dirs {
         if let Some(f) = d.to_str().and_then(|s| s.strip_prefix("--fault=")) {

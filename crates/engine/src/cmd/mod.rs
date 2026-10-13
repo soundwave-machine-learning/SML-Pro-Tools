@@ -34,6 +34,7 @@ mod more_util;
 mod nudge;
 mod options;
 mod paint;
+pub mod plugin_scan;
 mod plugin_state;
 mod query;
 mod setup_more;
@@ -135,6 +136,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(setup_more::specs());
         v.extend(clap::specs());
         v.extend(vst3::specs());
+        v.extend(plugin_scan::specs());
         v.extend(surround::specs());
         v.extend(plugin_state::specs());
         v.extend(instrument::specs());

@@ -33,3 +33,8 @@ soundcraft-mix = { path = ".", features = ["test-providers"] }
 
 [lints]
 workspace = true
+
+# HF13: the isolated scan worker run against the VST3 fixture (the test binary is its own worker).
+[[test]]
+name = "scan_worker_fixture"
+harness = false

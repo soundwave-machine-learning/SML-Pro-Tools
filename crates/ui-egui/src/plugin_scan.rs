@@ -4,10 +4,13 @@
 //! between formats (a single format's scan runs to completion once begun). Results land in the
 //! host crates' own caches; menus read them only after the scan finished.
 //!
-//! Scanning is isolated (R07): with a cache path configured, each bundle is loaded by a separate
-//! worker process (`soundcraft --scan-plugin`), so a plugin that crashes or hangs while loading
-//! is quarantined instead of taking the app down. Without a cache path (agents' test runs, the
-//! CLI) the in-process scan is used — a documented compatibility mode, not containment.
+//! Scanning is isolated (R07, HF12): when the process has a scan service
+//! (`soundcraft_mix::scan_jobs`, installed by the app at start) this scanner submits a job to it,
+//! like the control channel does, so the UI, the start-up scan and remote requests share one
+//! owner: each bundle is loaded by a separate worker process (`soundcraft --scan-plugin`), and a
+//! plugin that crashes or hangs while loading is quarantined instead of taking the app down.
+//! Without a service (agents' UI test runs) the in-process scan is used — a documented
+//! compatibility mode, not containment.
 //! Hosting for playback is in-process either way (runtime containment: E03).
 
 use std::sync::Arc;
@@ -28,8 +31,8 @@ pub struct Scanner {
     cancel: Arc<AtomicBool>,
     /// Formats finished so far (0..=3), for progress display.
     progress: Arc<AtomicU8>,
-    /// Scan cache file; `Some` enables the isolated (out-of-process) scan.
-    pub cache_path: Option<std::path::PathBuf>,
+    /// The scan-service job serving the last isolated scan (for progress display).
+    pub job: Arc<std::sync::atomic::AtomicU64>,
     /// Quarantined bundles of the last isolated scan (path, reason), for the UI.
     pub quarantined: Arc<std::sync::Mutex<Vec<(std::path::PathBuf, String)>>>,
     /// True while the last scan used worker processes.
@@ -57,47 +60,61 @@ impl Scanner {
             return false;
         }
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(cache_path) = self.cache_path.clone()
-            && let Some(worker) = soundcraft_mix::scan_isolated::Worker::this_program()
-        {
-            let quarantined = Arc::clone(&self.quarantined);
-            let isolated = Arc::clone(&self.isolated);
-            isolated.store(true, Ordering::Release);
-            let job: Box<dyn FnOnce() + Send> = Box::new(move || {
-                let mut cache = soundcraft_mix::scan_isolated::Cache::load(&cache_path);
-                let dirs = soundcraft_mix::scan_isolated::default_dirs();
-                let report = soundcraft_mix::scan_isolated::scan_dirs(&worker, &dirs, &mut cache, Some(&cache_path), false);
-                soundcraft_mix::scan_isolated::adopt(&report);
-                if let Ok(mut q) = quarantined.lock() {
-                    *q = report.quarantined.iter().map(|(p, q)| (p.clone(), q.to_string())).collect();
-                }
-                log::info!(
-                    "isolated plugin scan: {} CLAP, {} VST3, {} scanned, {} cached, {} quarantined",
-                    report.clap.len(),
-                    report.vst3.len(),
-                    report.scanned,
-                    report.cached,
-                    report.quarantined.len()
-                );
-            });
-            return self.start_jobs(recording, vec![job]);
+        if let Some(svc) = soundcraft_mix::scan_jobs::installed() {
+            if recording || matches!(self.phase(), Phase::Running | Phase::Done) {
+                return false;
+            }
+            self.isolated.store(true, Ordering::Release);
+            let submitted = svc.submit(false);
+            self.job.store(submitted.job.id, Ordering::Release);
+            return self.follow(svc, submitted.job.id);
         }
         self.isolated.store(false, Ordering::Release);
         self.start_with(recording, default_formats())
     }
 
-    /// Clears the quarantine of `path` in the cache so the next scan retries it.
+    /// Follows a service job on a waiting thread: the phase becomes Done when it ends and the
+    /// quarantine list is refreshed.
+    #[cfg(not(target_arch = "wasm32"))]
+    fn follow(&self, svc: Arc<soundcraft_mix::scan_jobs::ScanService>, id: u64) -> bool {
+        let quarantined = Arc::clone(&self.quarantined);
+        let job: Box<dyn FnOnce() + Send> = Box::new(move || {
+            // Bounded per bundle by the worker deadline; the wait itself only watches.
+            let _ = svc.wait(id, std::time::Duration::from_secs(24 * 3600));
+            if let Ok(mut q) = quarantined.lock() {
+                *q = svc.quarantine().into_iter().map(|q| (q.path, q.reason)).collect();
+            }
+        });
+        self.start_jobs(false, vec![job])
+    }
+
+    /// The service job behind the current isolated scan (progress for the menus).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn job_status(&self) -> Option<soundcraft_mix::scan_jobs::JobSnapshot> {
+        let id = self.job.load(Ordering::Acquire);
+        if id == 0 {
+            return None;
+        }
+        soundcraft_mix::scan_jobs::installed()?.status(Some(id))
+    }
+
+    /// Retries the quarantined bundle `path` now (a retry job on the scan service; other
+    /// quarantines and cached results are kept). False without a service or while scanning.
     pub fn re_enable(&self, path: &std::path::Path) -> bool {
         #[cfg(not(target_arch = "wasm32"))]
-        if let Some(cache_path) = &self.cache_path {
-            let mut cache = soundcraft_mix::scan_isolated::Cache::load(cache_path);
-            let removed = cache.forget(path);
-            let _ = cache.save(cache_path);
+        if let Some(svc) = soundcraft_mix::scan_jobs::installed() {
+            if self.phase() == Phase::Running {
+                return false;
+            }
             if let Ok(mut q) = self.quarantined.lock() {
                 q.retain(|(p, _)| p != path);
             }
-            return removed;
+            let submitted = svc.retry(vec![path.to_path_buf()]);
+            self.job.store(submitted.job.id, Ordering::Release);
+            self.phase.store(0, Ordering::Release);
+            return self.follow(svc, submitted.job.id);
         }
+        let _ = path;
         false
     }
 

@@ -43,6 +43,43 @@ pub use plugin::ClapPlugin;
 use soundcraft_dsp::{Category, Plugin, PluginInfo};
 use std::path::{Path, PathBuf};
 
+/// Prefix of the stage lines a scan worker writes to standard error (HF13): the last one before a
+/// crash names the step that was running. Same format as `soundcraft-vst3-host`.
+pub const STAGE_PREFIX: &str = "SML-SCAN-STAGE ";
+
+static STAGE_TRACE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Turns stage tracing on for this process (scan workers only): every load step is written to
+/// standard error, unbuffered, before it runs.
+pub fn set_stage_trace(on: bool) {
+    STAGE_TRACE.store(on, std::sync::atomic::Ordering::Release);
+}
+
+/// Records that `stage` is about to run (a no-op unless [`set_stage_trace`] is on).
+pub fn trace_stage(stage: &str) {
+    if STAGE_TRACE.load(std::sync::atomic::Ordering::Acquire) {
+        use std::io::Write;
+        let mut e = std::io::stderr().lock();
+        let _ = writeln!(e, "{STAGE_PREFIX}clap {stage}");
+        let _ = e.flush();
+    }
+}
+
+static IN_PROCESS_SCAN_OFF: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// HF12: with `false`, [`scan`] and [`rescan`] never load a bundle in this process; they return
+/// what the isolated scanner adopted (empty until it has). The app turns it off when its isolated
+/// scan service is installed, so no caller (control channel, menus, lookups) can map an unknown
+/// binary into the host while scanning.
+pub fn set_in_process_scan(enabled: bool) {
+    IN_PROCESS_SCAN_OFF.store(!enabled, std::sync::atomic::Ordering::Release);
+}
+
+/// Whether [`scan`] may load bundles in this process.
+pub fn in_process_scan_enabled() -> bool {
+    !IN_PROCESS_SCAN_OFF.load(std::sync::atomic::Ordering::Acquire)
+}
+
 /// Prefix of every hosted-CLAP plugin id.
 pub const ID_PREFIX: &str = "clap:";
 
@@ -94,6 +131,9 @@ mod api {
     pub fn rescan() -> Vec<ClapDescriptor> {
         registry::rescan()
     }
+    pub fn release_unused() {
+        ffi::release_unused()
+    }
     pub fn add_search_dir(dir: &Path) -> usize {
         registry::add_search_dir(dir)
     }
@@ -130,6 +170,7 @@ mod api {
     pub fn rescan() -> Vec<ClapDescriptor> {
         Vec::new()
     }
+    pub fn release_unused() {}
     pub fn add_search_dir(_dir: &Path) -> usize {
         0
     }
@@ -159,6 +200,12 @@ mod api {
 /// instances), then cached in memory.
 pub fn scan() -> Vec<ClapDescriptor> {
     api::scan()
+}
+
+/// Releases (runs `deinit` of) every loaded binary that no plugin instance uses. For scan workers
+/// before they exit; the app keeps loaded binaries for the life of the process.
+pub fn release_unused() {
+    api::release_unused()
 }
 
 /// Forgets the cached scan (and remembered failures) and scans again.

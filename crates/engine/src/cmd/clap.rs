@@ -12,15 +12,18 @@ pub fn specs() -> Vec<CommandSpec> {
         "List CLAP Plugins",
         [],
         None,
-        "{rescan?: bool} → [{id: \"clap:…\", plugin_id, name, vendor, version, description, features, category, is_instrument, path}]",
+        "{rescan?: bool} → list, or with rescan in SML Studio a scan job {job, coalesced} (see engine.plugin_scan_status; a process without the scan service rescans in-process and returns the list) — list: [{id: \"clap:…\", plugin_id, name, vendor, version, description, features, category, is_instrument, path}]",
         always,
         |_, p| {
-            let list = if p.get("rescan").and_then(Value::as_bool).unwrap_or(false) {
-                soundcraft_clap_host::rescan()
-            } else {
-                soundcraft_clap_host::scan()
-            };
-            Ok(json!(list))
+            if p.get("rescan").and_then(Value::as_bool).unwrap_or(false) {
+                // HF12: in the app a rescan is an isolated scan job (returns at once with its
+                // state); only a process without the scan service scans here.
+                if let Some(job) = super::plugin_scan::submit_if_installed(true) {
+                    return Ok(job);
+                }
+                return Ok(json!(soundcraft_clap_host::rescan()));
+            }
+            Ok(json!(soundcraft_clap_host::scan()))
         }
     )]
 }

@@ -62,6 +62,8 @@ pub mod test_providers;
 pub mod sandbox;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod scan_isolated;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod scan_jobs;
 
 /// True when a session insert/slot id cannot be instantiated in this build: a removed upstream
 /// built-in, or an external plugin that is not installed. Such entries keep their id, parameters

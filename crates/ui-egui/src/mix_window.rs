@@ -947,7 +947,11 @@ fn hosted_menus(ui: &mut Ui, scan: &crate::plugin_scan::Scanner, instruments: bo
     match scan.phase() {
         Phase::Done => {}
         Phase::Running => {
-            ui.label(format!("Scanning installed plugins… ({} of 2-3 formats)", scan.progress()));
+            #[cfg(not(target_arch = "wasm32"))]
+            let progress = scan.job_status().map(|j| format!("{} of {} plugin files", j.completed, j.total));
+            #[cfg(target_arch = "wasm32")]
+            let progress: Option<String> = None;
+            ui.label(format!("Scanning installed plugins… ({})", progress.unwrap_or_else(|| format!("{} of 2-3 formats", scan.progress()))));
             if ui.button("Cancel scan").clicked() {
                 scan.cancel();
             }
@@ -1002,8 +1006,8 @@ fn hosted_menus(ui: &mut Ui, scan: &crate::plugin_scan::Scanner, instruments: bo
                 ui.horizontal(|ui| {
                     ui.label(path.file_name().and_then(|n| n.to_str()).unwrap_or("?")).on_hover_text(format!("{}\n{reason}", path.display()));
                     if ui
-                        .small_button("Re-enable")
-                        .on_hover_text("Scan this plugin again next time (it may crash the scan worker again, never the app)")
+                        .small_button("Retry")
+                        .on_hover_text("Scan this plugin again now in a worker process (it may crash the worker again, never the app); other quarantined plugins stay as they are")
                         .clicked()
                     {
                         scan.re_enable(path);
@@ -1014,7 +1018,7 @@ fn hosted_menus(ui: &mut Ui, scan: &crate::plugin_scan::Scanner, instruments: bo
     }
     if ui
         .small_button("Rescan plugins")
-        .on_hover_text("Scans for new or changed plugins (cached results are reused; quarantines are kept unless re-enabled)")
+        .on_hover_text("Scans for new or changed plugins (cached results are reused; quarantined plugins are kept until you retry them)")
         .clicked()
     {
         scan.rescan();

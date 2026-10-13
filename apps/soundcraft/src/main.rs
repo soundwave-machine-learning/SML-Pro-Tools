@@ -281,8 +281,15 @@ fn main() -> eframe::Result {
             } else if unclean {
                 app.ui.status.push_str(" If a plugin caused it, start with --safe.");
             }
-            // Isolated plugin scanning (R07): worker processes + fingerprint cache + quarantine.
-            app.plugin_scan.cache_path = prefs_path().and_then(|p| p.parent().map(|d| d.join("plugin-scan-cache.json")));
+            // Isolated plugin scanning (R07, HF12): one scan service for the UI, the start-up scan
+            // and the control channel — worker processes, fingerprint cache, quarantine. From
+            // here on no caller loads an unknown plugin binary in this process to list it.
+            if !safe && let Some(worker) = soundcraft_mix::scan_isolated::Worker::this_program() {
+                let cache = prefs_path().and_then(|p| p.parent().map(|d| d.join("plugin-scan-cache.json")));
+                let parallel = std::thread::available_parallelism().map_or(2, |n| n.get() / 2);
+                let svc = soundcraft_mix::scan_jobs::ScanService::new(worker, cache, soundcraft_mix::scan_isolated::default_dirs(), parallel);
+                soundcraft_mix::scan_jobs::install(svc);
+            }
             app.preset_dir = prefs_path().and_then(|p| p.parent().map(|d| d.join("Presets")));
             if let Some(ui) = load_prefs() {
                 app.ui = ui;

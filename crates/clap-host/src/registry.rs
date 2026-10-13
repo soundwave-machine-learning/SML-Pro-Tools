@@ -70,7 +70,8 @@ pub fn scan_paths(dirs: &[PathBuf]) -> Vec<ClapDescriptor> {
 }
 
 fn ensure_scanned(r: &mut Registry) -> &Vec<ClapDescriptor> {
-    if r.scanned.is_none() {
+    // HF12: with the isolated scanner in charge, never load bundles here.
+    if r.scanned.is_none() && crate::in_process_scan_enabled() {
         let mut dirs = paths::default_search_paths();
         dirs.extend(r.extra_dirs.iter().cloned());
         r.scanned = Some(scan_paths(&dirs));
@@ -85,6 +86,10 @@ pub fn scan() -> Vec<ClapDescriptor> {
 
 pub fn rescan() -> Vec<ClapDescriptor> {
     let mut r = registry().lock().unwrap_or_else(PoisonError::into_inner);
+    if !crate::in_process_scan_enabled() {
+        // The isolated scanner owns rescans (HF12); keep what it adopted.
+        return r.scanned.clone().unwrap_or_default();
+    }
     r.scanned = None;
     r.failed.clear();
     ensure_scanned(&mut r).clone()

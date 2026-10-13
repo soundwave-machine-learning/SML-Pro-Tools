@@ -110,6 +110,18 @@ fn loaded() -> &'static Mutex<HashMap<PathBuf, Arc<Bundle>>> {
     L.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Releases every loaded binary no instance holds any more, running its `deinit` (scan workers
+/// call this before they exit; the app keeps its binaries for the life of the process).
+pub(crate) fn release_unused() {
+    let unused: Vec<Arc<Bundle>> = {
+        let mut map = loaded().lock().unwrap_or_else(PoisonError::into_inner);
+        let paths: Vec<PathBuf> = map.iter().filter(|(_, b)| Arc::strong_count(b) == 1).map(|(p, _)| p.clone()).collect();
+        paths.iter().filter_map(|p| map.remove(p)).collect()
+    };
+    // Dropped outside the lock: `deinit` is plugin code.
+    drop(unused);
+}
+
 impl Bundle {
     /// Loads (once per path, then cached for the life of the process) and initialises a `.clap`.
     pub fn load(path: &Path) -> Result<Arc<Bundle>, ClapError> {
@@ -124,7 +136,9 @@ impl Bundle {
 
     fn open(path: &Path) -> Result<Bundle, ClapError> {
         let err = |m: String| ClapError::Load(path.display().to_string(), m);
+        crate::trace_stage("locate_binary");
         let exe = scan::bundle_executable(path).ok_or_else(|| err("no loadable binary".into()))?;
+        crate::trace_stage("load_library");
         // SAFETY: loading a shared library runs its static initialisers. That is inherent to
         // hosting plugins; we only load files found in CLAP plugin folders or named explicitly.
         let lib = unsafe { libloading::Library::new(&exe) }.map_err(|e| err(e.to_string()))?;
@@ -144,11 +158,13 @@ impl Bundle {
         }
         let (Some(init), Some(get_factory)) = (e.init, e.get_factory) else { return Err(err("incomplete clap_entry".into())) };
         let cpath = CString::new(path.to_string_lossy().into_owned()).map_err(|_| err("path contains NUL".into()))?;
+        crate::trace_stage("entry_init");
         // SAFETY: `init` comes from a valid entry; the path is a valid NUL-terminated string that
         // outlives the call.
         if !unsafe { init(cpath.as_ptr()) } {
             return Err(err("clap_entry.init failed".into()));
         }
+        crate::trace_stage("get_factory");
         // SAFETY: the entry is initialised; the id is a static NUL-terminated string.
         let factory = unsafe { get_factory(CLAP_PLUGIN_FACTORY_ID.as_ptr()) } as *const clap_plugin_factory;
         if factory.is_null() {
@@ -174,6 +190,7 @@ impl Bundle {
         let n = unsafe { count(self.factory) }.min(MAX_PLUGINS_PER_FACTORY);
         let mut out = Vec::new();
         for i in 0..n {
+            crate::trace_stage(&format!("descriptor {i}/{n}"));
             // SAFETY: index is below the reported count.
             let d = unsafe { get(self.factory, i) };
             if d.is_null() {
@@ -287,6 +304,7 @@ impl Drop for Bundle {
         // SAFETY: `entry` was valid at load time and `_lib` (dropped after this) keeps it mapped.
         let e = unsafe { *self.entry };
         if let Some(deinit) = e.deinit {
+            crate::trace_stage("entry_deinit");
             // SAFETY: balanced with the successful `init` in `open`; no instance holds an `Arc`
             // to this bundle any more (they keep it alive), so no plugin code still runs.
             unsafe { deinit() };
