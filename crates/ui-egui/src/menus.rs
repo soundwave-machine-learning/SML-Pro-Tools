@@ -80,6 +80,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.midi_ops", "MIDI Operations", "", None),
     ("window.rtp", "MIDI Real-Time Properties", "", None),
     ("window.playback_engine", "Playback Engine", "", None),
+    ("window.audio_setup", "Audio Setup", "", None),
     ("window.recover", "Recover Autosave…", "File > Recover Autosave...", None),
     ("window.io_setup", "I/O Setup", "", None),
     ("window.shortcuts", "Keyboard Shortcuts", "", None),
@@ -605,6 +606,14 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         "window.midi_ops" => toggle(&mut app.ui.show_midi_ops),
         "window.rtp" => toggle(&mut app.ui.show_rtp),
         "window.playback_engine" => toggle(&mut app.ui.show_playback_engine),
+        "window.audio_setup" => {
+            // HF06: the same window as Setup › Playback Engine…; {track?} focuses a track's input.
+            if let Some(t) = p.get("track").and_then(Value::as_u64) {
+                app.ui.audio_focus_track = Some(soundcraft_model::TrackId(t));
+            }
+            app.ui.show_playback_engine = p.get("value").and_then(Value::as_bool).unwrap_or(true);
+            json!({"value": app.ui.show_playback_engine})
+        }
         "window.recover" => toggle(&mut app.ui.show_recover),
         "window.io_setup" => toggle(&mut app.ui.show_io_setup),
         "window.shortcuts" => toggle(&mut app.ui.show_shortcuts),

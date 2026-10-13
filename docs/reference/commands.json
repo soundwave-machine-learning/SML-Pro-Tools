@@ -19,9 +19,9 @@
   ],
   "counts": {
     "control_methods": 16,
-    "engine_commands": 533,
+    "engine_commands": 538,
     "mcp_tools": 17,
-    "ui_commands": 91
+    "ui_commands": 93
   },
   "engine_commands": [
     {
@@ -3585,6 +3585,81 @@
       "status": "implemented",
       "studio_one": [],
       "undoable": false
+    },
+    {
+      "id": "loop.clear",
+      "label": "Clear Loop Range",
+      "limits": [
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+      ],
+      "menu": [],
+      "params": "{} — removes the stored locators (Loop Playback then loops the edit selection)",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": true
+    },
+    {
+      "id": "loop.info",
+      "label": "Loop Settings",
+      "limits": [
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+      ],
+      "menu": [],
+      "params": "{} → {enabled, range: {start, end, length} | null, source: stored|selection|none, loop_record}",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "loop.select",
+      "label": "Select Loop Range",
+      "limits": [
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+      ],
+      "menu": [],
+      "params": "{} — sets the edit selection to the loop range (for Loop Record)",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "loop.set",
+      "label": "Set Loop Range",
+      "limits": [
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+      ],
+      "menu": [],
+      "params": "{start: position, end: position} (or start + length) — stores the loop locators; Loop Playback then loops this range; refused while recording",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": true
+    },
+    {
+      "id": "loop.to_selection",
+      "label": "Set Loop to Selection",
+      "limits": [
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+      ],
+      "menu": [],
+      "params": "{} — copies the edit selection into the loop locators",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": true
     },
     {
       "id": "markers.add",
@@ -8306,6 +8381,10 @@
       "limit": "DISABLED: not implemented (B04)"
     },
     {
+      "applies_to": "loop.",
+      "limit": "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording"
+    },
+    {
       "applies_to": "transport.record",
       "limit": "takes are placed from backend capture timestamps; loop record and punch use the documented scheduler"
     },
@@ -8370,6 +8449,14 @@
       "label": "Reset Panel Layout",
       "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
       "menu": "Window > Reset Panel Layout",
+      "pro_tools": null,
+      "studio_one": null
+    },
+    {
+      "id": "ui.mix_split",
+      "label": "Mixer Split Size",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "",
       "pro_tools": null,
       "studio_one": null
     },
@@ -8932,6 +9019,14 @@
     {
       "id": "window.playback_engine",
       "label": "Playback Engine",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "",
+      "pro_tools": null,
+      "studio_one": null
+    },
+    {
+      "id": "window.audio_setup",
+      "label": "Audio Setup",
       "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
       "menu": "",
       "pro_tools": null,

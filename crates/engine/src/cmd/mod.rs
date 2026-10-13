@@ -23,8 +23,10 @@ mod event_more;
 mod file;
 mod health;
 pub mod help;
+pub use loop_range::effective_range as loop_effective_range;
 pub mod host;
 mod instrument;
+mod loop_range;
 mod mastering;
 mod midi;
 mod mix;
@@ -138,6 +140,7 @@ pub fn command_specs() -> &'static [CommandSpec] {
         v.extend(instrument::specs());
         v.extend(video::specs());
         v.extend(nudge::specs());
+        v.extend(loop_range::specs());
         v.extend(bus::specs());
         v.extend(snapshot::specs());
         v.extend(slots::specs());

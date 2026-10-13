@@ -287,6 +287,11 @@ fn main() -> eframe::Result {
             if let Some(ui) = load_prefs() {
                 app.ui = ui;
             }
+            // HF06: reopen the output chosen in Audio Setup (a missing device is reported, the
+            // default stays in use); the saved input opens on the first record.
+            if !no_audio {
+                app.restore_audio_prefs();
+            }
             // Assistant voice phrases (features, not audio), spoken-reply and local-model settings.
             app.assistant.store = prefs_path().and_then(|p| p.parent().map(|d| d.join("assistant.json")));
             app.assistant_load();

@@ -342,9 +342,11 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
             if track.kind.has_playlist() && track.mixer.input == Route::None { "In 1".to_string() } else { route_name(app, &track.mixer.input) };
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(in_r));
         let resp = selector_box(&mut c, in_r.width(), in_r.height(), &input, t.text);
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, format!("{} input", track.name)));
         egui::Popup::menu(&resp).show(|ui| route_menu(app, ui, id, true));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(out_r));
         let resp = selector_box(&mut c, out_r.width(), out_r.height(), &route_name(app, &track.mixer.output), t.text);
+        resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, format!("{} output", track.name)));
         egui::Popup::menu(&resp).show(|ui| route_menu(app, ui, id, false));
         // Automation mode.
         let am_r = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 51.0), vec2(inner_w - 4.0, 16.0));
@@ -944,10 +946,20 @@ fn route_menu(app: &mut SoundApp, ui: &mut Ui, id: TrackId, input: bool) {
         let _ = app.run(cmd, json!({"track": id.0, key: "main"}));
     }
     if input {
-        for i in 1..=8 {
+        // HF06: list the open input device's real channels; before it opens, In 1–8 as before.
+        let channels = app.recorder.as_ref().map(|r| r.channels);
+        for i in 1..=channels.unwrap_or(8).max(1) {
             if ui.button(format!("In {i}")).clicked() {
                 let _ = app.run(cmd, json!({"track": id.0, key: format!("In {i}")}));
             }
+        }
+        if channels.is_none() {
+            ui.label(egui::RichText::new("input device not open yet").small());
+        }
+        if ui.button("Audio Setup…").on_hover_text("Choose the microphone/interface and check this track's input").clicked() {
+            app.ui.audio_focus_track = Some(id);
+            let _ = app.run("edit.select", json!({"tracks": [id.0]}));
+            app.ui.show_playback_engine = true;
         }
     }
     ui.separator();

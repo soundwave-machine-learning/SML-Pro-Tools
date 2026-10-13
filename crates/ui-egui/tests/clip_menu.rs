@@ -3,7 +3,7 @@
 //! returned early (no hover position) before the menu was drawn.
 
 use egui::{Event, Modifiers, PointerButton, pos2, vec2};
-use egui_kittest::Harness;
+use egui_kittest::{Harness, kittest::Queryable};
 use soundcraft_ui_egui::{Services, SoundApp};
 
 /// One UI frame, with queued synthetic pointer input applied first (as the control channel does).
@@ -46,18 +46,24 @@ fn clip_menu_stays_open_while_moving_onto_delete() {
     assert!(before > 0, "the demo session should have a recorded Kick clip");
 
     // Right-click the Kick clip, then move the pointer into the menu and down to Delete.
-    press(&mut h, 880.0, 240.0, PointerButton::Secondary);
+    // (The Kick lane is found where the Edit window laid it out.)
+    let kick = h.state().engine.session().track_by_name("Kick").unwrap().id.0;
+    let r = h.state().edit_layout.rows.iter().find(|(id, _)| *id == kick).map(|(_, r)| *r).unwrap();
+    press(&mut h, 880.0, r[1] + 0.4 * (r[3] - r[1]), PointerButton::Secondary);
     for _ in 0..10 {
         step(&mut h);
     }
     // Move (no click) into the menu, as a real pointer would, so the lane loses its hover.
-    for (x, y) in [(900.0, 300.0), (907.0, 442.0)] {
+    // The Delete item is found where the menu drew it (the layout above the lanes may change).
+    let delete = h.get_by_label("Delete").rect().center();
+    let (dx, dy) = (delete.x, delete.y);
+    for (x, y) in [(delete.x - 7.0, 300.0_f32.min(delete.y)), (dx, dy)] {
         h.state_mut().synthetic.push(Event::PointerMoved(pos2(x, y)));
         for _ in 0..10 {
             step(&mut h);
         }
     }
-    press(&mut h, 907.0, 442.0, PointerButton::Primary);
+    press(&mut h, dx, dy, PointerButton::Primary);
     for _ in 0..15 {
         step(&mut h);
     }

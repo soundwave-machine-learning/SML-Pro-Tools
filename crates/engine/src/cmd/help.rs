@@ -23,6 +23,10 @@ pub const LIMITS: &[(&str, &str)] = &[
     ("options.quickpunch", "DISABLED: not implemented (B04)"),
     ("options.trackpunch", "DISABLED: not implemented (B04)"),
     ("options.destructive", "DISABLED: not implemented (B04)"),
+    (
+        "loop.",
+        "Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording",
+    ),
     ("transport.record", "takes are placed from backend capture timestamps; loop record and punch use the documented scheduler"),
     ("file.bounce", "no compressed export formats; monitor controls never reach a bounce"),
     ("mix.monitor_mode", "hardware monitoring means the interface mixes the input; the app cannot verify the interface's own mix"),

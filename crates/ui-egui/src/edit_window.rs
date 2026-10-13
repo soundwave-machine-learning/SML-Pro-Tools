@@ -167,6 +167,7 @@ pub(crate) fn main_area(app: &mut SoundApp, ui: &mut Ui) {
     if session.edit.flag("view.ruler.tempo_editor") && session.edit.rulers.iter().any(|ruler| ruler == "tempo") {
         ruler_height_total += ruler_height("tempo_editor");
     }
+    ruler_height_total += ruler_height("loop");
     let minimum = vec2(header_width(session) + 64.0, ruler_height_total + 100.0);
     crate::docking::minimum_body(ui, minimum, |ui| main_area_content(app, ui));
 }
@@ -180,6 +181,12 @@ fn main_area_content(app: &mut SoundApp, ui: &mut Ui) {
         && let Some(i) = rulers.iter().position(|r| r == "tempo")
     {
         rulers.insert(i + 1, "tempo_editor".into());
+    }
+    // HF05: the Loop lane is always shown (added here, so the saved ruler set is unchanged),
+    // after the Markers ruler when there is one.
+    match rulers.iter().position(|r| r == "markers") {
+        Some(i) => rulers.insert(i + 1, "loop".into()),
+        None => rulers.push("loop".into()),
     }
     let rulers_h = rulers.iter().map(|r| ruler_height(r)).sum::<f32>() + 6.0;
     let hscroll_h = 14.0;
@@ -288,6 +295,7 @@ fn ruler_label(id: &str) -> &'static str {
         "tempo" => "Tempo",
         "meter" => "Meter",
         "markers" => "Markers",
+        "loop" => "Loop",
         "key" => "Key",
         "chords" => "Chords",
         "timecode2" => "Timecode 2",
@@ -302,6 +310,133 @@ fn ruler_label(id: &str) -> &'static str {
 
 pub fn ruler_height(id: &str) -> f32 {
     if id == "tempo_editor" { 56.0 } else { RULER_H }
+}
+
+/// A loop-locator drag in the Loop lane (HF05): which part moves, and the range it would set.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LoopDrag {
+    /// 0 = new range, 1 = start handle, 2 = end handle, 3 = move the whole range.
+    pub kind: u8,
+    pub anchor: Samples,
+    pub orig: Range,
+    pub preview: Range,
+}
+
+/// HF05: the Loop lane. Shows the stored loop range (shaded, with start/end handles and a text
+/// label, so on/off never depends on colour alone); drag empty space to make a range, drag a
+/// handle to move one end, drag inside to move it. The change is committed once, on release, as
+/// one `loop.set` (undoable); Escape cancels a drag. Locked while recording.
+fn loop_lane(app: &mut SoundApp, ui: &mut Ui, painter: &egui::Painter, s: &Session, tl: Rect, row: Rect) {
+    let t = Tokens::current();
+    let on = s.edit.loop_playback;
+    let recording = app.engine.transport.recording;
+    painter.rect_filled(row.shrink2(vec2(0.0, 1.0)), 0.0, t.marker_ruler.gamma_multiply(0.8));
+    let shown = app.ui.loop_drag.map(|d| d.preview).or(s.edit.loop_range);
+    let accent = if on { Color32::from_rgb(232, 150, 52) } else { t.text_dim };
+    let handle_x = shown.map(|r| (x_of(s, tl, r.start), x_of(s, tl, r.end)));
+    if let (Some(r), Some((x0, x1))) = (shown, handle_x) {
+        let span = Rect::from_min_max(pos2(x0.max(row.min.x - 20.0), row.min.y + 2.0), pos2(x1.min(row.max.x + 20.0), row.max.y - 2.0));
+        painter.rect_filled(span, 2.0, accent.gamma_multiply(if on { 0.45 } else { 0.2 }));
+        painter.rect_stroke(span, 2.0, Stroke::new(1.0, accent), egui::StrokeKind::Inside);
+        for (x, dir) in [(x0, 1.0f32), (x1, -1.0)] {
+            painter.add(Shape::convex_polygon(
+                vec![pos2(x, row.min.y + 1.0), pos2(x + 7.0 * dir, row.min.y + 1.0), pos2(x, row.max.y - 1.0)],
+                accent,
+                Stroke::NONE,
+            ));
+        }
+        let label = if on { "LOOP" } else { "loop (off)" };
+        if span.width() > 60.0 {
+            painter.text(span.center(), Align2::CENTER_CENTER, label, bold(10.0), if on { t.text } else { t.text_dim });
+        }
+        let _ = r;
+    } else if on && !s.edit.selection.is_empty() {
+        let (x0, x1) = (x_of(s, tl, s.edit.selection.start), x_of(s, tl, s.edit.selection.end));
+        let span = Rect::from_min_max(pos2(x0, row.min.y + 3.0), pos2(x1, row.max.y - 3.0));
+        for side in [[span.left_top(), span.right_top()], [span.left_bottom(), span.right_bottom()]] {
+            painter.add(Shape::dashed_line(&side, Stroke::new(1.0, accent), 4.0, 3.0));
+        }
+        if span.width() > 90.0 {
+            painter.text(span.center(), Align2::CENTER_CENTER, "loop = selection", regular(10.0), t.text_dim);
+        }
+    } else {
+        painter.text(pos2(tl.min.x + 6.0, row.center().y), Align2::LEFT_CENTER, "drag here to set a loop range", regular(10.0), t.text_dim);
+    }
+    let resp = ui.interact(row, ui.id().with("loop_lane"), if recording { Sense::hover() } else { Sense::click_and_drag() });
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Other, !recording, "Loop range lane"));
+    let near = |x: f32| resp.hover_pos().is_some_and(|p| (p.x - x).abs() <= 6.0);
+    if let Some((x0, x1)) = handle_x
+        && (near(x0) || near(x1))
+    {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+    }
+    if recording {
+        resp.on_hover_text("The loop range cannot move while recording");
+        return;
+    }
+    // Where the button went down, not where the drag was recognised (a fast drag would
+    // otherwise miss the handle it started on).
+    if resp.drag_started()
+        && let Some(p) = ui.input(|i| i.pointer.press_origin()).or(resp.interact_pointer_pos())
+    {
+        let at = snap(s, sample_at(s, tl, p.x).max(0));
+        let kind = match handle_x {
+            Some((x0, _)) if (p.x - x0).abs() <= 6.0 => 1,
+            Some((_, x1)) if (p.x - x1).abs() <= 6.0 => 2,
+            Some((x0, x1)) if p.x > x0 && p.x < x1 => 3,
+            _ => 0,
+        };
+        let orig = s.edit.loop_range.unwrap_or(Range::new(at, at));
+        app.ui.loop_drag = Some(LoopDrag { kind, anchor: at, orig, preview: if kind == 0 { Range::new(at, at) } else { orig } });
+    }
+    if let Some(mut d) = app.ui.loop_drag {
+        if ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+            app.ui.loop_drag = None;
+            return;
+        }
+        if resp.dragged()
+            && let Some(p) = resp.interact_pointer_pos()
+        {
+            let at = snap(s, sample_at(s, tl, p.x).max(0));
+            d.preview = match d.kind {
+                1 => Range::new(at.min(d.orig.end - 1), d.orig.end),
+                2 => Range::new(d.orig.start, at.max(d.orig.start + 1)),
+                3 => {
+                    let delta = (at - d.anchor).max(-d.orig.start);
+                    Range::new(d.orig.start + delta, d.orig.end + delta)
+                }
+                _ => Range::new(d.anchor.min(at), d.anchor.max(at)),
+            };
+            app.ui.loop_drag = Some(d);
+        }
+        if resp.drag_stopped() {
+            app.ui.loop_drag = None;
+            if d.preview.end > d.preview.start
+                && Some(d.preview) != s.edit.loop_range
+                && let Err(e) = app.run("loop.set", json!({"start": d.preview.start, "end": d.preview.end}))
+            {
+                app.ui.status = e;
+            }
+        }
+    }
+    resp.context_menu(|ui| {
+        if ui.add_enabled(!s.edit.selection.is_empty(), egui::Button::new("Set Loop to Selection")).clicked() {
+            let _ = app.run("loop.to_selection", json!({}));
+            ui.close();
+        }
+        if ui.add_enabled(s.edit.loop_range.is_some(), egui::Button::new("Select Loop Range")).clicked() {
+            let _ = app.run("loop.select", json!({}));
+            ui.close();
+        }
+        if ui.add_enabled(s.edit.loop_range.is_some(), egui::Button::new("Clear Loop Range")).clicked() {
+            let _ = app.run("loop.clear", json!({}));
+            ui.close();
+        }
+        if ui.button(if on { "Turn Loop Playback off" } else { "Turn Loop Playback on" }).clicked() {
+            let _ = app.run("options.loop_playback", json!({}));
+            ui.close();
+        }
+    });
 }
 
 /// The tempo editor: a graph of tempo over time. Click adds a change, Alt-click removes the nearest.
@@ -417,6 +552,9 @@ fn draw_rulers(app: &mut SoundApp, ui: &mut Ui, area: Rect, tl: Rect, rulers: &[
             }
             "tempo_editor" => {
                 tempo_editor(app, ui, &painter, &s, tl, row);
+            }
+            "loop" => {
+                loop_lane(app, ui, &painter, &s, tl, row);
             }
             "key" => {
                 painter.rect_filled(row, 0.0, Color32::from_rgb(64, 52, 88));

@@ -565,159 +565,330 @@ fn configurations(app: &mut SoundApp, ctx: &egui::Context) {
 /// Setup › Playback Engine / Hardware.
 pub fn playback_engine(app: &mut SoundApp, ctx: &egui::Context) {
     let mut open = app.ui.show_playback_engine;
-    win(ctx, &mut open, "Playback Engine", vec2(380.0, 220.0), |ui| {
-        egui::Grid::new("pe").num_columns(2).show(ui, |ui| {
+    if open {
+        let area = crate::control_bar::area_below(ctx);
+        egui::Window::new("Audio Setup")
+            .open(&mut open)
+            .default_size(vec2(560.0, 520.0))
+            .default_pos(area.min + vec2(24.0, 8.0))
+            .constrain_to(area)
+            .show(ctx, |ui| audio_setup(app, ui));
+    }
+    app.ui.show_playback_engine = open;
+    if !open {
+        // Closing the window discards anything not applied.
+        app.cancel_audio_draft();
+    }
+}
+
+/// HF06: Audio Setup (Setup › Playback Engine… / Hardware…, Search "Audio Setup", the control
+/// bar's ⚙ Audio Setup, a track's input menu). Device choices are drafts until Apply; Cancel
+/// returns to what is open. Every value shown comes from the open streams, the session or the
+/// mixer; anything the backend does not report says Unknown.
+fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
+    let running = app.is_playing() || app.engine.transport.recording;
+    let rate = app.engine.session().sample_rate.hz();
+    egui::ScrollArea::vertical().auto_shrink([false, true]).show(ui, |ui| {
+        ui.label(egui::RichText::new("Basic").strong());
+        ui.label(
+            egui::RichText::new(
+                "Audio host: the platform default (WASAPI on Windows). ASIO is not in this build (it needs Steinberg's SDK at build time).",
+            )
+            .small(),
+        );
+        egui::Grid::new("as_basic").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+            // Output device (draft).
             ui.label("Output device");
-            ui.label(app.player.as_ref().map_or("none".to_string(), |p| p.device_name.clone()));
-            ui.end_row();
-            ui.label("Device rate");
-            ui.label(app.player.as_ref().map_or("-".to_string(), |p| format!("{} Hz", p.device_rate)));
-            ui.end_row();
-            ui.label("Session rate");
-            ui.label(format!("{} Hz", app.engine.session().sample_rate.hz()));
-            ui.end_row();
-            ui.label("Input device");
-            ui.label(app.recorder.as_ref().map_or("opened on first record".to_string(), |r| {
-                let buf =
-                    r.config.as_ref().and_then(|n| n.requested_buffer).map_or("default buffer".to_string(), |b| format!("{b} frames requested"));
-                format!("{} ({} ch @ {} Hz, {buf})", r.device_name, r.channels, r.sample_rate)
-            }));
-            ui.end_row();
-            ui.label("Live render");
-            ui.label("exactly each callback's frames at equal rates (max 512); 512-frame blocks when resampling");
-            ui.end_row();
-            if let Some(p) = &app.player {
-                let (generation, frames, last) = p.stream_clock();
-                ui.label("Requested buffer");
-                ui.label(p.negotiated.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames")));
-                ui.end_row();
-                ui.label("Reported buffer range");
-                ui.label(p.negotiated.as_ref().map_or("not queried".to_string(), |n| format!("{:?}", n.reported_buffer)));
-                ui.end_row();
-                ui.label("Effective callback");
-                ui.label(if last == 0 {
-                    "no callback yet".to_string()
-                } else {
-                    format!("{last} frames ({:.2} ms)", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
-                });
-                ui.end_row();
-                ui.label("Stream clock");
-                ui.label(format!("generation {generation}, {frames} frames serviced"));
-                ui.end_row();
-                ui.label("Clock lock / driver latency");
-                ui.label("Unknown (not reported by this backend; not assumed zero)");
-                ui.end_row();
-            }
-        });
-        ui.separator();
-        ui.horizontal(|ui| {
-            if ui.button("Scan output devices").clicked() {
-                app.ui.output_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Output);
-                if app.ui.output_devices.is_empty() {
-                    app.ui.status = "No output devices found by this build's audio hosts".into();
-                }
-            }
-            let label = app.ui.device_choice.as_ref().map_or("default device".to_string(), |(h, d)| format!("{h}: {d}"));
-            egui::ComboBox::from_id_salt("pe_device").selected_text(label).width(200.0).show_ui(ui, |ui| {
-                if ui.selectable_label(app.ui.device_choice.is_none(), "default device").clicked() {
-                    app.ui.device_choice = None;
-                }
-                for d in app.ui.output_devices.clone() {
-                    let sel = app.ui.device_choice.as_ref() == Some(&(d.host.clone(), d.name.clone()));
-                    if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
-                        app.ui.device_choice = Some((d.host, d.name));
+            ui.horizontal(|ui| {
+                if ui.button("Scan").on_hover_text("Scan output devices").clicked() {
+                    app.ui.output_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Output);
+                    if app.ui.output_devices.is_empty() {
+                        app.ui.status = "No output devices found by this build's audio hosts".into();
                     }
                 }
+                let label = app.ui.device_choice.as_ref().map_or("default device".to_string(), |(h, d)| format!("{h}: {d}"));
+                egui::ComboBox::from_id_salt("pe_device").selected_text(label).width(300.0).show_ui(ui, |ui| {
+                    if ui.selectable_label(app.ui.device_choice.is_none(), "default device").clicked() {
+                        app.ui.device_choice = None;
+                    }
+                    for d in app.ui.output_devices.clone() {
+                        let sel = app.ui.device_choice.as_ref() == Some(&(d.host.clone(), d.name.clone()));
+                        if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
+                            app.ui.device_choice = Some((d.host, d.name));
+                        }
+                    }
+                });
             });
+            ui.end_row();
+            ui.label("");
+            ui.label(egui::RichText::new(format!("open now: {}", crate::control_bar::device_summary(app))).small());
+            ui.end_row();
+            // Input device (draft).
+            ui.label("Input device (microphone / interface)");
+            ui.horizontal(|ui| {
+                if ui.button("Scan").on_hover_text("Scan input devices").clicked() {
+                    app.ui.input_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Input);
+                    if app.ui.input_devices.is_empty() {
+                        app.ui.status = "No input devices found by this build's audio hosts".into();
+                    }
+                }
+                let shown = match &app.ui.input_draft {
+                    Some(Some(r)) => format!("{}: {}", r.host.as_deref().unwrap_or("?"), r.device.as_deref().unwrap_or("?")),
+                    Some(None) => "default input".to_string(),
+                    None => app.ui.input_request.as_ref().and_then(|r| Some(format!("{}: {}", r.host.as_deref()?, r.device.as_deref()?))).unwrap_or_else(|| "default input".into()),
+                };
+                egui::ComboBox::from_id_salt("pe_input").selected_text(shown).width(300.0).show_ui(ui, |ui| {
+                    if ui.selectable_label(false, "default input").clicked() {
+                        app.ui.input_draft = Some(None);
+                    }
+                    for d in app.ui.input_devices.clone() {
+                        if ui.selectable_label(false, format!("{}: {}", d.host, d.name)).clicked() {
+                            let buffer = (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice);
+                            match soundcraft_playback::device::input_request(&d, rate, buffer) {
+                                Some(r) => app.ui.input_draft = Some(Some(r)),
+                                // Never substitute another input: say why this one cannot be used.
+                                None => app.ui.status = format!("`{}` has no 32-bit float input at {rate} Hz", d.name),
+                            }
+                        }
+                    }
+                });
+            });
+            ui.end_row();
+            ui.label("");
+            ui.label(
+                egui::RichText::new(app.recorder.as_ref().map_or("open now: none (opened on the first record or arm)".to_string(), |r| {
+                    format!("open now: {} — {} input channel(s) @ {} Hz", r.device_name, r.channels, r.sample_rate)
+                }))
+                .small(),
+            );
+            ui.end_row();
+            // Sample rate.
+            ui.label("Sample rate");
+            let dev = app.player.as_ref().map(|p| p.device_rate);
+            ui.label(match dev {
+                Some(d) if d != rate => format!("session {rate} Hz · output device runs at {d} Hz (converted)"),
+                Some(d) => format!("{d} Hz (session and output device)"),
+                None => format!("session {rate} Hz · no output device"),
+            });
+            ui.end_row();
+            // Buffer (draft).
+            ui.label("Buffer size (requested)");
             egui::ComboBox::from_id_salt("pe_buffer")
                 .selected_text(if app.ui.buffer_choice == 0 { "default buffer".to_string() } else { format!("{} frames", app.ui.buffer_choice) })
                 .show_ui(ui, |ui| {
                     for b in [0u32, 32, 64, 128, 256, 512, 1024] {
-                        let l = if b == 0 { "default buffer".to_string() } else { format!("{b} frames") };
+                        let l = if b == 0 { "default buffer".to_string() } else { format!("{b} frames ({:.1} ms)", f64::from(b) * 1000.0 / f64::from(rate.max(1))) };
                         if ui.selectable_label(app.ui.buffer_choice == b, l).clicked() {
                             app.ui.buffer_choice = b;
                         }
                     }
                 });
-        });
-        let playing = app.is_playing() || app.engine.transport.recording;
-        if ui
-            .add_enabled(!playing, egui::Button::new("Apply (stopped only)"))
-            .on_disabled_hover_text("Stop the transport to change the device")
-            .clicked()
-        {
-            let req = soundcraft_playback::device::DeviceRequest {
-                host: app.ui.device_choice.as_ref().map(|c| c.0.clone()),
-                device: app.ui.device_choice.as_ref().map(|c| c.1.clone()),
-                sample_rate: app.engine.session().sample_rate.hz(),
-                buffer_frames: (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice),
-                channels: 2,
-            };
-            #[cfg(not(target_arch = "wasm32"))]
-            match soundcraft_playback::Player::open_requested(app.engine.session_arc(), &req) {
-                Ok(p) => {
-                    app.player = Some(p);
-                    app.ui.status = "Audio device opened with the requested settings".into();
+            ui.end_row();
+            ui.label("Buffer (delivered)");
+            ui.label(app.player.as_ref().map_or("no output stream".to_string(), |p| {
+                let (_, _, last) = p.stream_clock();
+                if last == 0 {
+                    "no callback yet".to_string()
+                } else {
+                    format!("{last} frames per callback ({:.2} ms) — what the driver actually delivers", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
                 }
-                // The previous device stays open: no silent substitution.
-                Err(e) => app.ui.status = format!("Device not changed: {e}"),
-            }
-            #[cfg(target_arch = "wasm32")]
-            let _ = req;
-        }
-        ui.separator();
-        // R01: recording input device (opened with the session rate and the chosen buffer).
+            }));
+            ui.end_row();
+            // Monitoring.
+            ui.label("Monitoring");
+            ui.horizontal(|ui| {
+                let hw = app.engine.session().edit.value("monitor.mode", 1.0) as i64 == 2;
+                if ui.add_enabled(!running, egui::Button::selectable(!hw, "Software (through SML Studio)")).clicked() {
+                    let _ = app.run("mix.monitor_mode", json!({"mode": "tracking"}));
+                }
+                if ui.add_enabled(!running, egui::Button::selectable(hw, "Hardware / direct (interface)")).on_disabled_hover_text("Change while stopped").clicked() {
+                    let _ = app.run("mix.monitor_mode", json!({"mode": "hardware"}));
+                }
+            });
+            ui.end_row();
+        });
+        ui.label(
+            egui::RichText::new(
+                "Software monitoring plays armed/input-monitored tracks through the mixer (with its latency and plugins). Hardware/direct turns SML Studio's input monitoring off so you use your interface's own direct monitoring; SML Studio cannot control the interface's mixer, gain, phantom power or headphone mix. Use one or the other, not both, or you will hear the voice twice.",
+            )
+            .small(),
+        );
         ui.horizontal(|ui| {
-            if ui.button("Scan input devices").clicked() {
-                app.ui.input_devices = soundcraft_playback::device::enumerate(soundcraft_playback::device::Direction::Input);
-                if app.ui.input_devices.is_empty() {
-                    app.ui.status = "No input devices found by this build's audio hosts".into();
-                }
+            let changed = app.audio_draft_pending();
+            if ui
+                .add_enabled(!running && changed, egui::Button::new(egui::RichText::new("Apply").strong()))
+                .on_disabled_hover_text(if running { "Stop the transport (and any recording) first" } else { "Nothing to apply" })
+                .clicked()
+            {
+                app.ui.status = app.apply_audio_draft();
             }
-            let current = app.ui.input_request.as_ref().and_then(|r| Some(format!("{}: {}", r.host.as_deref()?, r.device.as_deref()?)));
-            let mut pick: Option<Option<soundcraft_playback::device::DeviceCaps>> = None;
-            egui::ComboBox::from_id_salt("pe_input").selected_text(current.unwrap_or_else(|| "default input".to_string())).width(200.0).show_ui(
-                ui,
-                |ui| {
-                    if ui.selectable_label(app.ui.input_request.is_none(), "default input").clicked() {
-                        pick = Some(None);
-                    }
-                    for d in &app.ui.input_devices {
-                        let sel = app
-                            .ui
-                            .input_request
-                            .as_ref()
-                            .is_some_and(|r| r.device.as_deref() == Some(d.name.as_str()) && r.host.as_deref() == Some(d.host.as_str()));
-                        if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
-                            pick = Some(Some(d.clone()));
-                        }
-                    }
-                },
-            );
-            if let Some(choice) = pick {
-                let rate = app.engine.session().sample_rate.hz();
-                let buffer = (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice);
-                let req = match &choice {
-                    None => Ok(None),
-                    Some(d) => soundcraft_playback::device::input_request(d, rate, buffer)
-                        .map(Some)
-                        .ok_or_else(|| format!("`{}` has no 32-bit float input at {rate} Hz", d.name)),
-                };
-                app.ui.status = match req.and_then(|r| app.reopen_input(r)) {
-                    Ok(()) => "Input device opened with the requested settings".into(),
-                    Err(e) => format!("Input not changed: {e}"),
-                };
+            if ui.add_enabled(changed, egui::Button::new("Cancel")).clicked() {
+                app.cancel_audio_draft();
+            }
+            if app.ui.audio_output_missing {
+                ui.label(egui::RichText::new("the saved output is not open — Apply retries it").small().italics());
+            } else if changed {
+                ui.label(egui::RichText::new("unapplied changes").small().italics());
             }
         });
-        let mut dc = app.engine.session().edit.delay_compensation;
-        if ui.checkbox(&mut dc, "Delay compensation").changed() {
-            let _ = app.run("options.delay_compensation", json!({"value": dc}));
-        }
-        if ui.button("Reconnect audio device").clicked() {
-            app.player = Some(soundcraft_playback::Player::new(app.engine.session_arc()));
-        }
+        ui.separator();
+        selected_track_input(app, ui);
+        ui.separator();
+        egui::CollapsingHeader::new("Advanced / Latency").id_salt("as_adv").default_open(false).show(ui, |ui| latency_ledger(app, ui));
     });
-    app.ui.show_playback_engine = open;
+}
+
+/// The selected track's recording input: which channel(s) of the input device it records.
+/// This is per track (`track.input`), separate from choosing the device itself.
+fn selected_track_input(app: &mut SoundApp, ui: &mut egui::Ui) {
+    ui.label(egui::RichText::new("Selected track input").strong());
+    let track = {
+        let s = app.engine.session();
+        app.ui
+            .audio_focus_track
+            .and_then(|id| s.track(id))
+            .or_else(|| s.edit.selected_tracks.iter().filter_map(|id| s.track(*id)).find(|t| t.kind.has_playlist()))
+            .map(|t| {
+                let input = match &t.mixer.input {
+                    soundcraft_model::Route::Hardware(h) => h.clone(),
+                    // An audio track with no input set records In 1 (as its strip shows).
+                    soundcraft_model::Route::None => "In 1".to_string(),
+                    soundcraft_model::Route::Bus(b) => s.bus(*b).map_or_else(|| "bus".to_string(), |b| format!("bus {}", b.name)),
+                    soundcraft_model::Route::Main => "Main".to_string(),
+                };
+                (t.id, t.name.clone(), t.format.channels(), input, t.mixer.record_arm, t.mixer.input_monitor)
+            })
+    };
+    let Some((id, name, width, input, armed, monitored)) = track else {
+        ui.label("Select an audio track (or open this from its input selector) to choose which input it records.");
+        return;
+    };
+    let device_channels = app.recorder.as_ref().map(|r| r.channels);
+    let n = device_channels.unwrap_or(8).max(1);
+    let current = input;
+    ui.horizontal(|ui| {
+        ui.strong(&name);
+        egui::ComboBox::from_id_salt("as_track_input").selected_text(current.as_str()).show_ui(ui, |ui| {
+            for k in 1..=n {
+                // The same values as the channel strip's input menu: "In k" (a stereo track
+                // records k and k+1).
+                let value = format!("In {k}");
+                let shown = if width > 1 { format!("In {k} (inputs {k}–{})", k + width - 1) } else { value.clone() };
+                let ok = width == 1 || k + width - 1 <= n || n == 1;
+                let r = ui
+                    .add_enabled(ok, egui::Button::selectable(current == value, &shown))
+                    .on_disabled_hover_text("The input device does not have these channels");
+                if r.clicked() {
+                    let _ = app.run("track.input", json!({"tracks": [id.0], "input": value}));
+                }
+            }
+        });
+    });
+    match device_channels {
+        Some(ch) => {
+            let first = current.trim_start_matches("In ").split(['-', ' ']).next().and_then(|x| x.trim().parse::<usize>().ok()).unwrap_or(1);
+            // A one-input device may feed a stereo track (the same signal on both sides).
+            if first > ch || (ch > 1 && first + width - 1 > ch) {
+                ui.colored_label(
+                    egui::Color32::from_rgb(230, 110, 90),
+                    format!(
+                        "{current} is not available on the open input device ({ch} channel(s)): recording will refuse rather than use another input."
+                    ),
+                );
+            } else {
+                ui.label(egui::RichText::new(format!("Records {current} of the open input device ({ch} channel(s)).")).small());
+            }
+        }
+        None => {
+            ui.label(egui::RichText::new("The input device opens on the first record or arm; its channel count is not known yet.").small());
+        }
+    }
+    if armed || monitored {
+        let lvl = app.meters.get(&id).map_or(0.0, |m| m.level[0].max(m.level[1]));
+        ui.add(egui::ProgressBar::new(lvl.clamp(0.0, 1.0)).text(if lvl > 0.0 {
+            format!("input {:.1} dBFS", 20.0 * lvl.max(1e-6).log10())
+        } else {
+            "input: no signal".into()
+        }));
+    } else {
+        ui.label(egui::RichText::new("Arm or input-monitor the track to meter its input (no test signal is ever generated).").small());
+    }
+}
+
+/// HF06 latency ledger: each term with where it comes from; nothing measured is invented.
+fn latency_ledger(app: &mut SoundApp, ui: &mut egui::Ui) {
+    let rate = app.engine.session().sample_rate.as_f64();
+    let ms = |frames: f64| frames * 1000.0 / rate.max(1.0);
+    egui::Grid::new("as_latency").num_columns(2).spacing(vec2(12.0, 4.0)).show(ui, |ui| {
+        if let Some(p) = &app.player {
+            let (generation, frames, last) = p.stream_clock();
+            ui.label("Requested buffer");
+            ui.label(p.negotiated.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames")));
+            ui.end_row();
+            ui.label("Driver-reported buffer range");
+            ui.label(p.negotiated.as_ref().map_or("not queried".to_string(), |n| match n.reported_buffer {
+                soundcraft_playback::device::BufferRange::Range { min, max } => format!("{min}–{max} frames"),
+                soundcraft_playback::device::BufferRange::Unknown => "Unknown (not reported)".to_string(),
+            }));
+            ui.end_row();
+            ui.label("Delivered callback (observed)");
+            ui.label(if last == 0 {
+                "no callback yet".to_string()
+            } else {
+                format!("{last} frames = {:.2} ms", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
+            });
+            ui.end_row();
+            ui.label("Output buffering (calculated)");
+            ui.label(if last == 0 {
+                "—".to_string()
+            } else {
+                format!(
+                    "≥ {last} frames ≈ {:.2} ms (one callback; an estimate, not a measurement)",
+                    f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1))
+                )
+            });
+            ui.end_row();
+            ui.label("Stream clock");
+            ui.label(format!("generation {generation}, {frames} frames serviced"));
+            ui.end_row();
+        } else {
+            ui.label("Output");
+            ui.label("no output stream");
+            ui.end_row();
+        }
+        ui.label("Input buffer (requested)");
+        ui.label(app.recorder.as_ref().map_or("input not open".to_string(), |r| {
+            r.config.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames"))
+        }));
+        ui.end_row();
+        ui.label("Driver input/output latency");
+        ui.label("Unknown (not reported by this backend; not assumed zero)");
+        ui.end_row();
+        let s = app.engine.session();
+        let worst = soundcraft_mix::strip_latencies(s).into_iter().map(|(_, l)| l).max().unwrap_or(0);
+        let sandboxed = s.tracks.iter().flat_map(|t| t.mixer.inserts.iter().flatten()).filter(|i| i.plugin.starts_with("sandbox:")).count();
+        ui.label("Plugin / host path (delay compensation)");
+        ui.label(format!(
+            "{worst} samples = {:.2} ms (largest channel){}",
+            ms(worst as f64),
+            if sandboxed > 0 { format!("; includes the one-block delay of {sandboxed} sandboxed plugin(s)") } else { String::new() }
+        ));
+        ui.end_row();
+        ui.label("Measured round trip");
+        ui.label("Not measured: this build has no loopback calibration");
+        ui.end_row();
+    });
+    let mut dc = app.engine.session().edit.delay_compensation;
+    if ui.checkbox(&mut dc, "Delay compensation").changed() {
+        let _ = app.run("options.delay_compensation", json!({"value": dc}));
+    }
+    if ui
+        .button("Reopen the system default output")
+        .on_hover_text("Recovers after a device was unplugged; opens the default output, not a chosen one")
+        .clicked()
+    {
+        app.player = Some(soundcraft_playback::Player::new(app.engine.session_arc()));
+    }
 }
 
 /// File › Recover Autosave…: recovery points (rolling autosave generations per session) and

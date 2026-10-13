@@ -247,6 +247,10 @@ pub struct EditState {
     pub link_track_edit: bool,
     pub insertion_follows_playback: bool,
     pub loop_playback: bool,
+    /// Stored loop locators (HF05). When set, Loop Playback loops this range; when absent it
+    /// loops the edit selection, as before. Loop Record still records over the edit selection.
+    #[serde(default)]
+    pub loop_range: Option<Range>,
     pub pre_post_roll: bool,
     pub pre_roll: Samples,
     pub post_roll: Samples,
@@ -340,6 +344,7 @@ impl Default for EditState {
             link_track_edit: false,
             insertion_follows_playback: false,
             loop_playback: false,
+            loop_range: None,
             pre_post_roll: false,
             pre_roll: 96_000,
             post_roll: 96_000,

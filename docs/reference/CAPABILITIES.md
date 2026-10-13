@@ -17,6 +17,7 @@ What this build states about itself. Hand-reviewed capability status (what was o
 | `options.quickpunch` | DISABLED: not implemented (B04) |
 | `options.trackpunch` | DISABLED: not implemented (B04) |
 | `options.destructive*` | DISABLED: not implemented (B04) |
+| `loop*` | Loop Playback loops the stored loop range when one is set, else the edit selection; Loop Record records over the edit selection (loop.select copies the loop range into it); locators cannot move while recording |
 | `transport.record` | takes are placed from backend capture timestamps; loop record and punch use the documented scheduler |
 | `file.bounce*` | no compressed export formats; monitor controls never reach a bounce |
 | `mix.monitor_mode` | hardware monitoring means the interface mixes the input; the app cannot verify the interface's own mix |
@@ -40,4 +41,4 @@ Control-channel methods (JSON lines over TCP to the running desktop app; [contro
 
 MCP tools (`soundcraft-cli mcp`, optionally `--connect PORT` to the running app; [mcp.md](../mcp.md)): `list_commands`, `execute`, `batch`, `inspect_session`, `new_session`, `open_session`, `save_session`, `import_audio`, `bounce_mix`, `parity`, `screenshot`, `ui_inspect`, `ui_set`, `menu_invoke`, `click`, `drag`, `key`.
 
-Counts: 533 engine commands (256 undoable, 16 destructive by the registry's rule, 4 disabled), 91 UI-layer commands.
+Counts: 538 engine commands (259 undoable, 16 destructive by the registry's rule, 4 disabled), 93 UI-layer commands.

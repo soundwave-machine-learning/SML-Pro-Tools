@@ -6,6 +6,7 @@
 
 pub mod assistant_ui;
 pub mod control;
+pub mod control_bar;
 pub mod credits;
 pub mod dialogs;
 pub mod docking;
@@ -196,6 +197,40 @@ pub struct UiState {
     /// File › Recover Autosave… window.
     #[serde(skip)]
     pub show_recover: bool,
+    /// Control bar text being typed (never applied until Enter / Apply): BPM, time signature,
+    /// loop Start/End.
+    #[serde(skip)]
+    pub bpm_draft: Option<String>,
+    #[serde(skip)]
+    pub meter_draft: Option<(u32, u32)>,
+    #[serde(skip)]
+    pub loop_draft: Option<[String; 2]>,
+    /// Loop lane drag in progress (preview only until release).
+    #[serde(skip)]
+    pub loop_drag: Option<edit_window::LoopDrag>,
+    /// Audio Setup: an input device chosen but not applied (`Some(None)` = default input).
+    #[serde(skip)]
+    pub input_draft: Option<Option<soundcraft_playback::device::DeviceRequest>>,
+    /// Audio Setup opened from this track's input selector.
+    #[serde(skip)]
+    pub audio_focus_track: Option<TrackId>,
+    /// The output saved in Audio Setup could not be reopened at launch: Apply retries it.
+    #[serde(skip)]
+    pub audio_output_missing: bool,
+    /// Device choices applied in Audio Setup, remembered between launches (HF06).
+    #[serde(default)]
+    pub audio: AudioPrefs,
+}
+
+/// Output device, buffer and input device last applied in Audio Setup.
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AudioPrefs {
+    /// (host, device); `None` = the system default output.
+    pub output: Option<(String, String)>,
+    /// Requested buffer in frames; 0 = backend default.
+    pub buffer: u32,
+    /// Input device request; `None` = the system default input.
+    pub input: Option<soundcraft_playback::device::DeviceRequest>,
 }
 
 /// Autosave status shown in the Recording window and the status bar.
@@ -298,6 +333,14 @@ impl Default for UiState {
             input_devices: Vec::new(),
             input_request: None,
             show_recover: false,
+            bpm_draft: None,
+            meter_draft: None,
+            loop_draft: None,
+            loop_drag: None,
+            input_draft: None,
+            audio_focus_track: None,
+            audio_output_missing: false,
+            audio: AudioPrefs::default(),
         }
     }
 }
@@ -1177,6 +1220,99 @@ impl SoundApp {
 
     /// R01: switch recording to `req` (stopped only). On failure the current input stays open
     /// and the request is not remembered — never a silent substitution.
+    /// Audio Setup has choices that differ from what is applied.
+    pub fn audio_draft_pending(&self) -> bool {
+        self.ui.input_draft.is_some() || self.output_draft_pending()
+    }
+
+    fn output_draft_pending(&self) -> bool {
+        self.ui.audio_output_missing || self.ui.device_choice != self.ui.audio.output || self.ui.buffer_choice != self.ui.audio.buffer
+    }
+
+    /// Audio Setup › Cancel (or closing the window): back to the applied choices.
+    pub fn cancel_audio_draft(&mut self) {
+        self.ui.device_choice = self.ui.audio.output.clone();
+        self.ui.buffer_choice = self.ui.audio.buffer;
+        self.ui.input_draft = None;
+    }
+
+    /// Audio Setup › Apply (stopped only). The output is opened first with exactly the chosen
+    /// device, session rate and buffer; if that fails nothing changes. Then the chosen input.
+    /// Applied choices are remembered (`ui.json` `audio`). Returns the status message.
+    pub fn apply_audio_draft(&mut self) -> String {
+        if self.engine.transport.recording || self.is_playing() {
+            return "Stop the transport first: devices change only while stopped".into();
+        }
+        let mut msgs = Vec::new();
+        if self.output_draft_pending() {
+            let req = soundcraft_playback::device::DeviceRequest {
+                host: self.ui.device_choice.as_ref().map(|c| c.0.clone()),
+                device: self.ui.device_choice.as_ref().map(|c| c.1.clone()),
+                sample_rate: self.engine.session().sample_rate.hz(),
+                buffer_frames: (self.ui.buffer_choice > 0).then_some(self.ui.buffer_choice),
+                channels: 2,
+            };
+            #[cfg(not(target_arch = "wasm32"))]
+            match soundcraft_playback::Player::open_requested(self.engine.session_arc(), &req) {
+                Ok(p) => {
+                    self.player = Some(p);
+                    self.ui.audio.output = self.ui.device_choice.clone();
+                    self.ui.audio.buffer = self.ui.buffer_choice;
+                    self.ui.audio_output_missing = false;
+                    msgs.push("Output opened with the requested settings".to_string());
+                }
+                // The previous device stays open: no silent substitution, and the input is left alone.
+                Err(e) => return format!("Device not changed: {e}"),
+            }
+            #[cfg(target_arch = "wasm32")]
+            let _ = req;
+        }
+        if let Some(choice) = self.ui.input_draft.take() {
+            match self.reopen_input(choice.clone()) {
+                Ok(()) => {
+                    self.ui.audio.input = choice;
+                    msgs.push("input opened with the requested settings".to_string());
+                }
+                Err(e) => msgs.push(format!("input not changed: {e}")),
+            }
+        }
+        if msgs.is_empty() { "Nothing to apply".into() } else { msgs.join("; ") }
+    }
+
+    /// At start-up: reopen the output device remembered in Audio Setup, and remember the input
+    /// choice for the first recording (the microphone is not opened at launch). A device that
+    /// is missing is named in the status line; the system default stays in use and nothing
+    /// else is substituted.
+    pub fn restore_audio_prefs(&mut self) {
+        let a = self.ui.audio.clone();
+        self.ui.device_choice = a.output.clone();
+        self.ui.buffer_choice = a.buffer;
+        self.ui.input_request = a.input.clone();
+        if self.player.is_none() || (a.output.is_none() && a.buffer == 0) {
+            return;
+        }
+        let req = soundcraft_playback::device::DeviceRequest {
+            host: a.output.as_ref().map(|c| c.0.clone()),
+            device: a.output.as_ref().map(|c| c.1.clone()),
+            sample_rate: self.engine.session().sample_rate.hz(),
+            buffer_frames: (a.buffer > 0).then_some(a.buffer),
+            channels: 2,
+        };
+        #[cfg(not(target_arch = "wasm32"))]
+        match soundcraft_playback::Player::open_requested(self.engine.session_arc(), &req) {
+            Ok(p) => self.player = Some(p),
+            Err(e) => {
+                self.ui.audio_output_missing = true;
+                let name = a.output.as_ref().map_or("default device".to_string(), |(h, d)| format!("{h}: {d}"));
+                self.ui.status = format!(
+                    "The output saved in Audio Setup ({name}) could not be opened ({e}); the system default is in use. Reconnect it and press Apply in Audio Setup, or choose another device."
+                );
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = req;
+    }
+
     pub fn reopen_input(&mut self, req: Option<soundcraft_playback::device::DeviceRequest>) -> Result<(), String> {
         if self.engine.transport.recording || self.is_playing() {
             return Err("stop the transport to change the input device".into());
@@ -1328,8 +1464,11 @@ impl SoundApp {
         let sel = s.edit.selection;
         let preroll = if s.edit.pre_post_roll { s.edit.pre_roll } else { 0 };
         let postroll = if s.edit.pre_post_roll { s.edit.post_roll } else { 0 };
-        if s.edit.loop_playback && !sel.is_empty() {
-            self.start_play(sel.start, None, Some(sel));
+        // HF05: stored loop locators win; without them the selection loops, as before.
+        if s.edit.loop_playback
+            && let Some((range, _)) = soundcraft_engine::cmd::loop_effective_range(s)
+        {
+            self.start_play(range.start, None, Some(range));
         } else if !sel.is_empty() {
             self.start_play((sel.start - preroll).max(0), Some(sel.end + postroll), None);
         } else {
@@ -1635,6 +1774,7 @@ impl SoundApp {
         if !self.native_menu_bar {
             menus::menu_bar(self, ui);
         }
+        control_bar::show(self, ui);
         match self.ui.window {
             MainWindow::Edit => edit_window::show(self, ui),
             MainWindow::Mix => mix_window::show(self, ui),
