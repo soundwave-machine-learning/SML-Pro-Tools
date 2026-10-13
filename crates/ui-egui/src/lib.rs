@@ -87,6 +87,9 @@ pub struct UiState {
     pub show_big_counter: bool,
     pub show_undo_history: bool,
     pub show_session_info: bool,
+    /// HF21: Setup › External Control… (control channel token).
+    #[serde(skip)]
+    pub show_external_control: bool,
     /// Simple recording panel (R08).
     #[serde(default)]
     pub show_recording: bool,
@@ -280,6 +283,7 @@ impl Default for UiState {
             show_big_counter: false,
             show_undo_history: false,
             show_session_info: false,
+            show_external_control: false,
             show_recording: false,
             show_remote: false,
             show_help: false,
@@ -531,6 +535,9 @@ pub struct SoundApp {
     pub native_menu_bar: bool,
     /// Folder for crash-recovery autosaves (native apps set it).
     pub autosave_dir: Option<std::path::PathBuf>,
+    /// HF21: the control channel's token file and port when started with `--control`.
+    pub control_token_path: Option<std::path::PathBuf>,
+    pub control_port: Option<u16>,
     /// Folder for user plugin presets (native apps set it).
     pub preset_dir: Option<std::path::PathBuf>,
     last_autosave: f64,
@@ -621,6 +628,8 @@ impl SoundApp {
             services,
             native_menu_bar: false,
             autosave_dir: None,
+            control_token_path: None,
+            control_port: None,
             autosave_job: None,
             autosave_state: AutosaveState::default(),
             last_snapshot_revision: None,

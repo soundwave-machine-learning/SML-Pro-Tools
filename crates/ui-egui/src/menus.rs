@@ -22,6 +22,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("window.track_list", "Track List", "View > Other Displays > Track List", None),
     ("window.clip_list_view", "Clip List", "View > Other Displays > Clip List", None),
     ("window.narrow_mix", "Narrow Mix", "View > Narrow Mix", Some("Cmd+Alt+M")),
+    ("window.external_control", "External Control…", "Setup > External Control...", None),
     ("window.mix_detach", "Detach Mixer", "Window > Detach Mixer", None),
     ("window.mix_dock", "Dock Mixer", "Window > Dock Mixer", None),
     ("window.mix_window_status", "Mixer Window Status", "", None),
@@ -265,13 +266,17 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
                 let extra = ui_aliases();
                 for root in tree() {
                     ui.menu_button(&root.label, |ui| {
-                        for c in &root.children {
-                            menu_node(app, ui, c, &extra);
-                        }
-                        if root.label == "AudioSuite" {
-                            ui.separator();
-                            ui.label(egui::RichText::new("Processes selected clips offline").small().color(t.text_dim));
-                        }
+                        // HF19: a menu taller than the window scrolls (at 1366×768 at 150 % the
+                        // Window menu is longer than the screen), so every item stays reachable.
+                        scroll_menu(ui, |ui| {
+                            for c in &root.children {
+                                menu_node(app, ui, c, &extra);
+                            }
+                            if root.label == "AudioSuite" {
+                                ui.separator();
+                                ui.label(egui::RichText::new("Processes selected clips offline").small().color(t.text_dim));
+                            }
+                        });
                     });
                 }
                 let title = format!("{}{}", app.engine.session().name, if app.engine.is_dirty() { " *" } else { "" });
@@ -299,12 +304,21 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
     );
 }
 
+/// Menu contents in a vertical scroll area no taller than the space below the menu bar.
+fn scroll_menu(ui: &mut egui::Ui, add: impl FnOnce(&mut egui::Ui)) {
+    // A popup otherwise gives its scroll area a short viewport: use the room below the menu bar.
+    let max = (ui.ctx().content_rect().height() - 48.0).max(120.0);
+    egui::ScrollArea::vertical().max_height(max).min_scrolled_height(max).auto_shrink([true, true]).show(ui, add);
+}
+
 fn menu_node(app: &mut SoundApp, ui: &mut egui::Ui, n: &MenuNode, extra: &[(&str, &str)]) {
     if !n.children.is_empty() {
         ui.menu_button(&n.label, |ui| {
-            for c in &n.children {
-                menu_node(app, ui, c, extra);
-            }
+            scroll_menu(ui, |ui| {
+                for c in &n.children {
+                    menu_node(app, ui, c, extra);
+                }
+            });
         });
         return;
     }
@@ -315,7 +329,13 @@ fn menu_node(app: &mut SoundApp, ui: &mut egui::Ui, n: &MenuNode, extra: &[(&str
     let shortcut = id.as_deref().and_then(|i| app.shortcut_labels.get(i)).cloned().unwrap_or_default();
     let btn = egui::Button::new(label).shortcut_text(crate::shortcuts::shortcut_label(&shortcut, ui.ctx().os().is_mac()));
     // A disabled item says why (e.g. "not implemented in this build"), never a silent grey entry.
-    let reason = if enabled { None } else { id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| (c.enabled)(&app.engine).err()) };
+    let reason = if enabled {
+        None
+    } else {
+        id.as_deref()
+            .and_then(|i| ui_disabled_reason(app, i))
+            .or_else(|| id.as_deref().and_then(soundcraft_engine::find_command).and_then(|c| (c.enabled)(&app.engine).err()))
+    };
     let resp = ui.add_enabled(enabled, btn);
     let resp = match reason {
         Some(r) => resp.on_disabled_hover_text(r),
@@ -340,7 +360,7 @@ pub fn item_state(app: &SoundApp, path: &str, id: Option<&str>) -> (bool, bool) 
         Some(i)
             if i.starts_with("window.") || i.starts_with("view.mix_section") || matches!(i, "audiosuite.process" | "ui.dock" | "ui.dock.reset") =>
         {
-            true
+            ui_disabled_reason(app, i).is_none()
         }
         Some(i) => soundcraft_engine::find_command(i).is_some_and(|c| (c.enabled)(&app.engine).is_ok()),
         None => false,
@@ -455,7 +475,29 @@ const MENU_WINDOWS: &[(&str, &str)] = &[
     ("Event > Time Operations > Time Operations Window", "window.time_ops"),
     ("Event > MIDI Operations > MIDI Operations Window", "window.midi_ops"),
     ("Event > MIDI Real-Time Properties", "window.rtp"),
+    // HF19: core tools that were reachable only from Search (manual K15), and HF11/HF21 windows.
+    ("File > Recover Autosave...", "window.recover"),
+    ("Window > Recording", "window.recording"),
+    ("Window > SML Remote", "window.remote"),
+    ("Window > Detach Mixer", "window.mix_detach"),
+    ("Window > Dock Mixer", "window.mix_dock"),
+    ("Setup > External Control...", "window.external_control"),
+    ("Help > Command Help", "window.help"),
+    ("Help > Assistant", "window.assistant"),
 ];
+
+/// HF19: why a UI-layer menu item is disabled now, if it is (shown on hover). Recover Autosave
+/// follows the engine's recording guard (HF18); the guard itself also refuses direct callers.
+pub fn ui_disabled_reason(app: &SoundApp, id: &str) -> Option<String> {
+    match id {
+        "window.recover" => app.engine.session_replace_blocked().map(|why| format!("Recover Autosave is unavailable while recording: {why}")),
+        "window.mix_dock" if !app.ui.mixer_window.detached => Some("The Mixer is already in the main window".into()),
+        "window.mix_detach" if app.ui.mixer_window.detached => {
+            Some("The Mixer is already in its own window (Window › Dock Mixer brings it back)".into())
+        }
+        _ => None,
+    }
+}
 
 /// Menu-style invocation: may open a dialog.
 pub fn invoke_menu(app: &mut SoundApp, id: &str, path: &str) {
@@ -603,6 +645,7 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
         "window.clip_list" | "window.clip_list_view" => toggle(&mut app.ui.show_clip_list),
         "window.track_list" => toggle(&mut app.ui.show_tracks_list),
         "window.narrow_mix" => toggle(&mut app.ui.narrow_mix),
+        "window.external_control" => toggle(&mut app.ui.show_external_control),
         "window.mix_detach" => {
             let on = p.get("value").and_then(Value::as_bool).unwrap_or(!app.ui.mixer_window.detached);
             crate::detached_mixer::set_detached(app, on)

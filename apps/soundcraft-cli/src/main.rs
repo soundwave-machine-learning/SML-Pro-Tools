@@ -9,6 +9,7 @@
 //! soundcraft-cli describe ID                     one command's details
 //! soundcraft-cli app [--port P] METHOD [JSON]     call a running app's control channel
 //! soundcraft-cli mcp [--connect PORT] [--demo]    MCP server on stdio
+//! soundcraft-cli token <path|show|rotate|revoke>  the control channel's token (HF21)
 //! soundcraft-cli parity [--write PATH]            parity report (markdown)
 //! soundcraft-cli plugins                          list built-in plugins
 //! ```
@@ -51,7 +52,7 @@ fn help_text() -> String {
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let Some(cmd) = args.first().cloned() else {
-        eprintln!("usage: soundcraft-cli <info|convert|run|script|commands|describe|app|mcp|parity|plugins> …  (see --help)");
+        eprintln!("usage: soundcraft-cli <info|convert|run|script|commands|describe|app|mcp|token|parity|plugins> …  (see --help)");
         return ExitCode::FAILURE;
     };
     let rest: Vec<String> = args.iter().skip(1).cloned().collect();
@@ -72,6 +73,7 @@ fn main() -> ExitCode {
         "describe" => describe(&rest),
         "app" => app(&rest),
         "mcp" => mcp(&rest),
+        "token" => token(&rest),
         "parity" => parity(&rest),
         // Isolated plugin-scan worker (R07): loads ONE bundle in this process and prints its
         // descriptors as JSON; a crash takes only this process down.
@@ -387,6 +389,41 @@ fn app(args: &[String]) -> ExitCode {
             ExitCode::SUCCESS
         }
         Err(e) => fail(e),
+    }
+}
+
+/// HF21: the control channel's token in the settings folder. `show` prints the token itself
+/// (for the owner to paste into an operator's settings); the others never print it.
+fn token(args: &[String]) -> ExitCode {
+    use soundcraft_automation::auth;
+    let Some(path) = auth::default_token_path() else { return fail("no settings folder (SOUNDCRAFT_CONFIG_DIR is empty)") };
+    match args.first().map(String::as_str) {
+        Some("path") | None => {
+            outln!("{}", path.display());
+            ExitCode::SUCCESS
+        }
+        Some("show") => match auth::load(&path) {
+            Some(t) => {
+                outln!("{t}");
+                ExitCode::SUCCESS
+            }
+            None => fail(format!("no token in {} (start SoundCraft with --control, or run `soundcraft-cli token rotate`)", path.display())),
+        },
+        Some("rotate") => match auth::rotate(&path) {
+            Ok(t) => {
+                outln!("new token {} written to {}", auth::redact(&t), path.display());
+                ExitCode::SUCCESS
+            }
+            Err(e) => fail(e),
+        },
+        Some("revoke") => match auth::revoke(&path) {
+            Ok(()) => {
+                outln!("token removed: no new control connections until a new one exists");
+                ExitCode::SUCCESS
+            }
+            Err(e) => fail(e),
+        },
+        Some(other) => fail(format!("token {other}: use path, show, rotate or revoke")),
     }
 }
 

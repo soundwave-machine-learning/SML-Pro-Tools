@@ -20,6 +20,7 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
     configurations(app, ctx);
     playback_engine(app, ctx);
     recover(app, ctx);
+    external_control(app, ctx);
     io_setup(app, ctx);
     shortcuts_window(app, ctx);
     clip_effects(app, ctx);
@@ -1105,6 +1106,68 @@ pub fn recover(app: &mut SoundApp, ctx: &egui::Context) {
         ui.label(egui::RichText::new("Recovery keeps every validated generation and every journaled frame; nothing here deletes or overwrites a file. Media written after the last durable checkpoint is discarded and reported.").small());
     });
     app.ui.show_recover = open;
+}
+
+/// HF21: Setup › External Control…: the local control channel used by scripts, MCP clients and
+/// external AI operators. Shows whether it runs, where its token is, and lets the owner copy,
+/// rotate or revoke the token. Only the owner at this screen can do that: nothing here is
+/// reachable from a control connection (these are not commands).
+fn external_control(app: &mut SoundApp, ctx: &egui::Context) {
+    let mut open = app.ui.show_external_control;
+    win(ctx, &mut open, "External Control", vec2(560.0, 300.0), |ui| {
+        let path = app.control_token_path.clone().or_else(soundcraft_automation::auth::default_token_path);
+        match app.control_port {
+            Some(p) => ui.label(format!(
+                "Control channel: listening on 127.0.0.1:{p} (this computer only), protocol {}.",
+                soundcraft_automation::auth::PROTOCOL
+            )),
+            None => ui.label("Control channel: off. Start SML Studio with --control <port> to let a script or an AI operator connect."),
+        };
+        let token = path.as_deref().and_then(soundcraft_automation::auth::load);
+        ui.label(match (&path, &token) {
+            (Some(p), Some(t)) => format!("Token: {} (file {})", soundcraft_automation::auth::redact(t), p.display()),
+            (Some(p), None) => format!("Token: none (file {} does not hold one; created when the control channel starts)", p.display()),
+            (None, _) => "Token: no settings folder".to_string(),
+        });
+        ui.label(
+            egui::RichText::new("Every connection must send this token first; anything else is refused before it can run a command. Keep it private: whoever has it can control SML Studio on this computer.")
+                .small(),
+        );
+        ui.horizontal(|ui| {
+            if ui
+                .add_enabled(token.is_some(), egui::Button::new("Copy token"))
+                .on_hover_text("Copies the token to the clipboard to paste into your operator's settings")
+                .clicked()
+                && let Some(t) = &token
+            {
+                ui.ctx().copy_text(t.clone());
+                app.ui.status = "Control token copied to the clipboard".into();
+            }
+            if ui
+                .add_enabled(path.is_some(), egui::Button::new("Rotate token"))
+                .on_hover_text("A new token: new connections need it; connected clients keep running until they disconnect")
+                .clicked()
+                && let Some(p) = &path
+            {
+                app.ui.status = match soundcraft_automation::auth::rotate(p) {
+                    Ok(t) => format!("New control token {} — update your operator's settings", soundcraft_automation::auth::redact(&t)),
+                    Err(e) => format!("Could not rotate the token: {e}"),
+                };
+            }
+            if ui
+                .add_enabled(token.is_some(), egui::Button::new("Revoke"))
+                .on_hover_text("No new connection is accepted until a token exists again (Rotate, or restart with --control)")
+                .clicked()
+                && let Some(p) = &path
+            {
+                app.ui.status = match soundcraft_automation::auth::revoke(p) {
+                    Ok(()) => "Control token revoked: no new connections until you rotate it".into(),
+                    Err(e) => format!("Could not revoke the token: {e}"),
+                };
+            }
+        });
+    });
+    app.ui.show_external_control = open;
 }
 
 /// Setup › I/O: busses and output paths.

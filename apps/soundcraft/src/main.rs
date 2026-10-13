@@ -303,7 +303,10 @@ fn main() -> eframe::Result {
             app.assistant.store = prefs_path().and_then(|p| p.parent().map(|d| d.join("assistant.json")));
             app.assistant_load();
             if let Some(port) = control_port {
-                let rx = control_server::start(port, cc.egui_ctx.clone());
+                let token_path = config::config_dir().map(|d| soundcraft_automation::auth::token_path(&d));
+                app.control_token_path = token_path.clone();
+                app.control_port = Some(port);
+                let rx = control_server::start(port, cc.egui_ctx.clone(), token_path);
                 app = app.with_control(rx);
             }
             for f in &files {

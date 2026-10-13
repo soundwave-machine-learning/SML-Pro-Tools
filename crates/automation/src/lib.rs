@@ -7,7 +7,9 @@
 //!   exposing SoundCraft as tools and resources.
 #![deny(clippy::unwrap_used, clippy::expect_used, clippy::panic, clippy::unimplemented, clippy::todo, clippy::unreachable)]
 
+pub mod auth;
 pub mod mcp;
+pub mod server;
 
 use serde_json::{Value, json};
 use soundcraft_engine::Engine;
@@ -64,18 +66,46 @@ impl Backend for Headless {
     }
 }
 
-/// A TCP client for a running app's control channel.
+/// A TCP client for a running app's control channel (protocol 2: authenticated, HF21).
 pub struct Remote {
     addr: String,
+    token: Option<String>,
+    client: String,
     conn: Option<(TcpStream, BufReader<TcpStream>)>,
     next_id: u64,
+    /// The server's reply to `auth` (protocol, app version), once connected.
+    pub server: Option<Value>,
+}
+
+/// Where a request failed: before it reached the app (safe to retry) or after (never retried:
+/// it may have run).
+enum Failure {
+    NotSent(String),
+    Sent(String),
 }
 
 impl Remote {
-    /// `target` is a port (`7979`) or `host:port`.
+    /// `target` is a port (`7979`) or `host:port`. The token comes from `SOUNDCRAFT_CONTROL_TOKEN`
+    /// or the token file in the SoundCraft settings folder ([`auth`]).
     pub fn new(target: &str) -> Self {
+        let token = std::env::var(auth::TOKEN_ENV)
+            .ok()
+            .filter(|t| !t.trim().is_empty())
+            .map(|t| t.trim().to_string())
+            .or_else(|| auth::default_token_path().and_then(|p| auth::load(&p)));
+        Remote::with_token(target, token)
+    }
+
+    /// Like [`Remote::new`] with an explicit token (or none, to test refusal).
+    pub fn with_token(target: &str, token: Option<String>) -> Self {
         let addr = if target.contains(':') { target.to_string() } else { format!("127.0.0.1:{target}") };
-        Remote { addr, conn: None, next_id: 1 }
+        Remote { addr, token, client: "soundcraft-cli".into(), conn: None, next_id: 1, server: None }
+    }
+
+    /// Names this client in the app's log (never the token).
+    pub fn client_name(mut self, name: &str) -> Self {
+        self.client = name.chars().take(64).collect();
+        self
     }
 
     fn connect(&mut self) -> Result<(), String> {
@@ -88,40 +118,71 @@ impl Remote {
         s.set_read_timeout(Some(Duration::from_secs(120))).map_err(|e| e.to_string())?;
         let r = s.try_clone().map_err(|e| e.to_string())?;
         self.conn = Some((s, BufReader::new(r)));
-        Ok(())
+        let token = self.token.clone().ok_or_else(|| {
+            self.conn = None;
+            format!(
+                "no control token: set {} or create one by starting SoundCraft with --control (token file {})",
+                auth::TOKEN_ENV,
+                auth::default_token_path().map_or("in the settings folder".into(), |p| p.display().to_string())
+            )
+        })?;
+        let hello = json!({"token": token, "client": self.client, "protocol": auth::PROTOCOL});
+        match self.exchange("auth", &hello) {
+            Ok(v) => {
+                self.server = Some(v);
+                Ok(())
+            }
+            Err(Failure::NotSent(e) | Failure::Sent(e)) => {
+                self.conn = None;
+                Err(e)
+            }
+        }
     }
 
-    fn roundtrip(&mut self, method: &str, params: &Value) -> Result<Value, String> {
-        self.connect()?;
+    fn exchange(&mut self, method: &str, params: &Value) -> Result<Value, Failure> {
         let id = self.next_id;
         self.next_id += 1;
         let line = json!({"id": id, "method": method, "params": params}).to_string();
-        let (w, r) = self.conn.as_mut().ok_or("not connected")?;
-        writeln!(w, "{line}").map_err(|e| e.to_string())?;
+        let (w, r) = self.conn.as_mut().ok_or_else(|| Failure::NotSent("not connected".into()))?;
+        writeln!(w, "{line}").map_err(|e| Failure::NotSent(e.to_string()))?;
         let mut buf = String::new();
-        r.read_line(&mut buf).map_err(|e| e.to_string())?;
+        r.read_line(&mut buf).map_err(|e| Failure::Sent(format!("no reply (the request may have run): {e}")))?;
         if buf.is_empty() {
-            return Err("connection closed".into());
+            return Err(Failure::Sent("connection closed before the reply (the request may have run)".into()));
         }
-        let v: Value = serde_json::from_str(&buf).map_err(|e| e.to_string())?;
+        let v: Value = serde_json::from_str(&buf).map_err(|e| Failure::Sent(e.to_string()))?;
         if v.get("ok").and_then(Value::as_bool).unwrap_or(false) {
             Ok(v.get("result").cloned().unwrap_or(Value::Null))
         } else {
-            Err(v.get("error").and_then(Value::as_str).unwrap_or("error").to_string())
+            let msg = v.get("error").and_then(Value::as_str).unwrap_or("error").to_string();
+            let code = v.get("code").and_then(Value::as_str).map(|c| format!("[{c}] ")).unwrap_or_default();
+            Err(Failure::Sent(format!("{code}{msg}")))
         }
+    }
+
+    fn roundtrip(&mut self, method: &str, params: &Value) -> Result<Value, Failure> {
+        self.connect().map_err(Failure::NotSent)?;
+        self.exchange(method, params)
     }
 }
 
 impl Backend for Remote {
+    /// One attempt; a request is retried once on a fresh connection only when it never reached
+    /// the app (a stale connection that failed on write). A request that was sent is never
+    /// replayed automatically: it may have run (HF22).
     fn call(&mut self, method: &str, params: Value) -> Result<Value, String> {
         match self.roundtrip(method, &params) {
             Ok(v) => Ok(v),
-            Err(e) if e.contains("closed") || e.contains("Broken pipe") || e.contains("reset") => {
-                // Retry once on a fresh connection.
+            Err(Failure::NotSent(_)) if self.conn.is_some() => {
                 self.conn = None;
-                self.roundtrip(method, &params)
+                self.roundtrip(method, &params).map_err(|(Failure::NotSent(e) | Failure::Sent(e))| e)
             }
-            Err(e) => Err(e),
+            Err(Failure::NotSent(e)) | Err(Failure::Sent(e)) => {
+                if self.conn.as_ref().is_some() && e.contains("closed") {
+                    self.conn = None;
+                }
+                Err(e)
+            }
         }
     }
     fn has_ui(&self) -> bool {
