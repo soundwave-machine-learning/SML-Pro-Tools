@@ -1,0 +1,6 @@
+==> SoundCraft 0.5.0 for Windows x64 (GNU) from cb08e7e7f5a7deedd50b88d3c017308cb0c7d408
+    Finished `release` profile [optimized] target(s) in 3m 19s
+==> dist/hotfix03-windows/soundcraft-0.5.0-windows-x64-gnu-portable.zip
+    sha256 7ce82669e694f41e7291bcd72a4e55bc6741caac9c13d8b9996a43a86e6cfc44
+    soundcraft-cli.exe imports: KERNEL32.dll, api-ms-win-core-synch-l1-2-0.dll, bcryptprimitives.dll, kernel32.dll, msvcrt.dll, ntdll.dll, ole32.dll, oleaut32.dll, user32.dll, ws2_32.dll
+    soundcraft.exe imports: KERNEL32.dll, USER32.dll, advapi32.dll, api-ms-win-core-synch-l1-2-0.dll, avrt.dll, bcryptprimitives.dll, combase.dll, dwmapi.dll, dxgi.dll, gdi32.dll, imm32.dll, kernel32.dll, msvcrt.dll, ntdll.dll, ole32.dll, oleaut32.dll, opengl32.dll, setupapi.dll, shell32.dll, shlwapi.dll, uiautomationcore.dll, user32.dll, uxtheme.dll, ws2_32.dll

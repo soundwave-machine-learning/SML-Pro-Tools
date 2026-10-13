@@ -30,9 +30,26 @@
   },
   "installed_build": {
     "status": "unverified",
-    "note": "The documentation session had no access to the owner's Windows computer. The last package delivered was the portable zip from b641b5a (known_builds[0]). Identify the installed copy by hashing soundcraft.exe (USER_GUIDE.md §3.4). Hotfix Pass 01 (2026-10-13): a new candidate was built from the hotfix commits and delivered with an update script; its installation on the owner's computer could not be performed or verified from the build container."
+    "note": "The documentation session had no access to the owner's Windows computer. The last package delivered was the portable zip from b641b5a (known_builds[0]). Identify the installed copy by hashing soundcraft.exe (USER_GUIDE.md §3.4). Hotfix Pass 01 (2026-10-13): a new candidate was built from the hotfix commits and delivered with an update script; its installation on the owner's computer could not be performed or verified from the build container. Hotfix Pass 03 (2026-10-13): candidate cb08e7e staged in dist/hotfix03-windows; not installed (installation is the owner's step)."
   },
   "known_builds": [
+    {
+      "version": "0.5.0",
+      "commit": "cb08e7e7f5a7deedd50b88d3c017308cb0c7d408",
+      "program_code_identical_to": "9baf4de101a1c4cf4cd84af7f151e6212f20de27",
+      "documentation": "this edition (Hotfix Pass 03; compiled-in manual = USER_GUIDE.md at cb08e7e)",
+      "artifacts": [
+        {
+          "name": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+          "sha256": "7ce82669e694f41e7291bcd72a4e55bc6741caac9c13d8b9996a43a86e6cfc44",
+          "files": {
+            "soundcraft.exe": "34b385287fcf7ae21850a78d2d8ad2a50868a968c066d81a523a49d932b8191d",
+            "soundcraft-cli.exe": "cae23a75bbe6d067a6b51e41e02ee3cda313dddec180a9d60dcc8102c50b6d6b"
+          },
+          "notes": "Hotfix Pass 03 candidate; unsigned GNU cross-build; not yet run on Windows; staged in dist/hotfix03-windows with Update-SMLStudioCandidate.ps1 (147cb25)"
+        }
+      ]
+    },
     {
       "version": "0.5.0",
       "commit": "f6deab2fd2559748388cafbba859888dd5ec1aa3",

@@ -1,0 +1,55 @@
+## Update-SMLStudioCandidate.ps1 test — 2026-10-13T12:09:13Z — PowerShell 7.4.6 on Linux (NOT Windows)
+script sha256 cb47d2c68f0c05c1b00636f53b46d9a98f9be53fe3f78a6d6d6409bafd8a636a
+new package soundcraft-0.5.0-windows-x64-gnu-portable.zip sha256 7ce82669e694f41e7291bcd72a4e55bc6741caac9c13d8b9996a43a86e6cfc44
+old install = Hotfix 02 candidate (hotfix02-windows) + a user session folder; old soundcraft.exe 21e4e463989b52bc6f2f35e2bd03882e7de452b68c9d38bae6f35fd3d935f781
+settings: ui.json and a FAKE control-token generated for this test (value not shown)
+
+### 1. wrong checksum
+Exception: <test>/Update-SMLStudioCandidate.ps1:104
+Line |
+ 104 |  … ariant()) { throw "Checksum mismatch for $ZipPath`n expected $Expecte …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+old exe unchanged: yes
+
+### 2. app running from the folder
+  71 |          throw "SML Studio is running from $Dir ($list). Save your ses …
+     | SML Studio is running from <test>/SML Studio (soundcraft (PID 29359)). Save your session, close SML Studio, then run this again. Nothing was changed.
+old exe unchanged: yes
+
+### 3. -WhatIf
+What if: Performing the operation "replace with <test>/soundcraft-0.5.0-windows-x64-gnu-portable.zip (old build kept in <test>/SML Studio.backup-20261013-120918)" on target "<test>/SML Studio".
+WhatIf: would unpack to <test>/SML Studio.staging-20261013-120918, verify, back up to <test>/SML Studio.backup-20261013-120918 and install into <test>/SML Studio.
+folders: SML Studio Update-SMLStudioCandidate.ps1 appdata soundcraft-0.5.0-windows-x64-gnu-portable.zip soundcraft-0.5.0-windows-x64-gnu-portable.zip.sha256 
+
+### 4. update
+Package OK: <test>/soundcraft-0.5.0-windows-x64-gnu-portable.zip
+  sha256 7ce82669e694f41e7291bcd72a4e55bc6741caac9c13d8b9996a43a86e6cfc44
+Current build: <test>/SML Studio/soundcraft.exe
+  sha256 21e4e463989b52bc6f2f35e2bd03882e7de452b68c9d38bae6f35fd3d935f781
+  commit f6deab2fd2559748388cafbba859888dd5ec1aa3
+Unpacked and verified 5 files: version 0.5.0, commit cb08e7e7f5a7deedd50b88d3c017308cb0c7d408
+SML Studio candidate update 20261013-120919
+install folder: <test>/SML Studio
+old build: soundcraft.exe sha256 21e4e463989b52bc6f2f35e2bd03882e7de452b68c9d38bae6f35fd3d935f781, commit f6deab2fd2559748388cafbba859888dd5ec1aa3 -> kept in <test>/SML Studio.backup-20261013-120919
+new build: version 0.5.0, commit cb08e7e7f5a7deedd50b88d3c017308cb0c7d408, soundcraft.exe sha256 34b385287fcf7ae21850a78d2d8ad2a50868a968c066d81a523a49d932b8191d
+package: <test>/soundcraft-0.5.0-windows-x64-gnu-portable.zip sha256 7ce82669e694f41e7291bcd72a4e55bc6741caac9c13d8b9996a43a86e6cfc44
+copied from the old folder: My Sessions
+settings: <test>/appdata/SoundCraft (top-level files) copied to <test>/SML Studio.backup-20261013-120919/settings-copy; the originals are unchanged; includes control-token (the control channel password; contents not shown), readable by you only
+rollback: .\Update-SMLStudioCandidate.ps1 -Rollback -InstallDir "<test>/SML Studio" -BackupDir "<test>/SML Studio.backup-20261013-120919"
+
+Done. Start SML Studio from <test>/SML Studio; SML Studio > About shows the version, and Get-FileHash .\soundcraft.exe should print 34b385287fcf7ae21850a78d2d8ad2a50868a968c066d81a523a49d932b8191d.
+session kept in new folder: {"session":"keep me"}
+settings original unchanged: {"theme":"graphite"}; copy: {"theme":"graphite"}
+token copy present: yes; identical to the original: yes; mode: 600
+new exe: 34b385287fcf7ae21850a78d2d8ad2a50868a968c066d81a523a49d932b8191d
+
+### 5. rollback
+Restored <test>/SML Studio.backup-20261013-120919 to <test>/SML Studio. The build that was there is kept in <test>/SML Studio.replaced-20261013-120921.
+restored exe is the old one byte for byte: yes
+session still there: {"session":"keep me"}
+folders: SML Studio SML Studio.replaced-20261013-120921 Update-SMLStudioCandidate.ps1 appdata soundcraft-0.5.0-windows-x64-gnu-portable.zip soundcraft-0.5.0-windows-x64-gnu-portable.zip.sha256 
+
+### 6. the token never appears in any output or log
+searched: all script output and 1 update log(s)
+occurrences of the token in them: 0
+control: the same search finds it in the backed-up token file: 1
