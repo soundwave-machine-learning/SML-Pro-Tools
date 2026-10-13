@@ -11,15 +11,31 @@ use egui::{Ui, vec2};
 use serde_json::json;
 use soundcraft_model::TrackKind;
 
-/// The layout switcher shown at the right of the menu bar.
+/// Width the switcher needs (four 56-point buttons and their gaps).
+pub const SWITCHER_WIDTH: f32 = 4.0 * 56.0 + 3.0 * 6.0;
+/// egui temp-data key: the menu bar had no room for the switcher this frame.
+pub const OVERFLOW_KEY: &str = "layout_switcher_overflow";
+
+/// Whether the switcher moved from the menu bar into the control bar (compact windows).
+pub fn switcher_overflows(ctx: &egui::Context) -> bool {
+    ctx.data(|d| d.get_temp::<bool>(egui::Id::new(OVERFLOW_KEY))).unwrap_or(false)
+}
+
+/// The layout switcher shown at the right of the menu bar (or, on compact windows, at the start
+/// of the control bar).
 pub fn switcher(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
-    for (w, label, cmd) in [
+    let mut order = [
         (MainWindow::Record, "Record", "window.record"),
         (MainWindow::Edit, "Edit", "window.edit"),
         (MainWindow::Mix, "Mix", "window.mix"),
         (MainWindow::Master, "Master", "window.master"),
-    ] {
+    ];
+    // Same left-to-right order wherever it is drawn (the menu bar lays out right to left).
+    if !ui.layout().prefer_right_to_left() {
+        order.reverse();
+    }
+    for (w, label, cmd) in order {
         let on = app.ui.window == w;
         // The button text is the layout name; its accessible name says "layout" so it never
         // collides with the Edit menu (screen readers and the UI harness address by name).

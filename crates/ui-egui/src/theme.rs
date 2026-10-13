@@ -1,4 +1,7 @@
-//! Design tokens. Colours were chosen by eye to give a dark, studio-style look; they are ours.
+//! Design tokens: the one place colours, type sizes and control metrics are defined
+//! (docs/STYLE_GUIDE.md). `Tokens::DARK` is "SML Studio Dark" — charcoal surfaces, a restrained
+//! cyan/blue accent for focus and selection, green for playback, red for recording and
+//! critical states, amber for warnings. Colours were chosen by eye; they are ours.
 
 use egui::{Color32, FontFamily, FontId};
 use std::sync::RwLock;
@@ -266,51 +269,72 @@ pub struct Tokens {
     /// Mix-window section captions (INSERTS A-E, I/O…).
     #[serde(with = "rgba")]
     pub section_label: Color32,
+    /// Raised surfaces: the control bar, popovers' groups, cards inside panels.
+    #[serde(with = "rgba")]
+    pub surface_raised: Color32,
+    /// Keyboard focus ring and the focused/active outline (restrained cyan).
+    #[serde(with = "rgba")]
+    pub focus: Color32,
+    /// Playback running (Play button lit, transport state).
+    #[serde(with = "rgba")]
+    pub playback: Color32,
+    /// Warnings: unavailable or unverified states, mismatches that do not block.
+    #[serde(with = "rgba")]
+    pub warning: Color32,
+    /// Errors and faults (failed plugin, missing device); not the Record colour.
+    #[serde(with = "rgba")]
+    pub error: Color32,
+    /// Text of disabled controls and unavailable values.
+    #[serde(with = "rgba")]
+    pub text_disabled: Color32,
+    /// Outline of selected ranges, rows and strips (with `selection` fill).
+    #[serde(with = "rgba")]
+    pub selection_stroke: Color32,
 }
 
 impl Tokens {
     pub const DARK: Tokens = Tokens {
-        window_bg: Color32::from_rgb(30, 30, 30),
-        panel_bg: Color32::from_rgb(37, 37, 38),
-        panel_bg2: Color32::from_rgb(44, 44, 45),
-        toolbar_bg: Color32::from_rgb(30, 30, 31),
-        toolbar_group: Color32::from_rgb(24, 24, 25),
-        border: Color32::from_rgb(14, 14, 14),
-        border_light: Color32::from_rgb(64, 64, 66),
-        text: Color32::from_rgb(214, 214, 214),
-        text_dim: Color32::from_rgb(150, 150, 152),
+        window_bg: Color32::from_rgb(24, 25, 27),
+        panel_bg: Color32::from_rgb(31, 32, 35),
+        panel_bg2: Color32::from_rgb(38, 40, 43),
+        toolbar_bg: Color32::from_rgb(27, 28, 31),
+        toolbar_group: Color32::from_rgb(21, 22, 24),
+        border: Color32::from_rgb(11, 12, 13),
+        border_light: Color32::from_rgb(58, 61, 66),
+        text: Color32::from_rgb(224, 226, 230),
+        text_dim: Color32::from_rgb(158, 163, 171),
         text_dark: Color32::from_rgb(16, 16, 16),
-        header_text: Color32::from_rgb(196, 196, 198),
+        header_text: Color32::from_rgb(204, 208, 214),
         counter_bg: Color32::from_rgb(4, 4, 4),
         counter_text: Color32::from_rgb(104, 220, 120),
         counter_label: Color32::from_rgb(200, 200, 200),
-        accent: Color32::from_rgb(64, 132, 196),
-        accent_dark: Color32::from_rgb(40, 92, 146),
+        accent: Color32::from_rgb(44, 132, 192),
+        accent_dark: Color32::from_rgb(30, 88, 130),
         mode_on: Color32::from_rgb(92, 196, 108),
         mode_on_text: Color32::from_rgb(10, 30, 12),
         mode_off_text: Color32::from_rgb(98, 196, 112),
-        button: Color32::from_rgb(58, 58, 60),
-        button_hi: Color32::from_rgb(78, 78, 80),
-        button_border: Color32::from_rgb(20, 20, 20),
+        button: Color32::from_rgb(52, 55, 59),
+        button_hi: Color32::from_rgb(66, 70, 76),
+        button_border: Color32::from_rgb(16, 17, 18),
         name_field: Color32::from_rgb(208, 208, 208),
         name_field_sel: Color32::from_rgb(232, 232, 232),
-        ruler_bg: Color32::from_rgb(40, 40, 41),
-        ruler_label_bg: Color32::from_rgb(40, 40, 41),
-        ruler_text: Color32::from_rgb(178, 178, 180),
-        ruler_tick: Color32::from_rgb(96, 96, 98),
+        ruler_bg: Color32::from_rgb(35, 37, 40),
+        ruler_label_bg: Color32::from_rgb(35, 37, 40),
+        ruler_text: Color32::from_rgb(186, 190, 197),
+        ruler_tick: Color32::from_rgb(92, 96, 103),
         tempo_ruler: Color32::from_rgb(52, 128, 88),
         meter_ruler: Color32::from_rgb(44, 108, 140),
-        marker_ruler: Color32::from_rgb(46, 46, 48),
-        playlist_bg: Color32::from_rgb(36, 36, 37),
-        playlist_alt: Color32::from_rgb(40, 40, 41),
-        grid_line: Color32::from_rgb(52, 52, 54),
-        bar_line: Color32::from_rgb(66, 66, 70),
-        selection: Color32::from_rgba_premultiplied(40, 70, 110, 110),
-        playhead: Color32::from_rgb(232, 60, 50),
+        marker_ruler: Color32::from_rgb(41, 43, 46),
+        playlist_bg: Color32::from_rgb(30, 31, 34),
+        playlist_alt: Color32::from_rgb(34, 35, 38),
+        grid_line: Color32::from_rgb(46, 48, 52),
+        bar_line: Color32::from_rgb(64, 67, 73),
+        selection: Color32::from_rgba_premultiplied(30, 70, 104, 112),
+        playhead: Color32::from_rgb(240, 72, 60),
         insertion: Color32::from_rgb(230, 230, 230),
         solo: Color32::from_rgb(222, 196, 52),
         mute: Color32::from_rgb(232, 148, 40),
-        rec: Color32::from_rgb(214, 52, 46),
+        rec: Color32::from_rgb(220, 58, 52),
         input: Color32::from_rgb(70, 170, 90),
         auto_read: Color32::from_rgb(96, 200, 110),
         auto_write: Color32::from_rgb(220, 70, 60),
@@ -320,36 +344,43 @@ impl Tokens {
         meter_yellow: Color32::from_rgb(230, 210, 60),
         meter_red: Color32::from_rgb(230, 50, 40),
         fader_track: Color32::from_rgb(12, 12, 12),
-        strip_bg: Color32::from_rgb(46, 46, 48),
-        strip_section: Color32::from_rgb(36, 36, 38),
-        slot_bg: Color32::from_rgb(28, 28, 29),
+        strip_bg: Color32::from_rgb(39, 41, 44),
+        strip_section: Color32::from_rgb(30, 31, 34),
+        slot_bg: Color32::from_rgb(23, 24, 26),
         automation_line: Color32::from_rgb(240, 240, 240),
-        menu_bar: Color32::from_rgb(22, 22, 23),
-        group_border: Color32::from_rgb(8, 8, 8),
+        menu_bar: Color32::from_rgb(19, 20, 22),
+        group_border: Color32::from_rgb(9, 10, 11),
         mode_off: Color32::from_rgb(20, 36, 22),
         counter_off: Color32::from_rgb(30, 50, 32),
         counter_border: Color32::from_rgb(50, 50, 50),
         counter_rule: Color32::from_rgb(40, 40, 40),
         tool_bracket_off: Color32::from_rgb(64, 64, 66),
-        row_selected: Color32::from_rgb(52, 70, 96),
+        row_selected: Color32::from_rgb(34, 70, 102),
         visible_dot: Color32::from_rgb(200, 200, 200),
         big_counter_bg: Color32::from_rgb(0, 0, 0),
-        header_selected: Color32::from_rgb(52, 58, 66),
-        strip_selected: Color32::from_rgb(54, 58, 64),
+        header_selected: Color32::from_rgb(38, 56, 74),
+        strip_selected: Color32::from_rgb(40, 58, 78),
         marker_text: Color32::from_rgb(236, 236, 236),
-        playlist_lane: Color32::from_rgb(30, 30, 31),
-        universe_bg: Color32::from_rgb(18, 18, 19),
+        playlist_lane: Color32::from_rgb(26, 27, 29),
+        universe_bg: Color32::from_rgb(17, 18, 20),
         universe_view: Color32::from_rgb(255, 255, 255),
         meter_bg: Color32::from_rgb(8, 8, 8),
         meter_clip_off: Color32::from_rgb(60, 20, 20),
-        knob_bg: Color32::from_rgb(26, 26, 28),
-        knob_ring: Color32::from_rgb(90, 90, 94),
+        knob_bg: Color32::from_rgb(24, 25, 28),
+        knob_ring: Color32::from_rgb(88, 92, 100),
         knob_pointer: Color32::from_rgb(230, 230, 230),
-        insert_on: Color32::from_rgb(52, 62, 80),
+        insert_on: Color32::from_rgb(42, 66, 92),
         insert_bypass: Color32::from_rgb(70, 56, 30),
-        send_on: Color32::from_rgb(46, 66, 56),
+        send_on: Color32::from_rgb(38, 70, 58),
         slot_border: Color32::from_rgb(16, 16, 16),
-        section_label: Color32::from_rgb(200, 200, 200),
+        section_label: Color32::from_rgb(170, 176, 186),
+        surface_raised: Color32::from_rgb(36, 38, 42),
+        focus: Color32::from_rgb(88, 196, 232),
+        playback: Color32::from_rgb(70, 196, 112),
+        warning: Color32::from_rgb(236, 168, 56),
+        error: Color32::from_rgb(240, 92, 80),
+        text_disabled: Color32::from_rgb(104, 108, 116),
+        selection_stroke: Color32::from_rgb(86, 170, 226),
     };
 
     pub const LIGHT: Tokens = Tokens {
@@ -433,6 +464,13 @@ impl Tokens {
         send_on: Color32::from_rgb(204, 230, 214),
         slot_border: Color32::from_rgb(175, 179, 187),
         section_label: Color32::from_rgb(95, 98, 106),
+        surface_raised: Color32::from_rgb(255, 255, 255),
+        focus: Color32::from_rgb(20, 120, 190),
+        playback: Color32::from_rgb(30, 140, 62),
+        warning: Color32::from_rgb(176, 110, 10),
+        error: Color32::from_rgb(190, 40, 36),
+        text_disabled: Color32::from_rgb(150, 154, 162),
+        selection_stroke: Color32::from_rgb(52, 110, 180),
     };
 
     /// The active palette.
@@ -523,6 +561,13 @@ impl Tokens {
         send_on: Color32::from_rgb(0, 150, 90),
         slot_border: Color32::WHITE,
         section_label: Color32::WHITE,
+        surface_raised: Color32::from_rgb(20, 20, 20),
+        focus: Color32::from_rgb(0, 220, 255),
+        playback: Color32::from_rgb(0, 255, 120),
+        warning: Color32::from_rgb(255, 190, 0),
+        error: Color32::from_rgb(255, 60, 60),
+        text_disabled: Color32::from_rgb(170, 170, 170),
+        selection_stroke: Color32::from_rgb(255, 220, 0),
     };
 
     /// Every token by name, for the theme editor.
@@ -608,6 +653,13 @@ impl Tokens {
             ("send_on", &mut self.send_on),
             ("slot_border", &mut self.slot_border),
             ("section_label", &mut self.section_label),
+            ("surface_raised", &mut self.surface_raised),
+            ("focus", &mut self.focus),
+            ("playback", &mut self.playback),
+            ("warning", &mut self.warning),
+            ("error", &mut self.error),
+            ("text_disabled", &mut self.text_disabled),
+            ("selection_stroke", &mut self.selection_stroke),
         ]
     }
 }
@@ -784,6 +836,46 @@ pub fn mono(size: f32) -> FontId {
     FontId::new(size, FontFamily::Monospace)
 }
 
+/// Type scale in logical points (docs/STYLE_GUIDE.md). Use these, not ad-hoc sizes.
+pub mod size {
+    /// Section captions (INSERTS, I / O), units beside values. The smallest text in the app.
+    pub const CAPTION: f32 = 10.0;
+    /// Secondary text, hints, status details.
+    pub const SMALL: f32 = 11.0;
+    /// Labels and controls.
+    pub const BODY: f32 = 13.0;
+    /// Panel and window titles.
+    pub const TITLE: f32 = 14.0;
+    /// Numeric readouts (dB, BPM, positions) — always monospaced so digits line up.
+    pub const NUMERIC: f32 = 13.0;
+    /// Primary numeric entry in the control bar (BPM).
+    pub const NUMERIC_LARGE: f32 = 15.0;
+}
+
+/// Control metrics in logical points (docs/STYLE_GUIDE.md).
+pub mod metric {
+    /// Standard control height (buttons, combo boxes, text fields in bars and dialogs).
+    pub const CONTROL_H: f32 = 22.0;
+    /// Compact control height (mixer strip rows, lists).
+    pub const CONTROL_H_SMALL: f32 = 18.0;
+    /// Corner radius of controls and groups.
+    pub const RADIUS: u8 = 3;
+    /// Space between controls in a group.
+    pub const GAP: f32 = 6.0;
+    /// Space between groups.
+    pub const GROUP_GAP: f32 = 12.0;
+}
+
+/// A group frame on a bar or panel: raised surface, hairline border, standard radius.
+pub fn group_frame() -> egui::Frame {
+    let t = Tokens::current();
+    egui::Frame::NONE
+        .fill(t.surface_raised)
+        .stroke(egui::Stroke::new(1.0, t.border))
+        .corner_radius(egui::CornerRadius::same(metric::RADIUS))
+        .inner_margin(egui::Margin::symmetric(6, 2))
+}
+
 /// Make the built-in `light` (or dark) palette active and apply its visuals.
 pub fn apply(ctx: &egui::Context, light: bool) {
     apply_tokens(ctx, light, if light { Tokens::LIGHT } else { Tokens::DARK });
@@ -805,6 +897,31 @@ pub fn apply_tokens(ctx: &egui::Context, light: bool, t: Tokens) {
     v.widgets.hovered.weak_bg_fill = t.button_hi;
     v.widgets.noninteractive.fg_stroke.color = t.text;
     v.widgets.inactive.fg_stroke.color = t.text;
+    // Control states (docs/STYLE_GUIDE.md): resting = button fill with a dark hairline;
+    // hovered = lighter fill and a visible edge; pressed = accent fill with the focus edge;
+    // selected = accent fill. Disabled controls fade (disabled_alpha), they never vanish.
+    let radius = egui::CornerRadius::same(metric::RADIUS);
+    for w in [&mut v.widgets.noninteractive, &mut v.widgets.inactive, &mut v.widgets.hovered, &mut v.widgets.active, &mut v.widgets.open] {
+        w.corner_radius = radius;
+    }
+    v.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, t.border_light);
+    v.widgets.inactive.bg_stroke = egui::Stroke::new(1.0, t.button_border);
+    v.widgets.hovered.bg_fill = t.button_hi;
+    v.widgets.hovered.bg_stroke = egui::Stroke::new(1.0, t.border_light);
+    v.widgets.hovered.fg_stroke.color = t.text;
+    v.widgets.active.bg_fill = t.accent_dark;
+    v.widgets.active.weak_bg_fill = t.accent_dark;
+    v.widgets.active.bg_stroke = egui::Stroke::new(1.0, t.focus);
+    v.widgets.active.fg_stroke.color = t.text;
+    v.widgets.open.weak_bg_fill = t.button_hi;
+    v.widgets.open.bg_stroke = egui::Stroke::new(1.0, t.focus);
+    v.selection.stroke = egui::Stroke::new(1.0, t.text);
+    v.text_cursor.stroke = egui::Stroke::new(2.0, t.focus);
+    v.hyperlink_color = t.focus;
+    v.warn_fg_color = t.warning;
+    v.error_fg_color = t.error;
+    v.window_stroke = egui::Stroke::new(1.0, t.border_light);
+    v.disabled_alpha = 0.45;
     v.window_corner_radius = egui::CornerRadius::same(6);
     v.menu_corner_radius = egui::CornerRadius::same(4);
     // Keep receiving native OS appearance changes even when our palette is manual. On macOS,
@@ -870,7 +987,7 @@ mod tests {
         assert_eq!(resolve(&ctx, ThemeMode::HighContrast, None), (false, Tokens::HIGH_CONTRAST));
         assert_eq!(resolve(&ctx, ThemeMode::Custom, Some(&d)).1, Tokens::DARK);
         let mut editable = Tokens::DARK;
-        assert_eq!(editable.fields_mut().len(), 80);
+        assert_eq!(editable.fields_mut().len(), 87);
         assert_eq!(ThemeMode::parse("high_contrast"), Some(ThemeMode::HighContrast));
     }
 

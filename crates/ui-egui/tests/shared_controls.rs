@@ -83,7 +83,7 @@ fn tool_and_record_buttons_handle_keyboard_disabled_state_and_cancelled_clicks()
             ctx.memory_mut(|m| m.request_focus(response.id));
             let out = button_frame(&ctx, &mut state, vec![]);
             assert!(out.shapes.iter().any(|s| matches!(&s.shape, egui::Shape::Rect(r)
-                if r.rect == response.rect.shrink(2.0) && r.stroke.color == theme::Tokens::current().accent)));
+                if r.rect == response.rect.shrink(2.0) && r.stroke.color == theme::Tokens::current().focus)));
             button_frame(&ctx, &mut state, vec![key(key_code, true)]);
             button_frame(&ctx, &mut state, vec![key(key_code, false)]);
             assert_eq!(state.clicks, 1);

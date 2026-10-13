@@ -3,7 +3,7 @@
 use craft_ui::buttons::{ButtonVisuals, IconButton, IconButtonStyle};
 
 use crate::icons;
-use crate::theme::{Tokens, bold, regular};
+use crate::theme::{Tokens, bold, metric, regular};
 use egui::{Align2, Color32, CornerRadius, Rect, Response, Sense, Stroke, StrokeKind, Ui, pos2, vec2};
 
 /// Local colors for shared icon-button interaction; transport-specific states stay in the toolbar.
@@ -16,7 +16,7 @@ fn button_style(selected_fill: Color32, normal_icon: Color32, radius: u8) -> Ico
         pressed: None,
         selected: visuals(selected_fill, Color32::WHITE),
         corner_radius: CornerRadius::same(radius),
-        focus_stroke: Stroke::new(1.0, t.accent),
+        focus_stroke: Stroke::new(1.5, t.focus),
     }
 }
 
@@ -47,7 +47,15 @@ pub fn text_toggle_named(ui: &mut Ui, size: egui::Vec2, text: &str, name: &str, 
     } else {
         t.button
     };
-    ui.painter().rect(r, CornerRadius::same(2), fill, Stroke::new(1.0, t.button_border), StrokeKind::Inside);
+    // Resting: dark hairline. Hovered: a visible edge. Keyboard focus: the focus ring.
+    let edge = if resp.has_focus() {
+        Stroke::new(1.5, t.focus)
+    } else if resp.hovered() && !on {
+        Stroke::new(1.0, t.border_light)
+    } else {
+        Stroke::new(1.0, t.button_border)
+    };
+    ui.painter().rect(r, CornerRadius::same(metric::RADIUS), fill, edge, StrokeKind::Inside);
     let col = if on { t.text_dark } else { t.text };
     ui.painter().text(r.center(), Align2::CENTER_CENTER, text, bold((size.y * 0.62).clamp(8.0, 13.0)), col);
     // Accessible name (T01): screen readers and the UI test harness address the button by it.
@@ -57,7 +65,8 @@ pub fn text_toggle_named(ui: &mut Ui, size: egui::Vec2, text: &str, name: &str, 
 
 /// Record-enable button (red dot); the caller owns track arming and command dispatch.
 pub fn rec_toggle(ui: &mut Ui, size: egui::Vec2, on: bool, tip: &str) -> Response {
-    let style = button_style(Tokens::current().rec, Color32::from_rgb(190, 190, 190), 2);
+    let t = Tokens::current();
+    let style = button_style(t.rec, t.text_dim, metric::RADIUS);
     let resp = IconButton::new(tip, size, &style).selected(on).single_shape_frame().show(ui, |ui, r, tint| {
         ui.painter().circle_filled(r.center(), size.y * 0.24, tint);
     });
@@ -75,9 +84,18 @@ pub(crate) fn selector_box_with_tooltip(ui: &mut Ui, width: f32, height: f32, te
     let (r, resp) = ui.allocate_exact_size(vec2(width, height), Sense::click());
     ui.painter().rect(
         r,
-        CornerRadius::same(2),
+        CornerRadius::same(metric::RADIUS),
         if resp.hovered() { t.button_hi } else { t.button },
-        Stroke::new(1.0, t.button_border),
+        Stroke::new(
+            1.0,
+            if resp.has_focus() {
+                t.focus
+            } else if resp.hovered() {
+                t.border_light
+            } else {
+                t.button_border
+            },
+        ),
         StrokeKind::Inside,
     );
     let tr = Rect::from_min_max(pos2(r.max.x - height * 0.8, r.min.y), r.max);
@@ -216,21 +234,28 @@ pub fn fader(ui: &mut Ui, r: Rect, db: f32, id: egui::Id) -> Option<f32> {
     // Scale marks.
     for mark in [12.0f32, 6.0, 0.0, -5.0, -10.0, -15.0, -20.0, -30.0, -40.0, -60.0] {
         let y = slot.max.y - slot.height() * soundcraft_model::fader_db_to_pos(mark);
-        ui.painter().line_segment([pos2(r.min.x + 2.0, y), pos2(slot.min.x - 3.0, y)], Stroke::new(1.0, Color32::from_rgb(110, 110, 110)));
-        ui.painter().text(pos2(r.min.x, y), Align2::LEFT_CENTER, format!("{}", mark.abs()), regular(8.0), Color32::from_rgb(150, 150, 150));
+        // 0 dB (unity) is marked brighter than the rest of the scale.
+        let unity = mark == 0.0;
+        ui.painter()
+            .line_segment([pos2(r.min.x + 2.0, y), pos2(slot.min.x - 3.0, y)], Stroke::new(1.0, if unity { t.text_dim } else { t.ruler_tick }));
+        ui.painter().text(pos2(r.min.x, y), Align2::LEFT_CENTER, format!("{}", mark.abs()), regular(9.0), if unity { t.text } else { t.text_dim });
     }
     let pos = soundcraft_model::fader_db_to_pos(db);
     let y = slot.max.y - slot.height() * pos;
     let cap = Rect::from_center_size(pos2(slot.center().x, y), vec2(r.width() * 0.62, 22.0));
-    ui.painter().rect(cap, 2.0, Color32::from_rgb(70, 70, 72), Stroke::new(1.0, Color32::from_rgb(20, 20, 20)), StrokeKind::Inside);
-    ui.painter().line_segment(
-        [pos2(cap.min.x + 2.0, cap.center().y), pos2(cap.max.x - 2.0, cap.center().y)],
-        Stroke::new(2.0, Color32::from_rgb(230, 230, 230)),
+    let active = resp.hovered() || resp.dragged();
+    ui.painter().rect(
+        cap,
+        2.0,
+        if active { t.button_hi } else { t.button },
+        Stroke::new(1.0, if resp.dragged() { t.focus } else { t.button_border }),
+        StrokeKind::Inside,
     );
+    ui.painter().line_segment([pos2(cap.min.x + 2.0, cap.center().y), pos2(cap.max.x - 2.0, cap.center().y)], Stroke::new(2.0, t.text));
     for dy in [-6.0, -3.0, 3.0, 6.0] {
         ui.painter().line_segment(
             [pos2(cap.min.x + 3.0, cap.center().y + dy), pos2(cap.max.x - 3.0, cap.center().y + dy)],
-            Stroke::new(1.0, Color32::from_rgb(40, 40, 40)),
+            Stroke::new(1.0, t.button_border),
         );
     }
     if resp.double_clicked() || (resp.clicked() && ui.input(|i| i.modifiers.alt)) {

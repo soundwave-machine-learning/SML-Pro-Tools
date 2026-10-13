@@ -7,8 +7,8 @@
 //! uncommitted text while you type).
 
 use crate::SoundApp;
-use crate::theme::{Tokens, mono};
-use egui::{RichText, Ui, vec2};
+use crate::theme::{Tokens, group_frame, metric, mono, regular, size};
+use egui::{Color32, CornerRadius, RichText, Sense, Stroke, StrokeKind, Ui, vec2};
 use serde_json::json;
 use soundcraft_time::{TimeFormat, format_position};
 
@@ -16,21 +16,43 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     let t = Tokens::current();
     let bar = egui::Panel::top("control_bar")
         .resizable(false)
-        .frame(egui::Frame::NONE.fill(t.toolbar_bg).inner_margin(egui::Margin::symmetric(8, 3)))
+        .frame(egui::Frame::NONE.fill(t.toolbar_bg).inner_margin(egui::Margin::symmetric(8, 4)))
         .show(ui, |ui| {
             ui.horizontal_wrapped(|ui| {
-                ui.spacing_mut().item_spacing = vec2(6.0, 4.0);
-                audio_setup(app, ui);
-                ui.separator();
-                if matches!(app.ui.window, crate::MainWindow::Mix | crate::MainWindow::Master) {
-                    transport(app, ui);
-                    ui.separator();
+                // Segments (docs/STYLE_GUIDE.md): each is one raised group; on narrow windows
+                // whole segments wrap to the next row, so no control is ever cut in half.
+                ui.spacing_mut().item_spacing = vec2(metric::GAP, 4.0);
+                // A frame's width is only known after it is drawn, so each segment remembers its
+                // width from the previous frame and starts a new row when it would not fit.
+                let (left, right) = (ui.max_rect().min.x, ui.max_rect().max.x);
+                let seg = |ui: &mut Ui, name: &str, f: &mut dyn FnMut(&mut Ui)| {
+                    let key = egui::Id::new(("control_bar_segment", name));
+                    let need = ui.ctx().data(|d| d.get_temp::<f32>(key)).unwrap_or(0.0);
+                    // (In a wrapping layout `available_width` is a whole new row, so compare with
+                    // the row's right edge captured before any segment was drawn.)
+                    if ui.cursor().min.x + need > right && ui.cursor().min.x > left + 1.0 {
+                        ui.end_row();
+                    }
+                    let r = group_frame().show(ui, |ui| {
+                        ui.spacing_mut().item_spacing.x = metric::GAP;
+                        ui.horizontal(|ui| f(ui));
+                    });
+                    ui.ctx().data_mut(|d| d.insert_temp(key, r.response.rect.width()));
+                };
+                if crate::layouts::switcher_overflows(ui.ctx()) {
+                    seg(ui, "layouts", &mut |ui| crate::layouts::switcher(app, ui));
                 }
-                tempo(app, ui);
-                meter(app, ui);
-                click_countoff(app, ui);
-                ui.separator();
-                loop_controls(app, ui);
+                if matches!(app.ui.window, crate::MainWindow::Mix | crate::MainWindow::Master) {
+                    seg(ui, "transport", &mut |ui| transport(app, ui));
+                }
+                seg(ui, "tempo", &mut |ui| {
+                    tempo(app, ui);
+                    meter(app, ui);
+                });
+                seg(ui, "click", &mut |ui| click_countoff(app, ui));
+                seg(ui, "loop", &mut |ui| loop_controls(app, ui));
+                seg(ui, "recording", &mut |ui| recording_status(app, ui));
+                seg(ui, "audio", &mut |ui| audio_setup(app, ui));
             });
         });
     // Windows opened from the bar (Audio Setup) stay below it, so the bar is never covered.
@@ -75,42 +97,185 @@ pub fn device_summary(app: &SoundApp) -> String {
     }
 }
 
+/// A control-bar button: optional icon, a label, the standard height and state edges. `name`
+/// is the accessible name (kept stable for screen readers, tests and the manual). Lit buttons use
+/// their state colour (`on_fill`) with dark text, so on/off never depends on hue alone: the fill
+/// changes from neutral to solid.
+pub fn chip(ui: &mut Ui, icon: Option<&str>, text: &str, name: &str, on: bool, on_fill: Color32, enabled: bool) -> egui::Response {
+    chip_impl(ui, icon, text, name, on, on_fill, enabled, false)
+}
+
+/// A chip that opens a popover: the same button with a drop-down arrow at its right.
+pub fn chip_menu(ui: &mut Ui, text: &str, name: &str, enabled: bool) -> egui::Response {
+    chip_impl(ui, None, text, name, false, Tokens::current().accent, enabled, true)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn chip_impl(ui: &mut Ui, icon: Option<&str>, text: &str, name: &str, on: bool, on_fill: Color32, enabled: bool, dropdown: bool) -> egui::Response {
+    let t = Tokens::current();
+    let fg = if !enabled {
+        t.text_disabled
+    } else if on {
+        t.text_dark
+    } else {
+        t.text
+    };
+    let galley = ui.painter().layout_no_wrap(text.to_string(), regular(size::BODY), fg);
+    let icon_w = if icon.is_some() { 16.0 } else { 0.0 };
+    let w = galley.size().x + icon_w + 14.0 + if dropdown { 14.0 } else { 0.0 };
+    let (r, resp) = ui.allocate_exact_size(vec2(w, metric::CONTROL_H), if enabled { Sense::click() } else { Sense::hover() });
+    let fill = if on {
+        on_fill
+    } else if resp.hovered() && enabled {
+        t.button_hi
+    } else {
+        t.button
+    };
+    let edge = if resp.has_focus() {
+        Stroke::new(1.5, t.focus)
+    } else if resp.hovered() && enabled && !on {
+        Stroke::new(1.0, t.border_light)
+    } else {
+        Stroke::new(1.0, t.button_border)
+    };
+    ui.painter().rect(r, CornerRadius::same(metric::RADIUS), fill, edge, StrokeKind::Inside);
+    let mut x = r.min.x + 7.0;
+    if let Some(icon) = icon {
+        // The record dot is always the record colour (armed), unless the chip is lit red.
+        let ic = if icon == "record" && !on && enabled { t.rec } else { fg };
+        crate::icons::draw(ui.painter(), egui::Rect::from_center_size(egui::pos2(x + 6.0, r.center().y), vec2(12.0, 12.0)), icon, ic);
+        x += icon_w;
+    }
+    ui.painter().galley(egui::pos2(x, r.center().y - galley.size().y / 2.0), galley, fg);
+    if dropdown {
+        let a = egui::Rect::from_center_size(egui::pos2(r.max.x - 10.0, r.center().y), vec2(9.0, 9.0));
+        crate::icons::draw(ui.painter(), a, "triangle_down", if enabled { t.text_dim } else { t.text_disabled });
+    }
+    resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, enabled, on, name));
+    resp
+}
+
+/// A small status dot with a shape that differs by state (filled = OK, ring = waiting,
+/// cross = missing), so the state reads without colour.
+fn status_dot(ui: &mut Ui, state: Status) {
+    let t = Tokens::current();
+    let (r, _) = ui.allocate_exact_size(vec2(10.0, metric::CONTROL_H), Sense::hover());
+    let c = r.center();
+    match state {
+        Status::Ok => {
+            ui.painter().circle_filled(c, 4.0, t.playback);
+        }
+        Status::Waiting => {
+            ui.painter().circle_stroke(c, 3.5, Stroke::new(1.5, t.warning));
+        }
+        Status::Missing => {
+            let s = Stroke::new(1.8, t.error);
+            ui.painter().line_segment([c + vec2(-3.5, -3.5), c + vec2(3.5, 3.5)], s);
+            ui.painter().line_segment([c + vec2(-3.5, 3.5), c + vec2(3.5, -3.5)], s);
+        }
+    }
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Status {
+    Ok,
+    Waiting,
+    Missing,
+}
+
 fn audio_setup(app: &mut SoundApp, ui: &mut Ui) {
+    let t = Tokens::current();
     let open = app.ui.show_playback_engine;
-    let b = ui
-        .selectable_label(open, RichText::new("⚙ Audio Setup").strong())
+    let b = chip(ui, Some("gear"), "Audio Setup", "⚙ Audio Setup", open, t.accent, true)
         .on_hover_text("Microphone/interface input, output device, sample rate, buffer, monitoring and latency (Setup › Playback Engine…)");
     if b.clicked() {
         app.ui.audio_focus_track = None;
         app.ui.show_playback_engine = !open;
     }
+    let state = match &app.player {
+        None => Status::Missing,
+        Some(p) if p.stream_clock().2 == 0 => Status::Waiting,
+        Some(_) => Status::Ok,
+    };
+    status_dot(ui, state);
     let summary = device_summary(app);
     let input =
         app.recorder.as_ref().map_or("input: opened on first record".to_string(), |r| format!("input: {} ({} ch)", r.device_name, r.channels));
+    let colour = if state == Status::Missing { t.warning } else { t.text_dim };
     let s = ui
-        .add(egui::Label::new(RichText::new(&summary).font(mono(11.0)).color(Tokens::current().text_dim)).sense(egui::Sense::click()))
+        .add(egui::Label::new(RichText::new(&summary).font(mono(size::SMALL)).color(colour)).sense(Sense::click()))
         .on_hover_text(format!("{summary}\n{input}\nDriver latency: Unknown (not reported by this backend). Click for Audio Setup."));
     if s.clicked() {
         app.ui.show_playback_engine = true;
     }
 }
 
+/// What will record and how it is heard: armed tracks with their inputs, input monitoring, the
+/// monitoring mode and the input device — only what the session and the open devices say.
+fn recording_status(app: &mut SoundApp, ui: &mut Ui) {
+    let t = Tokens::current();
+    let (armed, monitored, hardware) = {
+        let s = app.engine.session();
+        let input_of = |tr: &soundcraft_model::Track| match &tr.mixer.input {
+            soundcraft_model::Route::Hardware(h) => h.clone(),
+            _ => "In 1".to_string(),
+        };
+        let armed: Vec<(soundcraft_model::TrackId, String, String)> = s
+            .tracks
+            .iter()
+            .filter(|tr| tr.mixer.record_arm && tr.kind == soundcraft_model::TrackKind::Audio && !tr.inactive)
+            .map(|tr| (tr.id, tr.name.clone(), input_of(tr)))
+            .collect();
+        let monitored = s.tracks.iter().filter(|tr| tr.mixer.input_monitor).count();
+        (armed, monitored, s.edit.value("monitor.mode", 1.0) as i64 == 2)
+    };
+    let recording = app.engine.transport.recording;
+    let text = match armed.as_slice() {
+        [] => "No track armed".to_string(),
+        [(_, name, input)] => format!("Armed: {name} · {input}"),
+        many => format!("Armed: {} tracks", many.len()),
+    };
+    let lit = !armed.is_empty();
+    let resp = chip(ui, lit.then_some("record"), &text, "Recording status", recording, t.rec, true);
+    let mic = app.recorder.as_ref().map_or("Input device: opens on the first record or arm".to_string(), |r| {
+        format!("Input device: {} ({} channel(s) @ {} Hz)", r.device_name, r.channels, r.sample_rate)
+    });
+    let list = armed.iter().map(|(_, n, i)| format!("● {n} records {i}")).collect::<Vec<_>>().join("\n");
+    let monitoring = if hardware {
+        "Monitoring: hardware/direct (SML Studio's input monitoring is off)".to_string()
+    } else {
+        format!("Monitoring: software · {monitored} track(s) input-monitored")
+    };
+    let resp = resp.on_hover_text(format!(
+        "{}{monitoring}\n{mic}\nClick for Audio Setup (input device and this track's input).",
+        if list.is_empty() { "No track is record-enabled.\n".to_string() } else { format!("{list}\n") }
+    ));
+    if resp.clicked() {
+        app.ui.audio_focus_track = armed.first().map(|a| a.0);
+        app.ui.show_playback_engine = true;
+    }
+    if monitored > 0 && !hardware {
+        ui.label(RichText::new(format!("I {monitored}")).font(mono(size::SMALL)).color(t.input))
+            .on_hover_text(format!("{monitored} track(s) monitor their live input through the mixer"));
+    }
+}
+
 fn transport(app: &mut SoundApp, ui: &mut Ui) {
+    let t = Tokens::current();
     let playing = app.is_playing();
     let recording = app.engine.transport.recording;
-    if ui.button("■ Stop").clicked() {
+    if chip(ui, Some("stop"), "Stop", "■ Stop", false, t.button, true).on_hover_text("Stop").clicked() {
         let _ = app.run("transport.stop", json!({}));
     }
-    if ui.selectable_label(playing && !recording, "▶ Play").clicked() {
+    if chip(ui, Some("play"), "Play", "▶ Play", playing && !recording, t.playback, true).on_hover_text("Play").clicked() {
         let _ = app.run("transport.play", json!({}));
     }
-    let rec = RichText::new("● Record").color(if recording { egui::Color32::from_rgb(240, 80, 70) } else { Tokens::current().text });
-    if ui.selectable_label(recording, rec).clicked() {
+    if chip(ui, Some("record"), "Record", "● Record", recording, t.rec, true).on_hover_text("Record (armed tracks)").clicked() {
         let _ = app.run("transport.record", json!({}));
     }
     let f = app.engine.session().edit.main_counter;
     let pos = fmt(app, app.position(), f);
-    ui.label(RichText::new(pos).font(mono(13.0)));
+    ui.label(RichText::new(pos).font(mono(size::NUMERIC)).color(t.counter_text));
 }
 
 /// The tempo change in effect at `at` (samples): its position and BPM, and how many changes the
@@ -129,9 +294,9 @@ fn tempo(app: &mut SoundApp, ui: &mut Ui) {
     let recording = app.engine.transport.recording;
     let id = egui::Id::new("control_bar_bpm");
     let mut text = app.ui.bpm_draft.clone().unwrap_or_else(|| format!("{bpm:.2}"));
-    let field = egui::TextEdit::singleline(&mut text).id(id).desired_width(62.0).font(mono(15.0)).horizontal_align(egui::Align::RIGHT);
+    let field = egui::TextEdit::singleline(&mut text).id(id).desired_width(64.0).font(mono(size::NUMERIC_LARGE)).horizontal_align(egui::Align::RIGHT);
     let resp = ui.add_enabled(!recording, field);
-    let label = ui.label(RichText::new("BPM").strong());
+    let label = ui.label(RichText::new("BPM").font(regular(size::SMALL)).color(Tokens::current().text_dim));
     let resp = resp.labelled_by(label.id);
     let where_ = if changes > 1 {
         format!(
@@ -164,7 +329,7 @@ fn tempo(app: &mut SoundApp, ui: &mut Ui) {
         app.ui.bpm_draft = None;
     }
     if changes > 1 {
-        ui.label(RichText::new("MAP").small().strong()).on_hover_text(where_);
+        ui.label(RichText::new("MAP").font(crate::theme::bold(size::CAPTION)).color(Tokens::current().focus)).on_hover_text(where_);
     }
 }
 
@@ -178,7 +343,10 @@ fn meter(app: &mut SoundApp, ui: &mut Ui) {
     };
     let recording = app.engine.transport.recording;
     let resp = ui
-        .add_enabled(!recording, egui::Button::new(RichText::new(format!("{num}/{den}")).font(mono(13.0))))
+        .add_enabled(
+            !recording,
+            egui::Button::new(RichText::new(format!("{num}/{den}")).font(mono(size::NUMERIC))).min_size(vec2(40.0, metric::CONTROL_H)),
+        )
         .on_hover_text("Time signature in effect at the playhead — click to change it")
         .on_disabled_hover_text("The time signature cannot change during a take");
     let shown = egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| {
@@ -220,11 +388,12 @@ fn click_countoff(app: &mut SoundApp, ui: &mut Ui) {
         let e = &app.engine.session().edit;
         (e.click, e.countoff, e.countoff_bars)
     };
-    if ui.selectable_label(click, "Click").on_hover_text("Metronome (Options › Click)").clicked() {
+    let t = Tokens::current();
+    if chip(ui, Some("click"), "Click", "Click", click, t.accent, true).on_hover_text("Metronome (Options › Click)").clicked() {
         let _ = app.run("options.click", json!({}));
     }
-    if ui
-        .selectable_label(countoff, format!("Count Off {bars}"))
+    let label = format!("Count Off {bars}");
+    if chip(ui, None, &label, &label, countoff, t.accent, true)
         .on_hover_text("Count Off: recording starts this many bars early with the click (bars: Recording window)")
         .clicked()
     {
@@ -237,8 +406,8 @@ fn loop_controls(app: &mut SoundApp, ui: &mut Ui) {
         let e = &app.engine.session().edit;
         (e.loop_playback, e.loop_range, e.selection, e.loop_record, e.main_counter)
     };
-    let toggle = ui
-        .selectable_label(enabled, RichText::new("⟲ Loop").strong())
+    let t = Tokens::current();
+    let toggle = chip(ui, Some("loop"), "Loop", "⟲ Loop", enabled, t.accent, true)
         .on_hover_text("Loop Playback on/off (Options › Loop Playback). Recording is never started by this button.");
     if toggle.clicked() {
         let _ = app.run("options.loop_playback", json!({}));
@@ -248,7 +417,8 @@ fn loop_controls(app: &mut SoundApp, ui: &mut Ui) {
         (None, false) => "selection".to_string(),
         (None, true) => "not set".to_string(),
     };
-    let resp = ui.button(format!("Loop: {range_text} ▾")).on_hover_text("Loop range and settings");
+    let resp = chip_menu(ui, &range_text, &format!("Loop: {range_text} ▾"), true)
+        .on_hover_text("Loop range and settings (start – end in the main counter format)");
     let shown =
         egui::Popup::menu(&resp).close_behavior(egui::PopupCloseBehavior::CloseOnClickOutside).show(|ui| loop_settings(app, ui, f, loop_record));
     if shown.is_none() {

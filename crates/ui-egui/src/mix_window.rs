@@ -125,11 +125,13 @@ fn split(app: &mut SoundApp, ui: &mut Ui, visual: &dyn Fn(&mut SoundApp, &mut Ui
     });
     let t = Tokens::current();
     let active = resp.hovered() || resp.dragged();
-    ui.painter().rect_filled(divider, 0.0, if active { t.group_border } else { t.toolbar_bg });
-    let c = divider.center();
-    for dx in [-12.0, 0.0, 12.0] {
-        ui.painter().circle_filled(pos2(c.x + dx, c.y), 1.6, if active { t.text } else { t.text_dim });
+    // A bar between hairlines with a grip in the middle; it lights up while hovered or dragged.
+    ui.painter().rect_filled(divider, 0.0, if active { t.button } else { t.toolbar_bg });
+    for y in [divider.min.y + 0.5, divider.max.y - 0.5] {
+        ui.painter().line_segment([pos2(divider.min.x, y), pos2(divider.max.x, y)], Stroke::new(1.0, t.border));
     }
+    let grip = Rect::from_center_size(divider.center(), vec2(36.0, 4.0));
+    ui.painter().rect_filled(grip, 2.0, if active { t.focus } else { t.text_dim });
     pane(app, ui, console_rect, console, "split-console");
     ui.advance_cursor_after_rect(full);
 }
@@ -194,16 +196,65 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
     let Some(track) = app.engine.session().track(id).cloned() else { return };
     let narrow = app.ui.narrow_mix;
     let w = strip_width(narrow);
-    let h = ui.available_height().max(560.0);
+    // Every strip is at least as tall as the tallest strip needed last frame (its sections plus a
+    // usable fader), so the console scrolls instead of squeezing a fader under its buttons.
+    let need_key = egui::Id::new("console_strip_min_height");
+    let pass = ui.ctx().cumulative_pass_nr();
+    // (pass, tallest needed so far this pass, tallest needed last pass)
+    let (seen, cur, prev) = ui.ctx().data(|d| d.get_temp::<(u64, f32, f32)>(need_key)).unwrap_or((pass, 0.0, 560.0));
+    let (cur, prev) = if seen == pass { (cur, prev) } else { (0.0, cur.max(1.0)) };
+    ui.ctx().data_mut(|d| d.insert_temp(need_key, (pass, cur, prev)));
+    let need = prev;
+    let h = ui.available_height().max(560.0).max(need);
     let (r, _) = ui.allocate_exact_size(vec2(w, h), Sense::hover());
     let selected = app.engine.session().edit.selected_tracks.contains(&id);
     ui.painter().rect_filled(r, 0.0, if selected { t.strip_selected } else { t.strip_bg });
-    let mut y = r.min.y + 4.0;
     let inner_w = w - 8.0;
     let x0 = r.min.x + 4.0;
     let views = app.ui.mix_views.clone();
     let has = |v: &str| views.iter().any(|x| x == v);
     let all = has("all");
+    // Top to bottom (docs/STYLE_GUIDE.md): identity → processing → sends and routing →
+    // pan/width → fader and meter → channel actions. Every strip uses the same rows so sections
+    // line up across the console.
+    // 1. Identity: colour bar, name (click selects, double-click renames), kind and state tags.
+    if app.ui.mix_views.iter().any(|v| v == "color") {
+        ui.painter().rect_filled(Rect::from_min_size(r.min, vec2(w, 4.0)), 0.0, rgb(track.color));
+    }
+    let nr = Rect::from_min_size(pos2(x0, r.min.y + 7.0), vec2(inner_w, 20.0));
+    ui.painter().rect(
+        nr,
+        CornerRadius::same(crate::theme::metric::RADIUS),
+        if selected { t.name_field_sel } else { t.name_field },
+        Stroke::new(if selected { 2.0 } else { 1.0 }, if selected { t.selection_stroke } else { t.border }),
+        StrokeKind::Inside,
+    );
+    ui.painter().with_clip_rect(nr.shrink(2.0)).text(nr.center(), Align2::CENTER_CENTER, &track.name, bold(12.0), t.text_dark);
+    let nresp = ui
+        .interact(nr, ui.id().with(("strip_name", id.0)), Sense::click())
+        .on_hover_text(format!("{} — click selects, double-click renames", track.name));
+    nresp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected, format!("{} strip name", track.name)));
+    if nresp.clicked() {
+        let _ = app.run("edit.select", json!({"tracks": [id.0]}));
+    }
+    if nresp.double_clicked() {
+        app.dialogs.open_rename_track(id, &track.name);
+    }
+    let kind = match track.kind {
+        TrackKind::Audio => "audio",
+        TrackKind::Aux => "aux",
+        TrackKind::Master => "master",
+        TrackKind::Midi => "midi",
+        TrackKind::Instrument => "inst",
+        TrackKind::Vca => "vca",
+        TrackKind::Folder => "folder",
+        TrackKind::Video => "video",
+    };
+    let faulted = strip_fault(&track);
+    let tags_r = Rect::from_min_size(pos2(x0, nr.max.y + 2.0), vec2(inner_w, 14.0));
+    strip_tags(ui, tags_r, kind, &track, faulted.as_deref(), narrow);
+    let mut y = tags_r.max.y + 5.0;
+    // 2. Processing.
     // Preamp, instrument and object rows keep their height on every strip so sections line up;
     // their controls only appear on tracks with an input.
     let has_input = matches!(track.kind, TrackKind::Audio | TrackKind::Instrument | TrackKind::Midi);
@@ -254,12 +305,7 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
         }
         y = sec.max.y + 4.0;
     }
-    for (key, title, off, is_send) in [
-        ("inserts_ae", "INSERTS A-E", 0usize, false),
-        ("inserts_fj", "INSERTS F-J", 5, false),
-        ("sends_ae", "SENDS A-E", 0, true),
-        ("sends_fj", "SENDS F-J", 5, true),
-    ] {
+    for (key, title, off, is_send) in [("inserts_ae", "INSERTS A-E", 0usize, false), ("inserts_fj", "INSERTS F-J", 5, false)] {
         if !(all || has(key)) {
             continue;
         }
@@ -285,8 +331,7 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
             TrackKind::Audio | TrackKind::Instrument | TrackKind::Midi => vec![soundcraft_model::SlotKind::Tape],
             _ => Vec::new(),
         };
-        let width_row = track.channels() == 2 && track.kind != TrackKind::Master;
-        let n = rows.len() + usize::from(width_row);
+        let n = rows.len();
         if n > 0 {
             let sec = Rect::from_min_size(pos2(x0, y), vec2(inner_w, 16.0 + n as f32 * 17.0));
             ui.painter().rect_filled(sec, 2.0, t.strip_section);
@@ -295,20 +340,6 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
                 let sr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + k as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
                 let io = snap.and_then(|m| m.tracks.get(&id)).and_then(|m| m.slots.get(kind.instance_index() - 1000).copied());
                 dedicated_slot(app, ui, &track, *kind, sr, io);
-            }
-            if width_row {
-                let wr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + rows.len() as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
-                let mut c = ui.new_child(egui::UiBuilder::new().max_rect(wr));
-                let mut w = track.mixer.width * 100.0;
-                let resp = c
-                    .add_sized(wr.size(), egui::DragValue::new(&mut w).range(0.0..=200.0).speed(1.0).prefix("W ").suffix("%").max_decimals(0))
-                    .on_hover_text("Stereo Width (100% = exact pass-through). Same control as the Visual view's node handles.");
-                if resp.changed() {
-                    let _ = app.engine.execute_merged("mix.width", &json!({"tracks": [id.0], "width": w / 100.0}), &format!("width:{}", id.0));
-                }
-                if resp.drag_stopped() || resp.lost_focus() {
-                    app.engine.end_merge();
-                }
             }
             y = sec.max.y + 4.0;
         }
@@ -329,6 +360,24 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
         let mut child = ui.new_child(egui::UiBuilder::new().max_rect(sec));
         if child.add(egui::TextEdit::multiline(&mut c).desired_width(inner_w).desired_rows(2).hint_text("comments").font(regular(10.0))).changed() {
             let _ = app.engine.execute_merged("track.comments", &json!({"track": id.0, "comments": c}), &format!("comments:{}", id.0));
+        }
+        y = sec.max.y + 4.0;
+    }
+    // 3. Sends and routing.
+    for (key, title, off, is_send) in [("sends_ae", "SENDS A-E", 0usize, true), ("sends_fj", "SENDS F-J", 5, true)] {
+        if !(all || has(key)) {
+            continue;
+        }
+        let sec = Rect::from_min_size(pos2(x0, y), vec2(inner_w, 16.0 + 5.0 * 17.0));
+        ui.painter().rect_filled(sec, 2.0, t.strip_section);
+        section_label(ui, sec, title);
+        for k in 0..5 {
+            let sr = Rect::from_min_size(pos2(x0 + 2.0, sec.min.y + 15.0 + k as f32 * 17.0), vec2(inner_w - 4.0, 15.0));
+            if is_send {
+                send_slot(app, ui, &track, off + k, sr);
+            } else {
+                insert_slot(app, ui, &track, off + k, sr);
+            }
         }
         y = sec.max.y + 4.0;
     }
@@ -384,6 +433,7 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
     let mut c = ui.new_child(egui::UiBuilder::new().max_rect(gr));
     let _ = selector_box(&mut c, gr.width(), gr.height(), &gname, t.text_dim);
     y += 22.0;
+    // 4. Pan and width.
     // Pan: a surround panner when the output is multichannel, else the stereo knobs.
     let out_fmt = output_format(app, &track);
     let surround_out =
@@ -428,37 +478,31 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
         }
         y += ks + 20.0;
     }
-    // Rec / Input / Solo / Mute.
-    let bw = (inner_w - 6.0) / 2.0;
-    let mut row = ui.new_child(
-        egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(inner_w, 20.0))).layout(egui::Layout::left_to_right(egui::Align::Min)),
-    );
-    row.spacing_mut().item_spacing.x = 6.0;
-    if track.kind.has_playlist() {
-        if text_toggle(&mut row, vec2(bw, 18.0), "I", track.mixer.input_monitor, t.input, "Input monitoring").clicked() {
-            let _ = app.run("mix.input_monitor", json!({"track": id.0}));
+    if track.channels() == 2 && track.kind != TrackKind::Master {
+        let wr = Rect::from_min_size(pos2(x0 + 6.0, y), vec2(inner_w - 12.0, 16.0));
+        let mut c = ui.new_child(egui::UiBuilder::new().max_rect(wr));
+        let mut w = track.mixer.width * 100.0;
+        let resp = c
+            .add_sized(wr.size(), egui::DragValue::new(&mut w).range(0.0..=200.0).speed(1.0).prefix("W ").suffix("%").max_decimals(0))
+            .on_hover_text("Stereo Width (100% = exact pass-through). Same control as the Visual view's node handles.");
+        if resp.changed() {
+            let _ = app.engine.execute_merged("mix.width", &json!({"tracks": [id.0], "width": w / 100.0}), &format!("width:{}", id.0));
         }
-        if rec_toggle(&mut row, vec2(bw, 18.0), track.mixer.record_arm, "Record enable").clicked() {
-            let _ = app.run("mix.record_arm", json!({"track": id.0}));
+        if resp.drag_stopped() || resp.lost_focus() {
+            app.engine.end_merge();
         }
+        y += 22.0;
     }
-    y += 22.0;
-    let mut row = ui.new_child(
-        egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(inner_w, 20.0))).layout(egui::Layout::left_to_right(egui::Align::Min)),
-    );
-    row.spacing_mut().item_spacing.x = 6.0;
-    if track.kind != TrackKind::Master {
-        if text_toggle(&mut row, vec2(bw, 18.0), "S", track.mixer.solo, t.solo, "Solo").clicked() {
-            let _ = app.run("mix.solo", json!({"track": id.0}));
+    // 5. Fader and meter, with the volume readout under the fader.
+    let actions_h = 50.0;
+    let readout_h = 22.0;
+    let required = (y - r.min.y) + 140.0 + readout_h + actions_h;
+    ui.ctx().data_mut(|d| {
+        if let Some((p, cur, prev)) = d.get_temp::<(u64, f32, f32)>(need_key) {
+            d.insert_temp(need_key, (p, cur.max(required), prev));
         }
-        if text_toggle(&mut row, vec2(bw, 18.0), "M", track.mixer.mute, t.mute, "Mute").clicked() {
-            let _ = app.run("mix.mute", json!({"track": id.0}));
-        }
-    }
-    y += 26.0;
-    // Fader + meter.
-    let bottom_h = 64.0;
-    let fh = (r.max.y - bottom_h - y).max(120.0);
+    });
+    let fh = (r.max.y - actions_h - readout_h - y).max(120.0);
     let wide_meter = (if track.kind == TrackKind::Master { app.engine.session().main_format() } else { track.format }).channels() > 2;
     let fr = Rect::from_min_size(pos2(x0, y), vec2(inner_w * if wide_meter { 0.45 } else { 0.6 }, fh));
     if let Some(db) = fader(ui, fr, track.mixer.volume_db, ui.id().with(("fader", id.0))) {
@@ -486,41 +530,104 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
     if md.gr > 0.1 {
         ui.painter().text(pos2(mr.center().x, mr.min.y - 3.0), Align2::CENTER_BOTTOM, format!("-{:.0}", md.gr), regular(8.0), t.meter_yellow);
     }
-    // Volume readout and name.
-    let vr = Rect::from_min_size(pos2(x0 + 4.0, r.max.y - bottom_h + 4.0), vec2(inner_w - 8.0, 15.0));
-    ui.painter().rect_filled(vr, 1.0, t.counter_bg);
-    ui.painter().text(vr.center(), Align2::CENTER_CENTER, db_text(track.mixer.volume_db), regular(11.0), t.counter_text);
-    let kind = match track.kind {
-        TrackKind::Audio => "audio",
-        TrackKind::Aux => "aux",
-        TrackKind::Master => "master",
-        TrackKind::Midi => "midi",
-        TrackKind::Instrument => "inst",
-        TrackKind::Vca => "vca",
-        TrackKind::Folder => "folder",
-        TrackKind::Video => "video",
-    };
-    ui.painter().text(pos2(vr.center().x, vr.max.y + 9.0), Align2::CENTER_CENTER, kind, regular(9.5), t.text_dim);
-    let nr = Rect::from_min_size(pos2(x0, r.max.y - 26.0), vec2(inner_w, 18.0));
-    ui.painter().rect(
-        nr,
-        CornerRadius::same(2),
-        if selected { t.name_field_sel } else { t.name_field },
-        Stroke::new(1.0, Color32::BLACK),
-        StrokeKind::Inside,
+    let vr = Rect::from_min_size(pos2(x0 + 4.0, fr.max.y + 4.0), vec2(inner_w - 8.0, 16.0));
+    ui.painter().rect_filled(vr, 2.0, t.counter_bg);
+    ui.painter().text(vr.center(), Align2::CENTER_CENTER, db_text(track.mixer.volume_db), crate::theme::mono(11.0), t.counter_text);
+    // 6. Channel actions: input monitor / record, solo / mute.
+    let mut y = r.max.y - actions_h;
+    let bw = (inner_w - 6.0) / 2.0;
+    let mut row = ui.new_child(
+        egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(inner_w, 20.0))).layout(egui::Layout::left_to_right(egui::Align::Min)),
     );
-    ui.painter().with_clip_rect(nr).text(nr.center(), Align2::CENTER_CENTER, &track.name, bold(12.0), t.text_dark);
-    let nresp = ui.interact(nr, ui.id().with(("strip_name", id.0)), Sense::click());
-    if nresp.clicked() {
-        let _ = app.run("edit.select", json!({"tracks": [id.0]}));
+    row.spacing_mut().item_spacing.x = 6.0;
+    if track.kind.has_playlist() {
+        if text_toggle(&mut row, vec2(bw, 18.0), "I", track.mixer.input_monitor, t.input, "Input monitoring").clicked() {
+            let _ = app.run("mix.input_monitor", json!({"track": id.0}));
+        }
+        if rec_toggle(&mut row, vec2(bw, 18.0), track.mixer.record_arm, "Record enable").clicked() {
+            let _ = app.run("mix.record_arm", json!({"track": id.0}));
+        }
     }
-    if nresp.double_clicked() {
-        app.dialogs.open_rename_track(id, &track.name);
+    y += 22.0;
+    let mut row = ui.new_child(
+        egui::UiBuilder::new().max_rect(Rect::from_min_size(pos2(x0, y), vec2(inner_w, 20.0))).layout(egui::Layout::left_to_right(egui::Align::Min)),
+    );
+    row.spacing_mut().item_spacing.x = 6.0;
+    if track.kind != TrackKind::Master {
+        if text_toggle(&mut row, vec2(bw, 18.0), "S", track.mixer.solo, t.solo, "Solo").clicked() {
+            let _ = app.run("mix.solo", json!({"track": id.0}));
+        }
+        if text_toggle(&mut row, vec2(bw, 18.0), "M", track.mixer.mute, t.mute, "Mute").clicked() {
+            let _ = app.run("mix.mute", json!({"track": id.0}));
+        }
     }
-    if app.ui.mix_views.iter().any(|v| v == "color") {
-        ui.painter().rect_filled(Rect::from_min_size(pos2(r.min.x, r.max.y - 5.0), vec2(w, 5.0)), 0.0, rgb(track.color));
+    // Selected strips: an outline as well as the lighter surface (not colour alone).
+    if selected {
+        ui.painter().rect_stroke(r.shrink(0.5), 0.0, Stroke::new(1.0, t.selection_stroke), StrokeKind::Inside);
     }
     ui.painter().line_segment([pos2(r.max.x, r.min.y), pos2(r.max.x, r.max.y)], Stroke::new(1.0, t.border));
+}
+
+/// Why a strip is faulted, if it is: a sandboxed plugin that crashed or hung, or an insert whose
+/// plugin is missing (it passes audio through).
+fn strip_fault(track: &Track) -> Option<String> {
+    let inserts: Vec<&soundcraft_model::Insert> = track.mixer.inserts.iter().flatten().collect();
+    if let Some(i) = inserts.iter().find(|i| soundcraft_mix::is_missing_plugin(&i.plugin)) {
+        return Some(format!("missing plugin {} (passes audio through)", i.plugin));
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let faults = soundcraft_mix::sandbox::faults();
+        if let Some(f) = faults.iter().find(|f| inserts.iter().any(|i| i.plugin.ends_with(&f.plugin) || f.plugin.ends_with(&i.plugin))) {
+            return Some(format!("{} faulted ({:?})", f.plugin, f.fault));
+        }
+    }
+    None
+}
+
+/// The row under the strip name: the track kind, then a text tag for each active state, so
+/// record, input, solo, mute and fault read without colour.
+fn strip_tags(ui: &mut Ui, r: Rect, kind: &str, track: &Track, fault: Option<&str>, narrow: bool) {
+    let t = Tokens::current();
+    let mut tags: Vec<(&str, Color32, String)> = Vec::new();
+    if fault.is_some() {
+        tags.push(("FAULT", t.error, fault.unwrap_or_default().to_string()));
+    }
+    if track.mixer.record_arm {
+        tags.push((if narrow { "R" } else { "REC" }, t.rec, "Record-enabled".into()));
+    }
+    if track.mixer.input_monitor {
+        tags.push((if narrow { "I" } else { "IN" }, t.input, "Input monitoring".into()));
+    }
+    if track.mixer.solo {
+        tags.push((if narrow { "S" } else { "SOLO" }, t.solo, "Soloed".into()));
+    }
+    if track.mixer.mute {
+        tags.push((if narrow { "M" } else { "MUTE" }, t.mute, "Muted".into()));
+    }
+    let painter = ui.painter().with_clip_rect(r);
+    let mut x = r.min.x;
+    if tags.is_empty() || !narrow {
+        let g = painter.layout_no_wrap(kind.to_string(), regular(10.0), t.text_dim);
+        let gw = g.size().x;
+        painter.galley(pos2(x, r.center().y - g.size().y / 2.0), g, t.text_dim);
+        x += gw + 4.0;
+    }
+    let mut tips = Vec::new();
+    for (label, col, tip) in tags {
+        let g = painter.layout_no_wrap(label.to_string(), bold(9.0), t.text_dark);
+        let tr = Rect::from_min_size(pos2(x, r.min.y + 1.0), vec2(g.size().x + 6.0, r.height() - 2.0));
+        if tr.max.x > r.max.x + 0.5 {
+            break;
+        }
+        painter.rect_filled(tr, 2.0, col);
+        painter.galley(pos2(tr.min.x + 3.0, tr.center().y - g.size().y / 2.0), g, t.text_dark);
+        x = tr.max.x + 3.0;
+        tips.push(tip);
+    }
+    if !tips.is_empty() {
+        ui.interact(r, ui.id().with(("strip_tags", track.id.0)), Sense::hover()).on_hover_text(tips.join(" · "));
+    }
 }
 
 /// An instrument track's INSTRUMENT row: click opens a hosted instrument's plugin window,
@@ -658,16 +765,47 @@ fn insert_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, slot: usize, r: R
         Stroke::new(1.0, t.slot_border),
         StrokeKind::Inside,
     );
-    let label = ins.as_ref().and_then(|i| plugin_info(&i.plugin)).map_or("", |p| p.short_name);
-    if label.is_empty() {
-        ui.painter().circle_filled(pos2(r.min.x + 6.0, r.center().y), 1.5, t.text_dim);
-    } else {
-        ui.painter().with_clip_rect(r).text(r.center(), Align2::CENTER_CENTER, label, regular(10.5), t.text);
+    // Name: the catalogue's short name, else the hosted plugin's own id (never a blank slot for
+    // a plugin that is there). Bypass and missing read as text and shape, not colour alone.
+    let label = ins.as_ref().map(|i| {
+        plugin_info(&i.plugin).map_or_else(|| i.plugin.rsplit(['.', ':', '/']).next().unwrap_or(&i.plugin).to_string(), |p| p.short_name.to_string())
+    });
+    match (&ins, label) {
+        (Some(i), Some(label)) => {
+            let missing = soundcraft_mix::is_missing_plugin(&i.plugin);
+            let (text, col) = if missing {
+                (format!("! {label}"), t.error)
+            } else if i.bypass {
+                (format!("byp {label}"), t.text_dim)
+            } else {
+                (label, t.text)
+            };
+            if i.bypass || missing {
+                ui.painter().rect_filled(Rect::from_min_size(r.min, vec2(3.0, r.height())), 1.0, if missing { t.error } else { t.warning });
+            }
+            ui.painter().with_clip_rect(r.shrink(1.0)).text(r.center(), Align2::CENTER_CENTER, text, regular(10.5), col);
+        }
+        _ => {
+            ui.painter().circle_filled(pos2(r.min.x + 6.0, r.center().y), 1.5, t.text_dim);
+        }
     }
     if resp.clicked() && ins.is_some() && !app.ui.plugin_windows.contains(&(id, slot)) {
         app.ui.plugin_windows.push((id, slot));
     }
-    let menu_resp = if ins.is_none() { resp.clone() } else { resp.clone().on_hover_text("Click: open plugin · right-click: change") };
+    let menu_resp = match &ins {
+        None => resp.clone().on_hover_text("Empty insert — click to choose a plugin"),
+        Some(i) => resp.clone().on_hover_text(format!(
+            "{}{}\nClick: open plugin · right-click: change",
+            i.plugin,
+            if soundcraft_mix::is_missing_plugin(&i.plugin) {
+                " — MISSING (passes audio through)"
+            } else if i.bypass {
+                " — bypassed"
+            } else {
+                ""
+            }
+        )),
+    };
     let popup = if ins.is_none() { egui::Popup::menu(&menu_resp) } else { egui::Popup::context_menu(&menu_resp) };
     popup.show(|ui| plugin_menu(app, ui, id, slot, ins.is_some()));
 }

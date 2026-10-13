@@ -96,46 +96,59 @@ fn visible_nodes(app: &SoundApp) -> Vec<Track> {
 
 /// Header shared by Console/Visual/Split: view switch, snapshots and bus actions.
 pub fn header(app: &mut SoundApp, ui: &mut Ui) {
-    ui.horizontal(|ui| {
-        let cur = MixView::of(app);
-        for (v, label) in [(MixView::Console, "Console"), (MixView::Visual, "Visual"), (MixView::Split, "Split")] {
-            if ui.selectable_label(cur == v, label).clicked() && cur != v {
-                let _ = app.run("mix.view", json!({"view": v.code()}));
-            }
-        }
-        ui.separator();
-        ui.label("Snapshot");
-        for k in ["A", "B", "C"] {
-            let has = app.engine.session().mix_snapshots.contains_key(k);
-            let resp = ui.button(if has { k.to_string() } else { format!("{k}·") }).on_hover_text(format!(
-                "Click: recall {k} (stopped). Shift+click: save {k}.\nScope: {}\nExcluded: {}",
-                "gain, pan, width, mute, solo, visibility", "plugins, slots, routing, trims, automation"
-            ));
-            if resp.clicked() {
-                let save = ui.input(|i| i.modifiers.shift) || !has;
-                let id = if save { "snapshot.save" } else { "snapshot.recall" };
-                if let Err(e) = app.run(id, json!({"slot": k})) {
-                    app.ui.status = e;
+    let t = crate::theme::Tokens::current();
+    egui::Frame::NONE.inner_margin(egui::Margin::symmetric(4, 3)).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.spacing_mut().item_spacing.x = crate::theme::metric::GAP;
+            let cur = MixView::of(app);
+            // View tabs: one segmented group; the active view is filled.
+            crate::theme::group_frame().show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 2.0;
+                    for (v, label) in [(MixView::Console, "Console"), (MixView::Visual, "Visual"), (MixView::Split, "Split")] {
+                        if crate::control_bar::chip(ui, None, label, label, cur == v, t.accent, true).clicked() && cur != v {
+                            let _ = app.run("mix.view", json!({"view": v.code()}));
+                        }
+                    }
+                });
+            });
+            ui.label(egui::RichText::new("Snapshots").font(crate::theme::regular(crate::theme::size::SMALL)).color(t.text_dim));
+            for k in ["A", "B", "C"] {
+                let has = app.engine.session().mix_snapshots.contains_key(k);
+                // Stored slots are solid; empty slots are drawn dim and say so (clicking one stores).
+                let text = if has { k.to_string() } else { format!("{k}·") };
+                let resp = crate::control_bar::chip(ui, None, &text, &text, has, t.button_hi, true).on_hover_text(format!(
+                    "{}Click: recall {k} (stopped). Shift+click: save {k}.\nScope: {}\nExcluded: {}",
+                    if has { "" } else { "Empty — a click stores the current mix here.\n" },
+                    "gain, pan, width, mute, solo, visibility",
+                    "plugins, slots, routing, trims, automation"
+                ));
+                if resp.clicked() {
+                    let save = ui.input(|i| i.modifiers.shift) || !has;
+                    let id = if save { "snapshot.save" } else { "snapshot.recall" };
+                    if let Err(e) = app.run(id, json!({"slot": k})) {
+                        app.ui.status = e;
+                    }
                 }
             }
-        }
-        ui.separator();
-        if ui.button("Create Bus from Selection").clicked() {
-            match app.run("bus.create_from_selection", json!({"name": "Bus"})) {
-                Ok(_) => app.ui.status = "Bus created from the selected channels".into(),
-                Err(e) => app.ui.status = e,
-            }
-        }
-        if ui.button("Create FX Return").clicked() {
-            match app.run("bus.create_fx_return", json!({"name": "FX Return"})) {
-                Ok(_) => app.ui.status = "FX return created; raise the sends to hear it".into(),
-                Err(e) => app.ui.status = e,
-            }
-        }
-        if cur != MixView::Console {
             ui.separator();
-            ui.add(egui::TextEdit::singleline(&mut app.ui.visual_filter).hint_text("Filter channels").desired_width(120.0));
-        }
+            if ui.button("Create Bus from Selection").on_hover_text("Route the selected channels to a new bus (one undo step)").clicked() {
+                match app.run("bus.create_from_selection", json!({"name": "Bus"})) {
+                    Ok(_) => app.ui.status = "Bus created from the selected channels".into(),
+                    Err(e) => app.ui.status = e,
+                }
+            }
+            if ui.button("Create FX Return").on_hover_text("A new aux return fed by sends from the selected channels (one undo step)").clicked() {
+                match app.run("bus.create_fx_return", json!({"name": "FX Return"})) {
+                    Ok(_) => app.ui.status = "FX return created; raise the sends to hear it".into(),
+                    Err(e) => app.ui.status = e,
+                }
+            }
+            if cur != MixView::Console {
+                ui.separator();
+                ui.add(egui::TextEdit::singleline(&mut app.ui.visual_filter).hint_text("Filter channels").desired_width(120.0));
+            }
+        })
     });
 }
 

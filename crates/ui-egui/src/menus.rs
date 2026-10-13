@@ -271,10 +271,24 @@ pub fn menu_bar(app: &mut SoundApp, ui: &mut egui::Ui) {
                     });
                 }
                 let title = format!("{}{}", app.engine.session().name, if app.engine.is_dirty() { " *" } else { "" });
+                // Compact windows: the menus keep their room. The session title shortens first;
+                // if the layout switcher still does not fit, it moves into the control bar
+                // (crate::layouts::switcher_overflows) instead of covering the last menus.
+                let room = ui.available_width() - 8.0;
+                let overflow = room < crate::layouts::SWITCHER_WIDTH;
+                ui.ctx().data_mut(|d| d.insert_temp(egui::Id::new(crate::layouts::OVERFLOW_KEY), overflow));
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.label(egui::RichText::new(title).color(t.text_dim));
-                    ui.add_space(6.0);
-                    crate::layouts::switcher(app, ui);
+                    let title_room = if overflow { room } else { room - crate::layouts::SWITCHER_WIDTH - 10.0 };
+                    if title_room > 40.0 {
+                        ui.scope(|ui| {
+                            ui.set_max_width(title_room);
+                            ui.add(egui::Label::new(egui::RichText::new(&title).color(t.text_dim)).truncate()).on_hover_text(title.as_str());
+                        });
+                    }
+                    if !overflow {
+                        ui.add_space(6.0);
+                        crate::layouts::switcher(app, ui);
+                    }
                 });
             });
         },
