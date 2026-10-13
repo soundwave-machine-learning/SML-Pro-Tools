@@ -1,0 +1,21 @@
+## Hotfix Pass 01 command check: 2026-10-13T01:57:23Z, SoundCraft CLI 0.5.0, Linux (P), headless, demo session, source 1d71089
+event.tempo: {"bpm":120.0,"tick":0}
+event.tempo: {"bpm":90.0,"tick":15360}
+event.meter: {"meter":"6/8"}
+edit.select: {"clips":[],"selection":{"end":14400,"start":9600},"tracks":[3]}
+loop.info: {"enabled":false,"loop_record":false,"range":{"end":14400,"length":4800,"start":9600},"source":"selection"}
+loop.set: {"end":96000,"length":48000,"start":48000}
+loop.set: {"end":72000,"length":24000,"start":48000}
+loop.info: {"enabled":false,"loop_record":false,"range":{"end":72000,"length":24000,"start":48000},"source":"stored"}
+loop.to_selection: {"end":14400,"length":4800,"start":9600}
+loop.select: {"end":14400,"start":9600}
+loop.set: {"end":288000,"length":144000,"start":144000}
+options.loop_playback: {"value":true}
+loop.info: {"enabled":true,"loop_record":false,"range":{"end":288000,"length":144000,"start":144000},"source":"stored"}
+loop.clear: {"cleared":true}
+loop.info: {"enabled":true,"loop_record":false,"range":{"end":14400,"length":4800,"start":9600},"source":"selection"}
+edit.undo: {"undone":true}
+loop.info: {"enabled":true,"loop_record":false,"range":{"end":288000,"length":144000,"start":144000},"source":"stored"}
+{"audio_files_written":5,"path":"<scratch>/hf.scraft"}
+## reopen the saved session
+loop.info: {"enabled":true,"loop_record":false,"range":{"end":288000,"length":144000,"start":144000},"source":"stored"}

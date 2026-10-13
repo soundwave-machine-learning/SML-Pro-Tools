@@ -3,6 +3,28 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
+## 2026-10-13 — revision 2026-10-13.2 — Hotfix Pass 01, source `1d71089`
+
+**Changed**
+- [USER_GUIDE.md](USER_GUIDE.md): new §3.5 (control bar: BPM, time signature, Click, Count Off,
+  Loop, Audio Setup and the device summary) and §6.7 (loop playback and the loop range, `loop.*`);
+  §4.1–4.3 rewritten for the Audio Setup window (drafts with Apply/Cancel, remembered choices, a
+  missing saved device, the selected track's input, the latency ledger); §4.5 monitoring choice;
+  §5.3 the + Add Track button and the New Tracks layout; §6.1 the input selector lists the
+  device's channels and links to Audio Setup; §6.5 Loop Record uses the selection; §13.1 the Split
+  divider; walkthrough A step 1; capability table; K10 partly fixed.
+- [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md): tempo, time signature, loop and
+  Split commands in the cookbook, the control bar for screen-access operators, device recovery
+  through Audio Setup. [grok/GROK_BOT_INSTRUCTIONS.md](grok/GROK_BOT_INSTRUCTIONS.md) to match.
+- Generated references regenerated (`loop.*`, `window.audio_setup`, `ui.mix_split`).
+- Report: [hotfix_pass_01/HOTFIX_REPORT.md](hotfix_pass_01/HOTFIX_REPORT.md).
+
+**Verified by:** source review against `1d71089`; UI tests `mix_split.rs`, `add_track.rs`,
+`control_bar.rs`; headless CLI command check
+(`docs/hotfix_pass_01/evidence/hotfix-commands.log`); offscreen renders; `cargo xtask docs-check`.
+**Not verified:** any of it on Windows, with the owner's microphone/interface, or on the installed
+copy (the installation could not be reached from the build container).
+
 ## 2026-10-13 — revision 2026-10-13.1 — source `018793f` (program code identical to build `b641b5a`)
 
 **Changed**

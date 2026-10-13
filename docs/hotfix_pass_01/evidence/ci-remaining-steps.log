@@ -1,0 +1,6 @@
+## remaining gate steps after adding the ATTRIBUTION.md row — 2026-10-13T02:07:28Z; fmt, clippy and test passed in ci-attempt1-assets.log on the same code
+cargo xtask assets: exit 0 — assets: ok
+cargo xtask layers: exit 0 — layers: ok
+cargo xtask docs-check: exit 0 — docs: ok (14 documents, 4 generated files, version 0.5.0)
+cargo xtask wasm: exit 0 —     Finished `dev` profile [optimized + debuginfo] target(s) in 0.29s
+cargo fmt --check: exit 0

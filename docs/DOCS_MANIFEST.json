@@ -2,15 +2,17 @@
   "schema": "sml-docs-manifest-1",
   "product": "SML Studio (SoundCraft engine)",
   "product_version": "0.5.0",
-  "docs_revision": "2026-10-13.1",
+  "docs_revision": "2026-10-13.2",
   "updated": "2026-10-13",
   "verification": {
-    "source_sha": "018793f7c2f3d601800b7ddbcd38b45c2c30a255",
+    "source_sha": "1d710899b03880ee75c6d0f42eac45c6ff2e1023",
+    "previous_source_sha": "018793f7c2f3d601800b7ddbcd38b45c2c30a255",
     "date": "2026-10-13",
-    "method": "source review of every chapter against the code and tests at source_sha (four cited audits: recording/device/recovery, editing/Nudge/shortcuts, mixer/plugins/mastering, remote/assistant/UI/external control), generated reference from the registry, headless CLI walkthroughs B/C/E on synthetic audio (docs/evidence/documentation/walkthrough-commands.log)",
+    "method": "source review + portable tests: Hotfix Pass 01 review at this commit of every chapter docs-check flagged (3, 4, 5, 6, 7, 8, 13, 21; 7, 8 and 21 changed only by additions that do not alter their text); UI tests crates/ui-egui/tests/{mix_split,add_track,control_bar}.rs; headless CLI command check docs/hotfix_pass_01/evidence/hotfix-commands.log; offscreen renders docs/hotfix_pass_01/evidence/*.png. Earlier review at 018793f7c2f3d601800b7ddbcd38b45c2c30a255: source review of every chapter against the code and tests at source_sha (four cited audits: recording/device/recovery, editing/Nudge/shortcuts, mixer/plugins/mastering, remote/assistant/UI/external control), generated reference from the registry, headless CLI walkthroughs B/C/E on synthetic audio (docs/evidence/documentation/walkthrough-commands.log)",
     "environment": "P: Linux x86_64 build container; no display, audio device, Windows host, phone, microphone, third-party plugin or listener",
     "observed": [],
     "pending": [
+      "Windows: Hotfix Pass 01 controls (control bar, Audio Setup with the owner's microphone/interface, Loop lane, Split divider, + Add Track) on the installed candidate; remembered device after a restart",
       "Windows: identify the installed build (USER_GUIDE.md §3.4) and walk through §4, §6, §17.3, §21 on it",
       "recording, input monitoring and buffer sizes on the owner's interface",
       "VST3 editor windows and third-party plugins (including sidechain) on Windows",
@@ -23,7 +25,7 @@
   },
   "installed_build": {
     "status": "unverified",
-    "note": "The documentation session had no access to the owner's Windows computer. The last package delivered was the portable zip from b641b5a (known_builds[0]). Identify the installed copy by hashing soundcraft.exe (USER_GUIDE.md §3.4)."
+    "note": "The documentation session had no access to the owner's Windows computer. The last package delivered was the portable zip from b641b5a (known_builds[0]). Identify the installed copy by hashing soundcraft.exe (USER_GUIDE.md §3.4). Hotfix Pass 01 (2026-10-13): a new candidate was built from the hotfix commits and delivered with an update script; its installation on the owner's computer could not be performed or verified from the build container."
   },
   "known_builds": [
     {
@@ -86,17 +88,17 @@
   ],
   "non_command_identifiers": [],
   "chapters": [
-    {"chapter": "3 First launch, settings, versions and Safe Open", "commands": ["window.about", "help.limits"], "sources": ["apps/soundcraft/src/main.rs", "apps/soundcraft/src/config.rs", "apps/soundcraft/src/logging.rs"]},
-    {"chapter": "4 Audio devices, sample rate, buffer and monitoring", "commands": ["window.playback_engine", "options.delay_compensation", "mix.monitor_mode", "mix.input_monitor", "mix.tracking_deactivate", "mix.tracking_restore", "monitor.*"], "sources": ["crates/playback/src", "crates/ui-egui/src/windows.rs", "crates/ui-egui/src/panels.rs"]},
-    {"chapter": "5 Sessions and project setup", "commands": ["session.new", "session.save", "session.save_as", "session.save_copy", "session.save_template", "setup.session", "track.new", "file.import_audio"], "sources": ["crates/engine/src/cmd/file.rs", "crates/engine/src/io.rs", "crates/ui-egui/src/dialogs.rs"]},
-    {"chapter": "6 Recording", "commands": ["transport.record", "mix.record_arm", "track.input", "options.pre_post_roll", "options.pre_roll", "options.post_roll", "options.countoff", "setup.click_countoff", "options.loop_record"], "sources": ["crates/ui-egui/src/lib.rs", "crates/playback/src/capture.rs", "crates/playback/src/record.rs", "crates/engine/src/io.rs"]},
+    {"chapter": "3 First launch, settings, versions and Safe Open", "commands": ["window.about", "help.limits", "window.audio_setup", "event.tempo", "event.meter", "options.click", "options.countoff", "options.loop_playback"], "sources": ["apps/soundcraft/src/main.rs", "apps/soundcraft/src/config.rs", "apps/soundcraft/src/logging.rs", "crates/ui-egui/src/control_bar.rs"]},
+    {"chapter": "4 Audio devices, sample rate, buffer and monitoring", "commands": ["window.audio_setup", "window.playback_engine", "options.delay_compensation", "mix.monitor_mode", "mix.input_monitor", "mix.tracking_deactivate", "mix.tracking_restore", "monitor.*"], "sources": ["crates/playback/src", "crates/ui-egui/src/windows.rs", "crates/ui-egui/src/panels.rs", "crates/ui-egui/src/control_bar.rs", "crates/ui-egui/src/lib.rs"]},
+    {"chapter": "5 Sessions and project setup", "commands": ["session.new", "session.save", "session.save_as", "session.save_copy", "session.save_template", "setup.session", "track.new", "file.import_audio"], "sources": ["crates/engine/src/cmd/file.rs", "crates/engine/src/io.rs", "crates/ui-egui/src/dialogs.rs", "crates/ui-egui/src/panels.rs"]},
+    {"chapter": "6 Recording", "commands": ["transport.record", "mix.record_arm", "track.input", "options.pre_post_roll", "options.pre_roll", "options.post_roll", "options.countoff", "setup.click_countoff", "options.loop_record", "loop.set", "loop.to_selection", "loop.clear", "loop.select", "loop.info", "options.loop_playback"], "sources": ["crates/ui-egui/src/lib.rs", "crates/playback/src/capture.rs", "crates/playback/src/record.rs", "crates/engine/src/io.rs", "crates/engine/src/cmd/loop_range.rs", "crates/ui-egui/src/control_bar.rs", "crates/ui-egui/src/edit_window.rs", "crates/ui-egui/src/mix_window.rs"]},
     {"chapter": "7 Takes, playlists and comping", "commands": ["track.playlist_*", "clip.rating"], "sources": ["crates/engine/src/cmd/track.rs", "crates/ui-egui/src/edit_window.rs"]},
     {"chapter": "8 Audio editing tools and edit modes", "commands": ["edit.mode", "edit.tool", "edit.split_at", "edit.erase_clips", "edit.mute_clips", "audition.*", "edit.alt_tool", "edit.tool_link"], "sources": ["crates/engine/src/cmd/tools.rs", "crates/engine/src/cmd/edit.rs", "crates/engine/src/cmd/audition.rs", "crates/ui-egui/src/edit_window.rs", "crates/ui-egui/src/toolbar.rs"]},
     {"chapter": "9 Clip gain, fades and strip silence", "commands": ["clip.gain*", "edit.fades_create", "edit.fades_delete", "edit.strip_silence", "edit.clear_clip_gain"], "sources": ["crates/engine/src/cmd/clip.rs", "crates/engine/src/cmd/edit.rs", "crates/dsp/src/offline.rs"]},
     {"chapter": "10 Bend (warp anchors)", "commands": ["clip.warp_*", "clip.remove_warp"], "sources": ["crates/engine/src/warp.rs", "crates/engine/src/cmd/bend.rs", "crates/model/src/clip.rs"]},
     {"chapter": "11 Clip groups, edit groups and stereo editing", "commands": ["clip.group", "clip.ungroup", "clip.regroup", "track.group"], "sources": ["crates/engine/src/cmd/clip.rs", "crates/engine/src/cmd/track.rs"]},
     {"chapter": "12 Nudge", "commands": ["nudge.*"], "sources": ["crates/engine/src/cmd/nudge.rs", "crates/ui-egui/src/nudge_keys.rs", "crates/ui-egui/src/toolbar.rs", "crates/model/src/nudge.rs"]},
-    {"chapter": "13 Mixer views: Console, Visual and Split", "commands": ["mix.view", "mix.volume", "mix.trim", "mix.pan", "mix.width", "mix.mute", "mix.solo", "mix.profile", "mix.graph_migrate"], "sources": ["crates/ui-egui/src/mix_window.rs", "crates/ui-egui/src/visual_mixer.rs", "crates/engine/src/cmd/mix.rs", "crates/engine/src/cmd/snapshot.rs"]},
+    {"chapter": "13 Mixer views: Console, Visual and Split", "commands": ["mix.view", "mix.volume", "mix.trim", "mix.pan", "mix.width", "mix.mute", "mix.solo", "mix.profile", "mix.graph_migrate", "ui.mix_split"], "sources": ["crates/ui-egui/src/mix_window.rs", "crates/ui-egui/src/visual_mixer.rs", "crates/engine/src/cmd/mix.rs", "crates/engine/src/cmd/snapshot.rs"]},
     {"chapter": "14 Automation and mixer snapshots", "commands": ["mix.automation_mode", "automation.*", "snapshot.*"], "sources": ["crates/model/src/automation.rs", "crates/engine/src/cmd/paint.rs", "crates/engine/src/cmd/snapshot.rs"]},
     {"chapter": "15 Buses, sends, FX returns and sidechains", "commands": ["bus.*", "mix.send", "mix.send_level", "mix.insert_sidechain"], "sources": ["crates/engine/src/cmd/bus.rs", "crates/vst3-host/src", "crates/clap-host/src"]},
     {"chapter": "16 Signal order, Summing and Tape slots", "commands": ["mix.slot", "mix.slot_state", "mix.signal_flow", "mix.audition_bypass"], "sources": ["crates/mix/src/lib.rs", "crates/engine/src/cmd/slots.rs"]},

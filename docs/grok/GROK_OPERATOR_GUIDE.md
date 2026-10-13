@@ -178,6 +178,22 @@ Each line below ran successfully on build 0.5.0 (headless CLI, synthetic audio; 
 | Reference without adding it to the mix | `file.import_audio {"path":"…\\ref.wav"}` → `track.delete {"track":"ref"}` → `mastering.reference {"source":<id from session.inspect sources>}` → `mastering.level_match {}` |
 | Export with verification | `file.bounce_mix {"path":"…\\mix.wav","bit_depth":"24","tail":"auto","report":true}` (needs authorization if the file exists) |
 | Undo history / undo | `engine.history {}`, `edit.undo {}` |
+| Tempo / time signature (Hotfix 01 builds) | `event.tempo {"bpm":120,"at":0}` edits or adds the change at `at`; other changes stay. `event.meter {"numerator":6,"denominator":8,"at":0}` |
+| Loop range (Hotfix 01 builds) | `loop.info {}` first; `loop.set {"start":48000,"end":96000}` or `{"start":…,"length":…}` (positions may use the counter format, e.g. `"bars_beats:3\|1\|000"`); `loop.to_selection {}`, `loop.select {}`, `loop.clear {}`; `options.loop_playback {"value":true}` |
+| Mixer Split share (owner's preference, not the session) | `ui.mix_split {"fraction":0.6}`; `{}` resets — control channel only |
+
+The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
+`docs/hotfix_pass_01/evidence/hotfix-commands.log`; `ui.mix_split` in the UI tests). Before using
+them, confirm with `help.search` that the installed build has them: builds before Hotfix Pass 01
+(such as `b641b5a`) do not.
+
+**On screen (level B):** in Hotfix Pass 01 builds a control bar under the menu bar shows
+**⚙ Audio Setup**, the device summary, the **BPM** field, the time signature, **Click**,
+**Count Off**, **⟲ Loop** and **Loop: … ▾** in every layout (manual §3.5). The BPM field commits on
+Enter only; Escape cancels. The + at the right of the TRACKS header opens New Tracks.
+Audio Setup (`window.audio_setup`) is where the owner picks the microphone/interface; device
+choices are not commands and are the owner's to make. Values Audio Setup shows as "Unknown" or
+"Not measured" are unknown: do not estimate them.
 
 ## 6. Recovery
 
@@ -187,7 +203,7 @@ Each line below ran successfully on build 0.5.0 (headless CLI, synthetic audio; 
 | **Change applied to the wrong target** | `edit.undo` (once per step), confirm with `engine.history` and `session.inspect`, tell the owner exactly what was undone. Never "fix" it with compensating edits you did not preview. |
 | **Command failed** | Read the error text: commands are atomic, so a failure changed nothing. Do not retry blindly or loosen parameters to force it. Explain the reason and the options. |
 | **Command refused as stale / document changed** | Re-read the state and rebuild the plan. |
-| **Audio device disconnected** ("Playback stopped…", "Recording stopped: the input device is no longer available…") | Stop. Ask the owner to reconnect it; the take so far is kept. Re-select the device in Setup › Playback Engine (`window.playback_engine`) — a level C operator cannot pick a device by command. |
+| **Audio device disconnected** ("Playback stopped…", "Recording stopped: the input device is no longer available…") | Stop. Ask the owner to reconnect it; the take so far is kept. Re-select the device in Audio Setup (control bar **⚙ Audio Setup**, `window.audio_setup`, or Setup › Playback Engine) and press Apply — a level C operator cannot pick a device by command. If the remembered device is missing at launch, the status line names it; the owner reconnects it and presses Apply. |
 | **Plugin faulted or hung** | `engine.host_faults`; bypass the insert (`mix.insert_bypass`); ask before removing it. If the app is unstable: the owner restarts with `--safe` (plugins pass audio through, state kept), then the plugin can be re-inserted sandboxed (`sandbox:<id>`). |
 | **Recover Autosave… while recording** | Never: it can list the take being recorded and recovering it shortens that file (manual K21). Stop first. |
 | **App crashed or closed** | The control channel drops. Do not restart the app yourself unless the owner asked. After restart: Search › Recover Autosave… (manual §23.2); open the recovery point as unsaved, save under a new name. |

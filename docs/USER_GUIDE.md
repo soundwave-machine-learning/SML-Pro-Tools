@@ -1,7 +1,7 @@
 # SML Studio user manual
 
 Product: SML Studio (the SoundCraft engine), version 0.5.0. This is the one authoritative manual.
-Documented source: commit `018793f7c2f3d601800b7ddbcd38b45c2c30a255` (branch `fable/recording-core`), whose program code is identical to the packaged build `b641b5ad938d47a9387f611cf717f9933c7cdb19`.
+Documented source: branch `fable/recording-core` at Hotfix Pass 01 (code commit `1d71089`, on top of `018793f7c2f3d601800b7ddbcd38b45c2c30a255`). Hotfix Pass 01 adds the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1); builds made before it (such as `b641b5a`) do not have them — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
 Verification status, applicable builds and history: [DOCS_MANIFEST.json](DOCS_MANIFEST.json), [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md).
 Every command named here exists in this build; parameters and chords for all of them: [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md).
 
@@ -49,12 +49,14 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Area | Status in 0.5.0 | Notes |
 |---|---|---|
 | Recording to disk (dry, 32-bit float WAV), punch with selection, pre/post-roll, loop record, Count Off | Implemented; pending target check on your interface | §6 |
-| Device selection, buffer request, effective callback display (WASAPI on Windows) | Implemented; pending target check | ASIO: not in the standard build (§4.6) |
+| Audio Setup: output/input device, buffer request, delivered callback, monitoring, track input, latency ledger; choices remembered (WASAPI on Windows) | Implemented; headless-tested; pending target check | ASIO: not in the standard build (§4.6) |
+| Control bar in every layout: tempo, time signature, Click, Count Off, Loop, Audio Setup | Implemented (Hotfix 01); headless-tested; not yet seen on Windows | §3.5 |
+| Loop locators: stored loop range, Loop lane, loop settings | Implemented (Hotfix 01); headless-tested | §6.7 |
 | QuickPunch, TrackPunch, Destructive Record/Punch | Not available | Menu entries are disabled |
 | Playlists, promote-to-main comping, take rating | Implemented | §7 |
 | Eight audio tools, edit modes, clip gain, fades, strip silence, Bend | Implemented | §8–§10 |
 | Nudge panel and keypad Nudge | Implemented; keypad and Windows-key limits | §12 |
-| Console / Visual / Split mixer, width, snapshots A/B/C | Implemented | §13–§14 |
+| Console / Visual / Split mixer (Split divider remembered), width, snapshots A/B/C | Implemented | §13–§14 |
 | Volume automation writing (Write/Touch/Latch), automation drawing | Implemented | Only volume is written live (§14) |
 | Buses, FX returns, sends, Spill | Implemented | §15 |
 | Sidechain into a plugin from a bus | Implemented (CLAP first aux port, VST3 first aux bus); no UI | Command only (§15.5); pending target check with real plugins |
@@ -145,55 +147,108 @@ currently overwritten when saved preferences load (Known issue K9); Safe Open st
 **Result:** a matching hash means this manual applies exactly. A different hash means a different
 build: read its own `MANIFEST.json` and the changelog.
 
+### 3.5 The control bar
+
+**Purpose:** the controls you need in every layout — tempo, time signature, loop and the audio
+device — in one place that never scrolls away.
+
+**Where:** the row directly under the menu bar, in the Edit, Mix, Record and Master layouts. On
+narrow windows it wraps onto a second row instead of hiding controls.
+
+| Control | What it does | Command |
+|---|---|---|
+| **⚙ Audio Setup** | Opens or closes Audio Setup (§4.1). | `window.audio_setup` |
+| Device summary (grey text) | "<host> · <device> · <rate> kHz · <frames> fr = <ms> ms" from the open stream, "… requested (not running yet)" before the first callback, or "No audio output — open Audio Setup". Hover: the input device and "Driver latency: Unknown". Click: opens Audio Setup. | — |
+| **■ Stop / ▶ Play / ● Record** and the position | Only in the Mix and Master layouts (Edit and Record have the transport in their toolbar). | `transport.*` |
+| **BPM** field | The tempo in effect at the playhead (stopped: the selection start). Click, type a value from 5 to 1000 and press **Enter**: one undo step. **Escape** or clicking elsewhere cancels; typing never triggers shortcuts. Disabled while recording. | `event.tempo {bpm, at}` |
+| **MAP** badge | Shown when the session has more than one tempo change. The BPM field then edits only the change in effect at the playhead; the others are kept (the map is never flattened). | — |
+| Time signature (e.g. **4/4**) | Click: a popover with the numerator (1–64) and denominator (1–64); **Apply** changes the signature in effect at the playhead (one undo step), **Cancel** or clicking away changes nothing. | `event.meter` |
+| **Click**, **Count Off N** | Metronome and Count Off on/off (§6.4). | `options.click`, `options.countoff` |
+| **⟲ Loop** | Loop Playback on/off. Never starts the transport or recording. | `options.loop_playback` |
+| **Loop: … ▾** | The loop range ("not set", "selection", or start – end in the main counter format). Click for loop settings (§6.7). | `loop.*` |
+
+**Limits:** changing the tempo moves bar and beat positions; audio clips keep their sample
+positions and are never stretched. Tempo and time signature cannot change during a take.
+
 ## 4. Audio devices, sample rate, buffer and monitoring
 
-### 4.1 Choose the output device and buffer
+### 4.1 Audio Setup: output device and buffer
 
-**Purpose:** play through your interface at a known buffer size.
+**Purpose:** play through your interface at a known buffer size, and see what the driver actually
+delivers.
 
-**Before you start:** stop the transport.
+**Before you start:** stop the transport (devices change only while stopped).
+
+**Open it:** **⚙ Audio Setup** in the control bar (§3.5) or a click on its device summary;
+**Setup › Playback Engine...** or **Setup › Hardware...**; Search "Audio Setup"; or **Audio
+Setup…** in a channel strip's input menu (§6.1). The window "Audio Setup" opens below the control
+bar.
 
 **Steps:**
-1. **Setup › Playback Engine...** (also **Setup › Hardware...**). The window "Playback Engine" opens.
-2. Click **Scan output devices**. Pick the device in the combo ("default device" or
-   "<host>: <device>"; on Windows the host is WASAPI).
-3. Pick the buffer: "default buffer" or 32, 64, 128, 256, 512, 1024 frames.
-4. Click **Apply (stopped only)**.
+1. **Output device:** click **Scan** and pick "default device" or "<host>: <device>" (on Windows
+   the host is WASAPI). The line "open now: …" under it shows what is actually open.
+2. **Buffer size (requested):** "default buffer" or 32, 64, 128, 256, 512, 1024 frames (the
+   milliseconds at the session rate are shown).
+3. Click **Apply**. Until then the choice is a draft ("unapplied changes"); **Cancel** or closing
+   the window returns to what is applied.
 
-**Result:** "Audio device opened with the requested settings". The read-only rows show **Device
-rate**, **Session rate**, **Requested buffer**, **Reported buffer range**, **Effective callback**
-("N frames (x.xx ms)" once audio runs) and **Stream clock**. "Clock lock / driver latency" always
-reads "Unknown (not reported by this backend; not assumed zero)".
+**Result:** "Output opened with the requested settings". **Sample rate** shows the session rate
+and the device rate (and "converted" when they differ). **Buffer (delivered)** shows "N frames per
+callback (x.xx ms)" once audio runs — what the driver actually gives, which can differ from the
+request. Applied choices are remembered (in `ui.json`, §3.2) and reopened at the next launch.
 
 **If it fails:** "Device not changed: …" with the reason (device not found, rate not supported,
-buffer outside the driver's range, no 32-bit float format). The previous device stays open;
-another device is never substituted silently.
+buffer outside the driver's range, no 32-bit float format). The previous device stays open and
+nothing is remembered; another device is never substituted. If the remembered device is missing
+at launch, the status line says "The output saved in Audio Setup (<host>: <device>) could not be
+opened (…); the system default is in use. Reconnect it and press Apply in Audio Setup, or choose
+another device." Audio Setup then shows "the saved output is not open — Apply retries it".
 
-**Limits:** the choice is not saved; each launch starts on the system default output. **Reconnect
-audio device** reopens the *default* output, not the one you chose (Known issue K10).
-Pending target check: actual buffer sizes on your interface.
+**Limits:** Apply is disabled while playing or recording. Pending target check: actual buffer
+sizes on your interface.
 
-### 4.2 Choose the recording input
+### 4.2 Audio Setup: microphone / interface input and the track's input
 
-**Steps:** in the same window click **Scan input devices** and pick the interface in the input
-combo ("default input" or "<host>: <device>"). It opens immediately (stopped only) at the session
-rate, the chosen buffer and every input channel the device offers.
+**Steps:**
+1. **Input device (microphone / interface):** **Scan**, then pick "default input" or
+   "<host>: <device>". Click **Apply** (stopped only). The line "open now: …" shows the open input
+   with its channel count and rate, or "none (opened on the first record or arm)".
+2. **Selected track input:** with an audio track selected (or Audio Setup opened from its strip),
+   pick which input it records: "In 1" … "In N" for the open device's N channels (In 1–8 before the
+   input opens). A stereo track shows "In k (inputs k–k+1)"; choices the device does not have are
+   disabled. This is the same per-track setting as the strip's input selector (`track.input`,
+   undoable).
 
-**Result:** "Input device opened with the requested settings"; the **Input device** row shows
-"<name> (<n> ch @ <rate> Hz, …)".
+**Result:** "input opened with the requested settings". The input choice is remembered and used
+when you first record or arm; the microphone is **not** opened at launch.
 
-**If it fails:** "Input not changed: …" (for example "`X` has no 32-bit float input at 48000
-Hz"); the current input stays. If the app ever reported "No audio input: …", Record answers
-"Cannot record: no audio input device" until you pick an input here.
+**If it fails:** "input not changed: …" (for example "`X` has no 32-bit float input at 48000 Hz");
+the current input stays. If a track's input is not on the open device, Audio Setup says
+"In 5 is not available on the open input device (2 channel(s)): recording will refuse rather than
+use another input." If the app ever reported "No audio input: …", Record answers "Cannot record:
+no audio input device" until you pick an input here.
 
-**Limits:** not saved between launches. If the input runs at a different rate than the session,
-takes are resampled to the session rate and the status line says so; for bit-exact dry takes,
-make the session rate match the device (§5.1).
+**Meter:** an input meter appears only for an armed or input-monitored track and shows the real
+input ("input: no signal" when silent). No test signal is ever generated.
 
-### 4.3 Delay compensation
-The **Delay compensation** checkbox in Playback Engine (also **Options › Delay Compensation**,
+**Limits:** SML Studio cannot control your interface's preamp gain, phantom power, direct-monitor
+mix or headphone mix. If the input runs at a different rate than the session, takes are resampled
+to the session rate and the status line says so; for bit-exact dry takes, make the session rate
+match the device (§5.1).
+
+### 4.3 Delay compensation and the latency ledger
+**Advanced / Latency** (collapsed, at the bottom of Audio Setup) lists each term with its source:
+requested buffer, driver-reported buffer range ("Unknown (not reported)" when the driver does not
+say), delivered callback (observed), output buffering (calculated — "an estimate, not a
+measurement"), stream clock, input buffer requested, **Driver input/output latency: "Unknown (not
+reported by this backend; not assumed zero)"**, the plugin/host path (largest channel delay,
+including the one-block delay of sandboxed plugins) and **Measured round trip: "Not measured:
+this build has no loopback calibration"**. Nothing here is invented.
+
+The **Delay compensation** checkbox there (also **Options › Delay Compensation**,
 `options.delay_compensation`) aligns all channels to the slowest one, including plugin latency.
-Leave it on for mixing. §17.6 covers latency reporting.
+Leave it on for mixing. §17.6 covers latency reporting. **Reopen the system default output**
+recovers after a device was unplugged; it opens the default output, not your remembered choice.
 
 ### 4.4 Monitoring controls (speaker path)
 
@@ -206,6 +261,9 @@ Leave it on for mixing. §17.6 covers latency reporting.
   available** in this build.
 
 ### 4.5 Input monitoring and monitoring modes
+- **Monitoring** in Audio Setup: **Software (through SML Studio)** or **Hardware / direct
+  (interface)** (stopped only; `mix.monitor_mode` tracking / hardware). Use one or the other, not
+  both, or you hear the voice twice.
 - **Input monitoring** (`mix.input_monitor`, Shift+I; the "I" button in a track header; "Input
   monitor" in the Recording window) plays the track's live input through its channel. An armed
   track also monitors its input while stopped and while recording.
@@ -252,8 +310,13 @@ session without asking; save first.
   File › New is **not available** (only the blank and demo starting points).
 
 ### 5.3 Tracks
-- **Track › New...** (Ctrl+Shift+N): count, format (mono, stereo, surround) and kind (audio, aux,
-  master, MIDI, instrument, VCA, folder). Undoable.
+- **Track › New...** (Ctrl+Shift+N), or the **+** button at the right of the **TRACKS** header in
+  the Tracks and Groups list (every layout): the New Tracks dialog. First row: count, format (mono,
+  stereo, surround), kind (audio, aux, master, MIDI, instrument, VCA, folder) and timebase; second
+  row: **Name** (full width; long and non-English names are kept in full). **Create** or Enter
+  creates the batch as one undo step; **Cancel** or Escape changes nothing. Choosing Aux Input
+  while Mono switches the format to Stereo. **Master Fader** is disabled when the session already
+  has one. New tracks and buses never take over other tracks' routing.
 - **Track › Duplicate...**, **Track › Delete** (both undoable; media files are never deleted).
 - Import audio: **File › Import › Audio...** (Ctrl+Shift+I) or drop files on the window. WAV, AIFF,
   FLAC, MP3, OGG, AAC/M4A, ALAC and CAF can be imported.
@@ -273,8 +336,9 @@ session without asking; save first.
 2 channel(s). Change the track input or the input device." — the app never records a different
 input instead. A one-input device can feed a stereo track (same signal both sides).
 
-**Limits:** the selector always lists In 1–In 8 whatever the device has; an unset input shows as
-"In 1".
+**Limits:** the selector lists the open input device's channels (In 1–In 8 with "input device not
+open yet" before it opens); an unset input records In 1 and shows as "In 1". **Audio Setup…** at
+the bottom of the selector opens Audio Setup on that track (§4.2).
 
 ### 6.2 Record a take
 
@@ -324,6 +388,8 @@ matters. Without a selection, pre-roll audio stays in the take.
 ### 6.5 Loop recording
 
 **Steps:** turn on **Options › Loop Record** (Alt+L), make a selection, press Record; stop when done.
+Loop Record always uses the **edit selection**, not the loop range of §6.7: to record over the
+loop range, use **Select Loop Range** (loop settings or the Loop lane menu) first.
 
 **Result:** "Loop-recorded N take(s)". The first pass lands on the active playlist; each later pass
 goes to a new playlist named "<track>.NN", all at the loop start. A last pass shorter than one
@@ -341,6 +407,33 @@ eighth of the loop is dropped.
 | "Recorded … — input ran at X Hz, resampled to the session's Y Hz" | Rate mismatch (§4.2). |
 
 After a crash, use **Search › Recover Autosave…** → "Unfinished takes" (§23.2).
+
+### 6.7 Loop playback and the loop range
+
+**Purpose:** repeat a section while you rehearse, edit or mix, without disturbing your selection.
+
+**Controls:**
+- **⟲ Loop** in the control bar (or **Options › Loop Playback**, `options.loop_playback`) turns Loop
+  Playback on and off. It never starts the transport or recording.
+- **Loop: … ▾** opens loop settings: the Loop Playback checkbox; **Start** and **End** in the main
+  counter format with **Apply**; the **Length**; **Set Loop to Selection**; **Select Loop
+  Range**; **Clear**. Invalid input (end not after start) is refused with a message and changes
+  nothing; closing the popover discards what you typed.
+- The **Loop** lane in the Edit window rulers: drag on an empty part to draw a range, drag a
+  handle to move one end, drag the middle to move the whole range (snapped in Grid). **Escape**
+  during a drag cancels it. Right-click: Set Loop to Selection, Select Loop Range, Clear Loop
+  Range, turn Loop Playback on/off. "LOOP" (on) or "loop (off)" marks the range; with no stored
+  range and Loop Playback on, a dashed "loop = selection" shows what will loop.
+
+**Result:** with Loop Playback on, Play loops the stored loop range; with no stored range it loops
+the edit selection, as before. Each change to the range is one undo step and is saved with the
+session (sessions from earlier builds open with no loop range). Moving the range never changes the
+selection.
+
+**Commands:** `loop.set {start, end}` or `{start, length}`, `loop.to_selection`, `loop.clear`,
+`loop.select` (copies the range into the selection), `loop.info` (state, range and its source).
+
+**Limits:** the loop range cannot change during a take. Loop Record uses the selection (§6.5).
 
 ## 7. Takes, playlists and comping
 
@@ -575,6 +668,13 @@ window; **Window › Edit** returns. The Mix window header has **Console** (chan
 same header holds **Snapshot** A/B/C (§14.3), **Create Bus from Selection**, **Create FX Return**
 (§15) and, outside Console view, **Filter channels**. All views edit the same mixer; switching
 views never changes the sound.
+
+**Split view:** Visual on top, Console below, each in its own pane with its own scrolling (the
+Console's scrollbar stays visible). Drag the bar between them ("Mixer split divider", resize
+pointer) to share the height; each pane keeps a usable minimum and the share follows window
+resizes. Double-click the bar, or right-click › **Reset split**, for the default (45 % Visual). The
+share is a preference of this computer (`ui.json`), not part of the session; `ui.mix_split
+{fraction: 0.1..0.9}` sets it and `{}` resets it.
 
 ### 13.2 Channel controls
 | Control | Where | Command | Range / notes |
@@ -1113,9 +1213,9 @@ Values marked *starting point* are first settings to adjust by ear, not rules.
 
 **Before you start:** interface connected; microphone on input 1; session created and saved
 (§5.1–5.2) so takes land in its `Audio Files\` folder.
-1. **Device:** Setup › Playback Engine... → Scan output devices / Scan input devices → your
-   interface; buffer *starting point* 128 frames for tracking; Apply (stopped only). Read
-   **Effective callback** to see what the driver gave you (§4.1–4.2).
+1. **Device:** **⚙ Audio Setup** (control bar) → Output device and Input device: **Scan** → your
+   interface; buffer *starting point* 128 frames for tracking; **Apply** (stopped only). Read
+   **Buffer (delivered)** to see what the driver gave you (§4.1–4.2). The choice is remembered.
 2. **Track:** Track › New... → 1 mono audio track; rename it "Lead" (double-click its name).
    Input "In 1" (§6.1). Arm it (red button).
 3. **Monitoring:** either your interface's direct monitoring with monitoring mode **Hardware**, or
@@ -1310,7 +1410,7 @@ documented so that you and any operator can work around them. Workarounds in bra
 | K7 | Studio One-style N (snap) and Alt+X (split) report errors; clip rating chords Ctrl+Alt+0–5 do nothing; the Nudge help mentions remapping `nudge.apply`, which has no row in the Keyboard Shortcuts window. |
 | K8 | Punch recording with pre/post-roll can remove existing clips in the roll zones (code reading; not reproduced). [Duplicate the playlist first.] |
 | K9 | The "SAFE OPEN" and "previous run did not close properly" status messages are overwritten when preferences load. Safe Open itself works. |
-| K10 | Playback Engine: "Reconnect audio device" reopens the default output, not your choice; device/buffer/input choices are not remembered; no control sets a recording offset. |
+| K10 | Partly fixed in Hotfix 01: device, buffer and input choices are now remembered (§4.1). Remaining: **Reopen the system default output** (Audio Setup › Advanced) opens the default output, not your choice [Apply your device again]; no control sets a recording offset. |
 | K11 | Send pan and send mute automation can be drawn but is not played back. |
 | K12 | Clicking an empty snapshot slot stores the current mix into it. |
 | K13 | `file.bounce_mix` ignores its documented `source` parameter; the Bounce Mix dialog has no dither, rate, tail, report or overwrite controls (use the command). |

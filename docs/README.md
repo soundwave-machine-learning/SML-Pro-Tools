@@ -25,6 +25,7 @@ Documentation for SML Studio (the SoundCraft engine), version 0.5.0. Start with 
 | [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md) | Documentation history. |
 | [DOCS_MAINTENANCE.md](DOCS_MAINTENANCE.md) | The update procedure tied to code changes and packaging (`cargo xtask docs`, `cargo xtask docs-check`). |
 | [manual_archive/](manual_archive/) | Earlier manual editions exactly as compiled into released builds. |
+| [hotfix_pass_01/HOTFIX_REPORT.md](hotfix_pass_01/HOTFIX_REPORT.md) | Hotfix Pass 01 (Split divider, + Add Track, control bar with BPM/Loop/Audio Setup): what changed, tests, evidence, pending Windows checks. |
 
 Development and planning documents (specifications, sprint contracts and reports, parity
 assessments) are listed in the repository's `docs/DOCUMENT_INDEX.md` and `ROADMAP.md`.

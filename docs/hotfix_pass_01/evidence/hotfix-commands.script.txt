@@ -1,0 +1,18 @@
+# Hotfix Pass 01: tempo, time signature and loop commands on the demo session (headless)
+event.tempo {"bpm": 120, "at": 0}
+event.tempo {"bpm": 90, "at": 384000}
+event.meter {"numerator": 6, "denominator": 8, "at": 0}
+edit.select {"start": 9600, "end": 14400}
+loop.info {}
+loop.set {"start": 48000, "end": 96000}
+loop.set {"start": 48000, "length": 24000}
+loop.info {}
+loop.to_selection {}
+loop.select {}
+loop.set {"start": "bars_beats:3|1|000", "end": "bars_beats:5|1|000"}
+options.loop_playback {"value": true}
+loop.info {}
+loop.clear {}
+loop.info {}
+edit.undo {}
+loop.info {}
