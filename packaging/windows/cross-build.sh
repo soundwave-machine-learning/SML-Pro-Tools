@@ -112,6 +112,12 @@ with open(zpath + ".sha256", "w") as f:
     f.write(f"{sha(zpath)}  {name}.zip\n")
 with open(os.path.join(out, "MANIFEST.json"), "w") as f:
     json.dump(manifest, f, indent=2)
+# Media Foundation is loaded at run time (Windows N/KN editions may lack it): an executable that
+# imports it would not start there. Refuse such a build.
+for k, v in files.items():
+    bad = [i for i in v.get("imports", []) if i.lower() in ("mfplat.dll", "mfreadwrite.dll", "mf.dll")]
+    if bad:
+        raise SystemExit(f"{k} imports {bad}: Media Foundation must be loaded at run time (crates/mf-encode)")
 print(f"==> {zpath}\n    sha256 {sha(zpath)}")
 for k, v in files.items():
     if "imports" in v:

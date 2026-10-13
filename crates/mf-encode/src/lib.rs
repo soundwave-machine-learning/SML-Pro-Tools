@@ -92,9 +92,18 @@ fn list(v: &[u32]) -> String {
     v.iter().map(u32::to_string).collect::<Vec<_>>().join(", ")
 }
 
-/// Whether this build can encode (Windows only).
+/// Whether this computer can encode: Windows with Media Foundation present (Windows N/KN
+/// editions need the Media Feature Pack). Media Foundation is loaded at run time, never linked,
+/// so its absence never stops the app from starting.
 pub fn available() -> bool {
-    cfg!(windows)
+    #[cfg(windows)]
+    {
+        ffi::present()
+    }
+    #[cfg(not(windows))]
+    {
+        false
+    }
 }
 
 /// Encodes interleaved 16-bit `pcm` (`channels` × frames) to `path` (its extension must be the

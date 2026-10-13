@@ -283,7 +283,11 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                                     let f = codec.extension();
                                     let r = ui
                                         .add_enabled(soundcraft_mf_encode::available(), egui::Button::selectable(format == f, format!("{} ({})", f.to_uppercase(), codec.label())))
-                                        .on_disabled_hover_text("Uses the encoder built into Windows (Media Foundation): not available on this platform");
+                                        .on_disabled_hover_text(if cfg!(windows) {
+                                            "Uses the Windows Media Foundation encoder, which is not installed here (Windows N/KN editions: install the Media Feature Pack)"
+                                        } else {
+                                            "Uses the encoder built into Windows (Media Foundation): not available on this platform"
+                                        });
                                     if r.clicked() {
                                         *format = f.to_string();
                                         *bit_depth = codec.default_bitrate().to_string();
