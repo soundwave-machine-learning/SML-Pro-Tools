@@ -16,7 +16,8 @@ microphone or interface. **Nothing in this report was observed on Windows.**
 | Starting HEAD | `3cd6372151f502a5b20ba063c8c37e3879f1980e` (documentation commit on top of `018793f7…`, the last reported source; the delivered package `b641b5a` has identical program code to `018793f`). Working tree clean at start. |
 | HF01 + HF02 + HF04 | `6b0693b7ac8bbdbf9a800578c7139a456c4bba2c` |
 | HF03 + HF05 + HF06 | `1d710899b03880ee75c6d0f42eac45c6ff2e1023` |
-| Documentation, report, update script | the commit that adds this file (see `git log -- docs/hotfix_pass_01/HOTFIX_REPORT.md`) |
+| Documentation, report, update script | `6474f4a`, `053d448` (report bundled), and the commit recording the build below |
+| Candidate build source | `053d448fbff4d7cf8f1bdd3e305deded90590cb7` (clean tree) |
 | Installed build on the owner's computer | **not reachable from this session**; unidentified (manual §3.4 explains how to hash it) |
 
 ## Status per acceptance ID
@@ -153,8 +154,8 @@ No before/after **native** screenshots: the Windows machine was not accessible.
    installed. The candidate zip, its manifest, checksums and `Update-SMLStudioCandidate.ps1` are
    delivered for the owner to run (see *Build and delivery*).
 3. **Update script not run on Windows.** It was exercised with PowerShell 7.4.6 on Linux against
-   the real zip (see *Build and delivery*); Windows-specific parts (process check by path,
-   Windows PowerShell 5.1) are untested.
+   the real zip (see *Build and delivery*); Windows PowerShell 5.1 and Windows file locking are
+   untested — run it with `-WhatIf` first.
 4. Remaining from K10: **Reopen the system default output** (Advanced) still opens the default,
    not the remembered device; no recording-offset control.
 5. Not in scope / observed in renders, pre-existing: at 911 points wide the layout buttons overlap
@@ -181,4 +182,39 @@ after each group; `clip_menu.rs` was the only existing test affected by the new 
 
 ## Build and delivery
 
-_Filled in after the build._
+Built with the repository's script: `OUT=dist/hotfix01-windows bash packaging/windows/cross-build.sh`
+(GNU cross-build from Linux, `x86_64-pc-windows-gnu`, rustc 1.97.0, release, `--locked`; WASAPI;
+no ASIO, unsigned, no installer). It includes the documentation bundle (manual, references, Grok
+guide, this report; `docs_revision` 2026-10-13.2). Not executed on Windows.
+
+| Artifact | SHA-256 |
+|---|---|
+| `soundcraft-0.5.0-windows-x64-gnu-portable.zip` | `9189ff1636d3a2604a910a17952348a245df6bbdbc9a9c43dd45eb10ce38a789` |
+| `soundcraft.exe` (inside) | `192521f6211b3260bea1dc7a922810f3060758ea27183e7f3dd704dd94d6d3d4` |
+| `soundcraft-cli.exe` (inside) | `57d06c7d362092e4f5b91271be799d2770f9de0a752875814d1d6841e37669b7` |
+| `MANIFEST.json` (beside and inside the zip; source commit `053d448…`, `dirty: false`) | `c626274f84ffabe6f5f6b86b25462beec1b97acf4e486e9e0d43e8a3b7c9da04` (the copy beside the zip) |
+| `Update-SMLStudioCandidate.ps1` (`packaging/windows/`, delivered beside the zip) | `6b47db77e03c9788bb92aee4b6442b610d4c9f0e05ea75df9d26e83370ec0bde` |
+
+**Update script** (`packaging/windows/Update-SMLStudioCandidate.ps1`): checks the zip's SHA-256;
+records the old build; refuses while `soundcraft.exe`/`soundcraft-cli.exe` runs from the folder
+(never stops it); unpacks to a staging folder and checks every file against the zip's
+`MANIFEST.json`; renames the old folder to `<folder>.backup-<timestamp>` and moves the new build in
+(restoring the old one if anything fails); carries over anything in the old folder that did not
+come from a package (for example sessions saved there); copies `%APPDATA%\SoundCraft` top-level
+settings files into the backup without changing the originals; writes a log; `-Rollback` restores
+the backup. Test on Linux with PowerShell 7.4.6 (wrong checksum, app running, `-WhatIf`, update
+keeping a session folder and settings, rollback to the identical old binary):
+`evidence/update-script-test.log`.
+
+**Installation status: pending.** The owner's Windows computer is not reachable from this
+session; nothing was installed and no claim is made that the installed copy changed. The zip,
+its `.sha256`, `MANIFEST.json` and the update script were attached to the conversation.
+
+**Exact next action (owner, on Windows):**
+1. Put the zip, its `.sha256` and `Update-SMLStudioCandidate.ps1` in one folder. Save your
+   session and close SML Studio.
+2. In PowerShell in that folder:
+   `powershell -ExecutionPolicy Bypass -File .\Update-SMLStudioCandidate.ps1 -InstallDir "<the folder you run soundcraft.exe from>" -WhatIf`,
+   then the same without `-WhatIf`.
+3. Start SML Studio; `Get-FileHash .\soundcraft.exe` should print `192521f6…94d6d3d4`. Then the
+   native checks in *Gaps* item 1. To go back: the `-Rollback` line printed by the script.

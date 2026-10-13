@@ -1,0 +1,39 @@
+## Update-SMLStudioCandidate.ps1 test — 2026-10-13T02:12:40Z — PowerShell 7.4.6 on Linux (NOT Windows); old install = earlier portable zip (no MANIFEST.json) + a user session folder; package = dist zip from 053d448
+script sha256 6b47db77e03c9788bb92aee4b6442b610d4c9f0e05ea75df9d26e83370ec0bde
+
+### 1. wrong checksum
+refused: "Checksum mismatch for <zip> expected 0000 actual 9189ff16… Nothing was changed." (folders below unchanged)
+folders: SML Studio Update-SMLStudioCandidate.ps1 appdata soundcraft-0.5.0-windows-x64-gnu-portable.zip soundcraft-0.5.0-windows-x64-gnu-portable.zip.sha256 
+
+### 2. app running from the folder
+SML Studio is running from <test>/SML Studio (soundcraft (PID 19339)). Save your session, close SML Studio, then run this again. Nothing was changed.
+folders: SML Studio Update-SMLStudioCandidate.ps1 appdata soundcraft-0.5.0-windows-x64-gnu-portable.zip soundcraft-0.5.0-windows-x64-gnu-portable.zip.sha256 
+
+### 3. -WhatIf
+WhatIf: would unpack to <test>/SML Studio.staging-20261013-021245, verify, back up to <test>/SML Studio.backup-20261013-021245 and install into <test>/SML Studio.
+folders: SML Studio Update-SMLStudioCandidate.ps1 appdata soundcraft-0.5.0-windows-x64-gnu-portable.zip soundcraft-0.5.0-windows-x64-gnu-portable.zip.sha256 
+
+### 4. update
+Package OK: <test>/soundcraft-0.5.0-windows-x64-gnu-portable.zip
+  sha256 9189ff1636d3a2604a910a17952348a245df6bbdbc9a9c43dd45eb10ce38a789
+Current build: <test>/SML Studio/soundcraft.exe
+  sha256 851a8fbce57820713f75d55d984c4f87024566deb863fd16a5108bfdf0e8fd40
+  commit unknown (no MANIFEST.json)
+Unpacked and verified 5 files: version 0.5.0, commit 053d448fbff4d7cf8f1bdd3e305deded90590cb7
+SML Studio candidate update 20261013-021246
+install folder: <test>/SML Studio
+old build: soundcraft.exe sha256 851a8fbce57820713f75d55d984c4f87024566deb863fd16a5108bfdf0e8fd40, commit unknown (no MANIFEST.json) -> kept in <test>/SML Studio.backup-20261013-021246
+new build: version 0.5.0, commit 053d448fbff4d7cf8f1bdd3e305deded90590cb7, soundcraft.exe sha256 192521f6211b3260bea1dc7a922810f3060758ea27183e7f3dd704dd94d6d3d4
+package: <test>/soundcraft-0.5.0-windows-x64-gnu-portable.zip sha256 9189ff1636d3a2604a910a17952348a245df6bbdbc9a9c43dd45eb10ce38a789
+copied from the old folder: My Sessions
+settings: <test>/appdata/SoundCraft (top-level files) copied to <test>/SML Studio.backup-20261013-021246/settings-copy; the originals are unchanged
+rollback: .\Update-SMLStudioCandidate.ps1 -Rollback -InstallDir "<test>/SML Studio" -BackupDir "<test>/SML Studio.backup-20261013-021246"
+
+Done. Start SML Studio from <test>/SML Studio; SML Studio > About shows the version, and Get-FileHash .\soundcraft.exe should print 192521f6211b3260bea1dc7a922810f3060758ea27183e7f3dd704dd94d6d3d4.
+install folder: LICENSE-APACHE LICENSE-MIT MANIFEST.json My Sessions README.txt docs soundcraft-cli.exe soundcraft.exe 
+session kept: s
+settings unchanged: {"mix_split":0.3}
+
+### 5. rollback
+Restored <test>/SML Studio.backup-20261013-021246 to <test>/SML Studio. The build that was there is kept in <test>/SML Studio.replaced-20261013-021248.
+restored soundcraft.exe sha256 851a8fbce57820713f75d55d984c4f87024566deb863fd16a5108bfdf0e8fd40 (old build 851a8fbc…)

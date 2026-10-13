@@ -142,7 +142,9 @@ currently overwritten when saved preferences load (Known issue K9); Safe Open st
    delivered on 2026-10-12 (commit `b641b5a`) has
    `soundcraft.exe` SHA-256 `bb405c79a3a3c2d3d4a9bf9f0bb80e845901f80f794d891b30653f1d34878967` and
    `soundcraft-cli.exe` `7e8ca105f4a64e80bd531bb54c3951e0ed812ac8de2c247694352be99a67300b`.
-   The zip also contains `MANIFEST.json` naming its commit.
+   The zip also contains `MANIFEST.json` naming its commit. The Hotfix Pass 01 candidate (commit
+   `053d448`) has `soundcraft.exe` SHA-256
+   `192521f6211b3260bea1dc7a922810f3060758ea27183e7f3dd704dd94d6d3d4`.
 
 **Result:** a matching hash means this manual applies exactly. A different hash means a different
 build: read its own `MANIFEST.json` and the changelog.

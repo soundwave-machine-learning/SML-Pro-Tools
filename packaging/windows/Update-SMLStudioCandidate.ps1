@@ -59,7 +59,8 @@ $ErrorActionPreference = 'Stop'
 function Get-Sha256([string]$Path) { (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant() }
 
 function Assert-NotRunning([string]$Dir) {
-    $full = [System.IO.Path]::GetFullPath($Dir).TrimEnd('\') + '\'
+    $sep = [System.IO.Path]::DirectorySeparatorChar
+    $full = [System.IO.Path]::GetFullPath($Dir).TrimEnd($sep) + $sep
     $running = @(Get-Process -Name soundcraft, soundcraft-cli -ErrorAction SilentlyContinue | Where-Object {
             try { $_.Path -and $_.Path.StartsWith($full, [System.StringComparison]::OrdinalIgnoreCase) } catch { $false }
         })
@@ -171,13 +172,14 @@ if ($settings -and (Test-Path -LiteralPath $settings)) {
 }
 
 # 7. Record what happened.
+$extrasText = if ($extras.Count) { (@($extras | ForEach-Object { $_.Name })) -join ', ' } else { 'nothing' }
 $log = @(
     "SML Studio candidate update $stamp",
     "install folder: $InstallDir",
     "old build: soundcraft.exe sha256 $oldHash, commit $oldCommit -> kept in $backup",
     "new build: version $($nm.version), commit $($nm.source.commit), soundcraft.exe sha256 $newHash",
     "package: $ZipPath sha256 $zipHash",
-    "copied from the old folder: " + ($(if ($extras.Count) { ($extras | ForEach-Object Name) -join ', ' } else { 'nothing' })),
+    "copied from the old folder: $extrasText",
     "settings: $settingsCopy",
     "rollback: .\Update-SMLStudioCandidate.ps1 -Rollback -InstallDir `"$InstallDir`" -BackupDir `"$backup`""
 )

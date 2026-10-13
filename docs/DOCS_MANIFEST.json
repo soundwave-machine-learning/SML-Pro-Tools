@@ -30,6 +30,23 @@
   "known_builds": [
     {
       "version": "0.5.0",
+      "commit": "053d448fbff4d7cf8f1bdd3e305deded90590cb7",
+      "program_code_identical_to": "1d710899b03880ee75c6d0f42eac45c6ff2e1023",
+      "documentation": "this edition (Hotfix Pass 01; compiled-in manual = USER_GUIDE.md at 053d448)",
+      "artifacts": [
+        {
+          "name": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+          "sha256": "9189ff1636d3a2604a910a17952348a245df6bbdbc9a9c43dd45eb10ce38a789",
+          "files": {
+            "soundcraft.exe": "192521f6211b3260bea1dc7a922810f3060758ea27183e7f3dd704dd94d6d3d4",
+            "soundcraft-cli.exe": "57d06c7d362092e4f5b91271be799d2770f9de0a752875814d1d6841e37669b7"
+          },
+          "notes": "Hotfix Pass 01 candidate; unsigned GNU cross-build; not yet run on Windows; update with packaging/windows/Update-SMLStudioCandidate.ps1"
+        }
+      ]
+    },
+    {
+      "version": "0.5.0",
       "commit": "b641b5ad938d47a9387f611cf717f9933c7cdb19",
       "program_code_identical_to": "018793f7c2f3d601800b7ddbcd38b45c2c30a255",
       "documentation": "this edition (behaviour); the in-app assistant cites manual_archive/USER_GUIDE-0.5.0-b641b5a.md",
