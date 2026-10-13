@@ -112,6 +112,28 @@ pub fn header(app: &mut SoundApp, ui: &mut Ui) {
                     }
                 });
             });
+            // Strip density (Console and Split): one persisted UI preference, the same one as
+            // View › Narrow Mix (`window.narrow_mix`) and `ui.mix_density`.
+            if cur != MixView::Visual {
+                crate::theme::group_frame().show(ui, |ui| {
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing.x = 2.0;
+                        for (compact, label) in [(false, "Comfortable"), (true, "Compact")] {
+                            let on = app.ui.narrow_mix == compact;
+                            let r = crate::control_bar::chip(ui, None, label, &format!("{label} density"), on, t.accent, true).on_hover_text(
+                                if compact {
+                                    "Compact: narrower strips, short captions — more channels on screen"
+                                } else {
+                                    "Comfortable: wider strips with full captions and values"
+                                },
+                            );
+                            if r.clicked() && !on {
+                                let _ = app.run("ui.mix_density", json!({"density": if compact { "compact" } else { "comfortable" }}));
+                            }
+                        }
+                    });
+                });
+            }
             ui.label(egui::RichText::new("Snapshots").font(crate::theme::regular(crate::theme::size::SMALL)).color(t.text_dim));
             for k in ["A", "B", "C"] {
                 let has = app.engine.session().mix_snapshots.contains_key(k);
@@ -171,42 +193,39 @@ pub fn canvas(app: &mut SoundApp, ui: &mut Ui) {
     p.rect_stroke(r, 0.0, Stroke::new(1.0, t.strip_section), StrokeKind::Inside);
     let selected = app.engine.session().edit.selected_tracks.clone();
     let meters = app.meters.clone();
-    for tr in &nodes {
-        let x = pan_to_x(node_x(tr), r);
+    // Geometry comes only from gain, pan and width; nothing drawn here writes them back.
+    let rects: Vec<Rect> = nodes.iter().map(|tr| node_rect(tr, r)).collect();
+    // Z-order: unselected first, selected last — the topmost node gets the pointer, so a channel
+    // chosen from a cluster list is the one a drag at that spot moves.
+    let mut order: Vec<usize> = (0..nodes.len()).collect();
+    order.sort_by_key(|&i| selected.contains(&nodes[i].id));
+    let mut hovered: Option<usize> = None;
+    for &i in &order {
+        let tr = &nodes[i];
+        let node = rects[i];
+        let x = node.center().x;
         let db = tr.mixer.volume_db;
-        let y = db_to_y(db, r);
         let width = tr.mixer.width;
         let stereo = tr.channels() == 2;
-        let half = if stereo { 10.0 + 18.0 * width } else { 8.0 };
-        let node = Rect::from_center_size(pos2(x, y), vec2(half * 2.0, 18.0));
         let id = ui.id().with(("vm-node", tr.id.0));
         let resp = ui.interact(node, id, Sense::click_and_drag());
+        resp.widget_info(|| egui::WidgetInfo::selected(egui::WidgetType::Button, true, selected.contains(&tr.id), format!("{} node", tr.name)));
         let is_sel = selected.contains(&tr.id);
         let c = Color32::from_rgb(tr.color[0], tr.color[1], tr.color[2]);
         let level = meters.get(&tr.id).map_or(0.0, |m| m.level[0].max(m.level[1]));
         p.rect_filled(node, 6.0, c.gamma_multiply(0.35 + 0.65 * level.clamp(0.0, 1.0)));
-        p.rect_stroke(node, 6.0, Stroke::new(if is_sel { 2.5 } else { 1.0 }, if is_sel { Color32::WHITE } else { c }), StrokeKind::Outside);
-        let mut label = tr.name.clone();
-        if tr.mixer.mute {
-            label.push_str(" [M]");
-        }
-        if tr.mixer.solo {
-            label.push_str(" [S]");
-        }
-        p.text(pos2(x, node.min.y - 8.0), Align2::CENTER_BOTTOM, &label, regular(11.0), t.counter_text);
+        p.rect_stroke(node, 6.0, Stroke::new(if is_sel { 2.5 } else { 1.0 }, if is_sel { t.selection_stroke } else { c }), StrokeKind::Outside);
         // Off-canvas values: edge indicator, value untouched.
         if !(BOTTOM_DB..=TOP_DB).contains(&db) {
-            p.text(pos2(x, node.center().y), Align2::CENTER_CENTER, if db > TOP_DB { "▲" } else { "▼" }, bold(11.0), Color32::YELLOW);
+            p.text(pos2(x, node.center().y), Align2::CENTER_CENTER, if db > TOP_DB { "▲" } else { "▼" }, bold(11.0), t.warning);
         }
-        let readout = format!(
-            "{} | {} | W {:.0}%",
-            if db <= -144.0 { "-inf dB".to_string() } else { format!("{db:.1} dB") },
-            pan_label(node_x(tr)),
-            width * 100.0
-        );
         let resp = resp.on_hover_text(format!(
-            "{readout}\nDrag: pan (x) / fader (y). Shift: lock axis. Alt: fine. Double-click: reset to 0 dB / centre. Esc: cancel drag."
+            "{}\nDrag: pan (x) / fader (y). Shift: lock axis. Alt: fine. Double-click: reset to 0 dB / centre. Esc: cancel drag.",
+            node_readout(tr)
         ));
+        if resp.hovered() {
+            hovered = Some(i);
+        }
         if resp.clicked() {
             // Ctrl/Cmd+click toggles the node in a multi-selection; plain click selects it alone.
             let toggle = ui.input(|i| i.modifiers.command);
@@ -228,7 +247,89 @@ pub fn canvas(app: &mut SoundApp, ui: &mut Ui) {
         if stereo {
             width_handles(app, ui, tr, node);
         }
+        let _ = width;
     }
+    // Labels: one per channel, or one chip per cluster of coincident nodes, placed where they
+    // overlap neither another label nor a node.
+    let clusters = clusters(&rects);
+    let mut items: Vec<(Vec<usize>, String)> = clusters
+        .iter()
+        .map(|members| {
+            let mut m = members.clone();
+            m.sort_by_key(|&i| (!selected.contains(&nodes[i].id), nodes[i].name.to_lowercase()));
+            let text = if m.len() == 1 { label_text(&nodes[m[0]]) } else { format!("{} +{}", nodes[m[0]].name, m.len() - 1) };
+            (m, text)
+        })
+        .collect();
+    // Priority: clusters holding a selected channel, then bigger clusters, then top to bottom.
+    items.sort_by(|a, b| {
+        let sa = a.0.iter().any(|&i| selected.contains(&nodes[i].id));
+        let sb = b.0.iter().any(|&i| selected.contains(&nodes[i].id));
+        sb.cmp(&sa).then(b.0.len().cmp(&a.0.len())).then(rects[a.0[0]].min.y.total_cmp(&rects[b.0[0]].min.y))
+    });
+    let font = regular(11.0);
+    let sizes: Vec<egui::Vec2> =
+        items.iter().map(|(_, text)| p.layout_no_wrap(text.clone(), font.clone(), t.text).size() + vec2(10.0, 4.0)).collect();
+    let anchors: Vec<Rect> = items.iter().map(|(m, _)| m.iter().fold(rects[m[0]], |acc, &i| acc.union(rects[i]))).collect();
+    // Labels keep clear of the status band at the top of the canvas.
+    let label_bounds = Rect::from_min_max(pos2(outer.min.x + 2.0, outer.min.y + 22.0), outer.max - vec2(2.0, 2.0));
+    let placed = place_labels(&anchors, &sizes, &rects, label_bounds);
+    for (k, (members, text)) in items.iter().enumerate() {
+        let Some(lr) = placed[k] else { continue };
+        let anchor = anchors[k];
+        let sel = members.iter().any(|&i| selected.contains(&nodes[i].id));
+        // A leader line when the label had to move away from its node.
+        if lr.min.y > anchor.max.y + 8.0 || lr.max.y < anchor.min.y - 8.0 || lr.min.x > anchor.max.x + 16.0 || lr.max.x < anchor.min.x - 16.0 {
+            let to = pos2(anchor.center().x, if lr.center().y < anchor.center().y { anchor.min.y } else { anchor.max.y });
+            p.line_segment([lr.center(), to], Stroke::new(1.0, t.text_dim));
+        }
+        p.rect(lr, 3.0, t.panel_bg2, Stroke::new(1.0, if sel { t.selection_stroke } else { t.border_light }), StrokeKind::Inside);
+        p.text(lr.center(), Align2::CENTER_CENTER, text, font.clone(), if sel { t.text } else { t.text_dim.lerp_to_gamma(t.text, 0.5) });
+        let lid = ui.id().with(("vm-label", nodes[members[0]].id.0));
+        let names: Vec<&str> = members.iter().map(|&i| nodes[i].name.as_str()).collect();
+        let lresp = ui.interact(lr, lid, Sense::click());
+        if members.len() == 1 {
+            let i = members[0];
+            lresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Button, true, format!("{} label", nodes[i].name)));
+            let lresp = lresp.on_hover_text(format!("{}\nClick to select.", node_readout(&nodes[i])));
+            if lresp.hovered() {
+                hovered = Some(i);
+            }
+            if lresp.clicked() {
+                let _ = app.run("edit.select", json!({"tracks": [nodes[i].id.0]}));
+            }
+        } else {
+            // Coincident channels: the chip lists every one with its values; choosing one
+            // selects it (and puts it on top, so a drag here moves it).
+            let summary = format!("{} channels at this position: {}", members.len(), names.join(", "));
+            lresp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ComboBox, true, summary.clone()));
+            let lresp = lresp
+                .on_hover_text(format!("{}\nClick to choose one.", members.iter().map(|&i| node_readout(&nodes[i])).collect::<Vec<_>>().join("\n")));
+            egui::Popup::menu(&lresp).show(|ui| {
+                ui.label(egui::RichText::new("CHANNELS AT THIS POSITION").font(bold(crate::theme::size::CAPTION)).color(t.section_label));
+                for &i in members {
+                    let tr = &nodes[i];
+                    let is_sel = selected.contains(&tr.id);
+                    if ui.selectable_label(is_sel, node_readout(tr)).on_hover_text("Select this channel").clicked() {
+                        let _ = app.run("edit.select", json!({"tracks": [tr.id.0]}));
+                        ui.close();
+                    }
+                }
+            });
+        }
+    }
+    // Readable details: a card beside the hovered node, and the selection on the bottom line.
+    if let Some(i) = hovered {
+        detail_card(&p, &nodes[i], rects[i], outer, ui.ctx().pixels_per_point());
+    }
+    let sel_nodes: Vec<&Track> = nodes.iter().filter(|n| selected.contains(&n.id)).collect();
+    let line = match sel_nodes.as_slice() {
+        [] => "Click a node or label to select · labels of channels at the same position are grouped — click one to choose".to_string(),
+        [one] => format!("Selected: {}", node_readout(one)),
+        many => format!("{} selected: {}", many.len(), many.iter().map(|n| n.name.as_str()).collect::<Vec<_>>().join(", ")),
+    };
+    // In the free band above the stage (the L/R and 0 dB marks stay clear).
+    p.text(pos2(outer.min.x + 8.0, outer.min.y + 5.0), Align2::LEFT_TOP, line, regular(11.0), t.text_dim);
     if ui.input(|i| i.key_pressed(egui::Key::Escape))
         && let Some(g) = app.ui.visual_gesture.take()
     {
@@ -241,6 +342,148 @@ pub fn canvas(app: &mut SoundApp, ui: &mut Ui) {
             }
         }
         app.engine.end_merge();
+    }
+}
+
+/// A node's rectangle on the canvas: x from pan, y from gain, width from Stereo Width.
+pub fn node_rect(tr: &Track, r: Rect) -> Rect {
+    let x = pan_to_x(node_x(tr), r);
+    let y = db_to_y(tr.mixer.volume_db, r);
+    let half = if tr.channels() == 2 { 10.0 + 18.0 * tr.mixer.width } else { 8.0 };
+    Rect::from_center_size(pos2(x, y), vec2(half * 2.0, 18.0))
+}
+
+/// "−3.0 dB · C · W 100% · MUTE" — the values a node stands for.
+pub fn node_readout(tr: &Track) -> String {
+    let db = tr.mixer.volume_db;
+    let mut s = format!("{} — {} · {}", tr.name, if db <= -144.0 { "-inf dB".to_string() } else { format!("{db:.1} dB") }, pan_label(node_x(tr)));
+    if tr.channels() == 2 {
+        s.push_str(&format!(" · W {:.0}%", tr.mixer.width * 100.0));
+    }
+    if tr.mixer.mute {
+        s.push_str(" · MUTE");
+    }
+    if tr.mixer.solo {
+        s.push_str(" · SOLO");
+    }
+    s
+}
+
+fn label_text(tr: &Track) -> String {
+    let mut label = tr.name.clone();
+    if tr.mixer.mute {
+        label.push_str(" [M]");
+    }
+    if tr.mixer.solo {
+        label.push_str(" [S]");
+    }
+    label
+}
+
+/// Groups of nodes whose rectangles overlap (directly or through a chain): they share one label.
+pub fn clusters(rects: &[Rect]) -> Vec<Vec<usize>> {
+    let mut group: Vec<usize> = (0..rects.len()).collect();
+    fn find(g: &mut [usize], i: usize) -> usize {
+        let mut i = i;
+        while g[i] != i {
+            g[i] = g[g[i]];
+            i = g[i];
+        }
+        i
+    }
+    for a in 0..rects.len() {
+        for b in a + 1..rects.len() {
+            if rects[a].intersects(rects[b]) {
+                let (ra, rb) = (find(&mut group, a), find(&mut group, b));
+                group[ra] = rb;
+            }
+        }
+    }
+    let mut out: Vec<Vec<usize>> = Vec::new();
+    let mut root_of: Vec<(usize, usize)> = Vec::new();
+    for i in 0..rects.len() {
+        let root = find(&mut group, i);
+        match root_of.iter().find(|(r, _)| *r == root) {
+            Some((_, k)) => out[*k].push(i),
+            None => {
+                root_of.push((root, out.len()));
+                out.push(vec![i]);
+            }
+        }
+    }
+    out
+}
+
+/// Collision-aware label placement. For each anchor (in priority order) try above, below,
+/// right and left of it, then further above/below (drawn with a leader line). A slot is taken
+/// only if it stays inside `bounds` and overlaps no placed label and no node. `None`: no room
+/// (the channel is still in the list beside the canvas and in its node's tooltip).
+pub fn place_labels(anchors: &[Rect], sizes: &[egui::Vec2], nodes: &[Rect], bounds: Rect) -> Vec<Option<Rect>> {
+    let gap = 3.0;
+    let mut placed: Vec<Rect> = Vec::new();
+    let mut out = Vec::with_capacity(anchors.len());
+    for (a, size) in anchors.iter().zip(sizes) {
+        let (w, h) = (size.x, size.y);
+        let c = a.center();
+        let mut candidates = vec![
+            Rect::from_center_size(pos2(c.x, a.min.y - gap - h / 2.0), *size),
+            Rect::from_center_size(pos2(c.x, a.max.y + gap + h / 2.0), *size),
+            Rect::from_min_size(pos2(a.max.x + gap + 6.0, c.y - h / 2.0), *size),
+            Rect::from_min_size(pos2(a.min.x - gap - 6.0 - w, c.y - h / 2.0), *size),
+        ];
+        for k in 1..=6 {
+            let dy = k as f32 * (h + gap);
+            for dx in [0.0, -(w / 2.0 + gap), w / 2.0 + gap] {
+                candidates.push(Rect::from_center_size(pos2(c.x + dx, a.min.y - gap - h / 2.0 - dy), *size));
+                candidates.push(Rect::from_center_size(pos2(c.x + dx, a.max.y + gap + h / 2.0 + dy), *size));
+            }
+        }
+        let free = |r: &Rect| {
+            bounds.contains_rect(*r) && !placed.iter().any(|p| p.expand(1.0).intersects(*r)) && !nodes.iter().any(|n| n.expand(4.0).intersects(*r))
+        };
+        let slot = candidates.into_iter().find(free);
+        if let Some(r) = slot {
+            placed.push(r);
+        }
+        out.push(slot);
+    }
+    out
+}
+
+/// The card beside a hovered node: name and values in readable type on a solid surface.
+fn detail_card(p: &egui::Painter, tr: &Track, node: Rect, bounds: Rect, _ppp: f32) {
+    let t = Tokens::current();
+    let title = p.layout_no_wrap(tr.name.clone(), bold(12.0), t.text);
+    let db = tr.mixer.volume_db;
+    let mut lines = vec![
+        format!("Gain   {}", if db <= -144.0 { "-inf dB".to_string() } else { format!("{db:.1} dB") }),
+        format!("Pan    {}", pan_label(node_x(tr))),
+    ];
+    if tr.channels() == 2 {
+        lines.push(format!("Width  {:.0}%", tr.mixer.width * 100.0));
+    }
+    let states: Vec<&str> =
+        [(tr.mixer.mute, "MUTE"), (tr.mixer.solo, "SOLO"), (tr.mixer.record_arm, "REC")].iter().filter(|s| s.0).map(|s| s.1).collect();
+    if !states.is_empty() {
+        lines.push(states.join(" · "));
+    }
+    let body: Vec<_> = lines.iter().map(|l| p.layout_no_wrap(l.clone(), crate::theme::mono(11.0), t.text)).collect();
+    let w = body.iter().map(|g| g.size().x).fold(title.size().x, f32::max) + 16.0;
+    let h = title.size().y + body.iter().map(|g| g.size().y + 1.0).sum::<f32>() + 12.0;
+    let mut card = Rect::from_min_size(pos2(node.max.x + 14.0, node.center().y - h / 2.0), vec2(w, h));
+    if card.max.x > bounds.max.x {
+        card = card.translate(vec2(-(card.width() + node.width() + 28.0), 0.0));
+    }
+    let card = card.translate(vec2(0.0, (bounds.min.y + 2.0 - card.min.y).max(0.0) + (bounds.max.y - 2.0 - card.max.y).min(0.0)));
+    p.rect(card, 4.0, t.panel_bg2, Stroke::new(1.0, t.border_light), StrokeKind::Inside);
+    let mut y = card.min.y + 6.0;
+    let th = title.size().y;
+    p.galley(pos2(card.min.x + 8.0, y), title, t.text);
+    y += th + 2.0;
+    for g in body {
+        let gh = g.size().y;
+        p.galley(pos2(card.min.x + 8.0, y), g, t.text);
+        y += gh + 1.0;
     }
 }
 
@@ -506,6 +749,43 @@ mod tests {
         tr.mixer.output = Route::None;
         tr.mixer.sends = Default::default();
         assert_eq!(route_badge(&s, &tr), "→ none");
+    }
+
+    #[test]
+    fn label_placement_never_overlaps_labels_or_nodes() {
+        // A dense stage: a column of near-identical nodes, a row of neighbours, and outliers.
+        let bounds = Rect::from_min_size(pos2(0.0, 0.0), vec2(600.0, 400.0));
+        let mut nodes: Vec<Rect> = Vec::new();
+        for k in 0..12 {
+            nodes.push(Rect::from_center_size(pos2(300.0, 120.0 + k as f32 * 9.0), vec2(40.0, 18.0)));
+        }
+        for k in 0..8 {
+            nodes.push(Rect::from_center_size(pos2(80.0 + k as f32 * 30.0, 300.0), vec2(16.0, 18.0)));
+        }
+        nodes.push(Rect::from_center_size(pos2(590.0, 10.0), vec2(16.0, 18.0)));
+        let groups = clusters(&nodes);
+        assert!(groups.iter().any(|g| g.len() >= 12), "the column is one cluster");
+        let anchors: Vec<Rect> = groups.iter().map(|g| g.iter().fold(nodes[g[0]], |a, &i| a.union(nodes[i]))).collect();
+        let sizes: Vec<egui::Vec2> = anchors.iter().map(|_| vec2(70.0, 16.0)).collect();
+        let placed = place_labels(&anchors, &sizes, &nodes, bounds);
+        let got: Vec<Rect> = placed.iter().flatten().copied().collect();
+        assert!(got.len() >= anchors.len() - 1, "nearly every label finds room ({} of {})", got.len(), anchors.len());
+        for (i, a) in got.iter().enumerate() {
+            assert!(bounds.contains_rect(*a), "{a:?} inside the canvas");
+            assert!(!nodes.iter().any(|n| n.intersects(*a)), "{a:?} never covers a node");
+            for b in &got[i + 1..] {
+                assert!(!a.intersects(*b), "{a:?} overlaps {b:?}");
+            }
+        }
+        // Separate nodes stay separate clusters; a chain of overlaps is one.
+        let apart = [Rect::from_min_size(pos2(0.0, 0.0), vec2(10.0, 10.0)), Rect::from_min_size(pos2(50.0, 0.0), vec2(10.0, 10.0))];
+        assert_eq!(clusters(&apart).len(), 2);
+        let chain = [
+            Rect::from_min_size(pos2(0.0, 0.0), vec2(10.0, 10.0)),
+            Rect::from_min_size(pos2(8.0, 0.0), vec2(10.0, 10.0)),
+            Rect::from_min_size(pos2(16.0, 0.0), vec2(10.0, 10.0)),
+        ];
+        assert_eq!(clusters(&chain).len(), 1);
     }
 
     #[test]

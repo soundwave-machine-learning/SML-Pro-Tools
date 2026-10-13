@@ -196,6 +196,39 @@ pub fn meter(ui: &Ui, r: Rect, level: f32, hold: f32, clip: bool) {
     }
 }
 
+/// A horizontal input-level bar for status panels (Record layout, Audio Setup). `level` is a
+/// linear peak from the real meter. At zero nothing is filled — an empty track and the words
+/// "input: no signal" (or `idle_text`), never a dot or a pretend level. Exposed to screen
+/// readers as a progress indicator whose label is the visible text.
+pub fn input_level_bar(ui: &mut Ui, level: f32, idle_text: &str) -> Response {
+    let t = Tokens::current();
+    let w = ui.available_width().clamp(120.0, 320.0);
+    let (r, resp) = ui.allocate_exact_size(vec2(w, 18.0), Sense::hover());
+    ui.painter().rect(r, CornerRadius::same(3), t.meter_bg, Stroke::new(1.0, t.border_light), StrokeKind::Inside);
+    let level = if level.is_finite() { level.max(0.0) } else { 0.0 };
+    let text = if level > 0.0 {
+        let db = 20.0 * level.max(1e-6).log10();
+        let pos = meter_pos(db);
+        let fill = Rect::from_min_size(r.min + vec2(1.0, 1.0), vec2((r.width() - 2.0) * pos, r.height() - 2.0));
+        let col = if db >= -3.0 {
+            t.meter_red
+        } else if db >= -12.0 {
+            t.meter_yellow
+        } else {
+            t.meter_green
+        };
+        ui.painter().rect_filled(fill, 2.0, col.gamma_multiply(0.85));
+        format!("input {db:.1} dBFS")
+    } else {
+        idle_text.to_string()
+    };
+    let col = if level > 0.0 { t.text } else { t.text_dim };
+    // Text on the empty part of the track stays readable over a partial fill.
+    ui.painter().text(pos2(r.min.x + 6.0, r.center().y), Align2::LEFT_CENTER, &text, regular(11.0), col);
+    resp.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::ProgressIndicator, true, text.clone()));
+    resp
+}
+
 /// dB → 0..1 meter position (logarithmic-ish scale like hardware meters).
 pub fn meter_pos(db: f32) -> f32 {
     if !db.is_finite() || db <= -80.0 {
@@ -232,13 +265,28 @@ pub fn fader(ui: &mut Ui, r: Rect, db: f32, id: egui::Id) -> Option<f32> {
     let slot = Rect::from_center_size(r.center(), vec2(5.0, r.height() - 14.0));
     ui.painter().rect_filled(slot, 2.0, t.fader_track);
     // Scale marks.
+    // A label is skipped (its tick stays) when it would collide with the one above it, so the
+    // crowded low end (-30/-40/-60) never prints on top of itself.
+    let mut last_label_y = f32::NEG_INFINITY;
     for mark in [12.0f32, 6.0, 0.0, -5.0, -10.0, -15.0, -20.0, -30.0, -40.0, -60.0] {
         let y = slot.max.y - slot.height() * soundcraft_model::fader_db_to_pos(mark);
+        let show_label = y - last_label_y >= 10.0 || mark == 0.0;
+        if show_label {
+            last_label_y = y;
+        }
         // 0 dB (unity) is marked brighter than the rest of the scale.
         let unity = mark == 0.0;
         ui.painter()
             .line_segment([pos2(r.min.x + 2.0, y), pos2(slot.min.x - 3.0, y)], Stroke::new(1.0, if unity { t.text_dim } else { t.ruler_tick }));
-        ui.painter().text(pos2(r.min.x, y), Align2::LEFT_CENTER, format!("{}", mark.abs()), regular(9.0), if unity { t.text } else { t.text_dim });
+        if show_label {
+            ui.painter().text(
+                pos2(r.min.x, y),
+                Align2::LEFT_CENTER,
+                format!("{}", mark.abs()),
+                regular(9.0),
+                if unity { t.text } else { t.text_dim },
+            );
+        }
     }
     let pos = soundcraft_model::fader_db_to_pos(db);
     let y = slot.max.y - slot.height() * pos;

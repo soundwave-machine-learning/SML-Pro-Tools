@@ -815,11 +815,8 @@ fn selected_track_input(app: &mut SoundApp, ui: &mut egui::Ui) {
     }
     if armed || monitored {
         let lvl = app.meters.get(&id).map_or(0.0, |m| m.level[0].max(m.level[1]));
-        ui.add(egui::ProgressBar::new(lvl.clamp(0.0, 1.0)).text(if lvl > 0.0 {
-            format!("input {:.1} dBFS", 20.0 * lvl.max(1e-6).log10())
-        } else {
-            "input: no signal".into()
-        }));
+        let idle = if app.recorder.is_some() { "input: no signal" } else { "input: no signal (input device not open)" };
+        crate::widgets::input_level_bar(ui, lvl, idle);
     } else {
         ui.label(egui::RichText::new("Arm or input-monitor the track to meter its input (no test signal is ever generated).").small());
     }

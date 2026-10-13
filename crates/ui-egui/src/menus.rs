@@ -10,6 +10,7 @@ pub const UI_COMMANDS: &[(&str, &str, &str, Option<&str>)] = &[
     ("ui.dock", "Arrange Panel", "", None),
     ("ui.dock.reset", "Reset Panel Layout", "Window > Reset Panel Layout", None),
     ("ui.mix_split", "Mixer Split Size", "", None),
+    ("ui.mix_density", "Mixer Density", "", None),
     ("window.mix", "Mix", "Window > Mix", Some("Cmd+=")),
     ("window.edit", "Edit", "Window > Edit", Some("Cmd+=")),
     ("window.toggle_mix_edit", "Toggle Mix/Edit", "", Some("Cmd+=")),
@@ -765,6 +766,17 @@ pub fn run_ui_command(app: &mut SoundApp, id: &str, p: &Value) -> Option<Result<
                 },
                 None => json!({"text": text}),
             }
+        }
+        "ui.mix_density" => {
+            // Comfortable / Compact console strips: the persisted `narrow_mix` preference
+            // (View › Narrow Mix). {density: comfortable|compact}; {} reports it.
+            match p.get("density").and_then(Value::as_str) {
+                Some("comfortable") => app.ui.narrow_mix = false,
+                Some("compact") => app.ui.narrow_mix = true,
+                Some(other) => return Some(Err(format!("`density` must be comfortable or compact, not `{other}`"))),
+                None => {}
+            }
+            json!({"density": if app.ui.narrow_mix { "compact" } else { "comfortable" }})
         }
         "ui.mix_split" => {
             // HF01: the Split view's Visual share; {fraction: 0.1..0.9} or {reset: true} / {}.

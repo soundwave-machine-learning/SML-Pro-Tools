@@ -179,7 +179,19 @@ fn channel_levels(ui: &Ui, key: (&str, u64), peaks: &[f32], n: usize) -> Vec<f32
 }
 
 fn section_label(ui: &Ui, r: Rect, text: &str) {
-    ui.painter().text(pos2(r.center().x, r.min.y + 7.0), Align2::CENTER_CENTER, text, bold(10.0), Tokens::current().section_label);
+    // Compact strips use the short caption when the full one would not fit (INSERTS A-E → INS A-E).
+    let short = match text {
+        "INSERTS A-E" => "INS A-E",
+        "INSERTS F-J" => "INS F-J",
+        "SENDS A-E" => "SND A-E",
+        "SENDS F-J" => "SND F-J",
+        "INSTRUMENT" => "INSTR",
+        other => other,
+    };
+    let t = Tokens::current();
+    let full = ui.painter().layout_no_wrap(text.to_string(), bold(10.0), t.section_label);
+    let text = if full.size().x <= r.width() - 4.0 { text } else { short };
+    ui.painter().with_clip_rect(r).text(pos2(r.center().x, r.min.y + 7.0), Align2::CENTER_CENTER, text, bold(10.0), t.section_label);
 }
 
 fn route_name(app: &SoundApp, r: &Route) -> String {
@@ -229,7 +241,15 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
         Stroke::new(if selected { 2.0 } else { 1.0 }, if selected { t.selection_stroke } else { t.border }),
         StrokeKind::Inside,
     );
-    ui.painter().with_clip_rect(nr.shrink(2.0)).text(nr.center(), Align2::CENTER_CENTER, &track.name, bold(12.0), t.text_dark);
+    // The name ends in "…" when it does not fit (the full name is on hover and in the
+    // accessible name); compact strips use a slightly smaller face.
+    let mut job = egui::text::LayoutJob::simple_singleline(track.name.clone(), bold(if narrow { 11.0 } else { 12.0 }), t.text_dark);
+    job.wrap.max_width = nr.width() - 6.0;
+    job.wrap.max_rows = 1;
+    job.wrap.break_anywhere = true;
+    job.wrap.overflow_character = Some('…');
+    let g = ui.painter().layout_job(job);
+    ui.painter().galley(nr.center() - g.size() * 0.5, g, t.text_dark);
     let nresp = ui
         .interact(nr, ui.id().with(("strip_name", id.0)), Sense::click())
         .on_hover_text(format!("{} — click selects, double-click renames", track.name));
@@ -472,18 +492,35 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
                 let _ = app.engine.execute_merged("mix.pan", &json!({"track": id.0, "pan": v, "index": i}), &format!("pan:{}:{i}", id.0));
             }
             let _ = resp;
-            let pr = Rect::from_center_size(pos2(cx, y + ks + 8.0), vec2(ks + 8.0, 13.0));
-            ui.painter().rect_filled(pr, 1.0, t.counter_bg);
-            ui.painter().text(pr.center(), Align2::CENTER_CENTER, pan_text(v), regular(10.0), t.counter_text);
+            // Each readout keeps to its half of the strip, monospaced so values line up.
+            let pw = if n == 2 { inner_w / 2.0 - 4.0 } else { (ks + 8.0).min(inner_w) };
+            let pr = Rect::from_center_size(pos2(cx, y + ks + 8.0), vec2(pw, 13.0));
+            ui.painter().rect_filled(pr, 2.0, t.counter_bg);
+            ui.painter().with_clip_rect(pr).text(
+                pr.center(),
+                Align2::CENTER_CENTER,
+                pan_text(v),
+                crate::theme::mono(if narrow { 9.5 } else { 10.0 }),
+                t.counter_text,
+            );
         }
         y += ks + 20.0;
     }
     if track.channels() == 2 && track.kind != TrackKind::Master {
         let wr = Rect::from_min_size(pos2(x0 + 6.0, y), vec2(inner_w - 12.0, 16.0));
         let mut c = ui.new_child(egui::UiBuilder::new().max_rect(wr));
+        // Compact: smaller type and no "W " prefix so "100%" fits; the tooltip names it.
+        if narrow {
+            for style in [egui::TextStyle::Body, egui::TextStyle::Button] {
+                c.style_mut().text_styles.insert(style, regular(10.5));
+            }
+        }
         let mut w = track.mixer.width * 100.0;
         let resp = c
-            .add_sized(wr.size(), egui::DragValue::new(&mut w).range(0.0..=200.0).speed(1.0).prefix("W ").suffix("%").max_decimals(0))
+            .add_sized(
+                wr.size(),
+                egui::DragValue::new(&mut w).range(0.0..=200.0).speed(1.0).prefix(if narrow { "" } else { "W " }).suffix("%").max_decimals(0),
+            )
             .on_hover_text("Stereo Width (100% = exact pass-through). Same control as the Visual view's node handles.");
         if resp.changed() {
             let _ = app.engine.execute_merged("mix.width", &json!({"tracks": [id.0], "width": w / 100.0}), &format!("width:{}", id.0));
@@ -670,7 +707,8 @@ fn dedicated_slot(app: &mut SoundApp, ui: &mut Ui, track: &Track, kind: soundcra
     };
     ui.painter().rect_filled(r, 1.0, t.counter_bg);
     let label = format!("{prefix} {name}{}", if bypass { " (byp)" } else { "" });
-    ui.painter().text(pos2(r.min.x + 3.0, r.center().y), Align2::LEFT_CENTER, label, regular(10.0), col);
+    // Clipped to the slot so a long provider name never runs into the next strip.
+    ui.painter().with_clip_rect(r.shrink(1.0)).text(pos2(r.min.x + 3.0, r.center().y), Align2::LEFT_CENTER, label, regular(10.0), col);
     // R23 slot I/O meters: two thin bars (in | out) at the right edge, -60..0 dBFS.
     let io = io.filter(|m| m.active);
     if let Some(m) = io {

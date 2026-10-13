@@ -125,7 +125,10 @@ pub fn master(app: &mut SoundApp, ui: &mut Ui) {
                         ui.label(format!("Program: {}", st["program"].as_u64().map_or("session mix".to_string(), |s| format!("source {s}"))));
                         let reference = st["reference"].clone();
                         if reference.is_null() {
-                            ui.label(egui::RichText::new("Reference: none (Clip List › right-click an imported file › Use as reference)").color(t.text_dim));
+                            ui.label(
+                                egui::RichText::new("Reference: none. Set one with the command mastering.reference {source: <id>} (there is no menu entry for it yet).")
+                                    .color(t.text_dim),
+                            );
                         } else {
                             let listening = reference["listening"].as_bool().unwrap_or(false);
                             ui.label(format!(
@@ -148,7 +151,7 @@ pub fn master(app: &mut SoundApp, ui: &mut Ui) {
                             });
                             // Known issue K1: be explicit rather than imply A/B plays audio.
                             ui.label(
-                                egui::RichText::new("A/B stores the setting only: this build does not play the reference (manual known issue K1).")
+                                egui::RichText::new("OPEN DEFECT: A/B stores the setting only — no reference audio reaches the speakers (known issue K1). Compare in another player at the level-matched gain.")
                                     .font(regular(crate::theme::size::SMALL))
                                     .color(t.warning),
                             );

@@ -42,7 +42,9 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
                 if crate::layouts::switcher_overflows(ui.ctx()) {
                     seg(ui, "layouts", &mut |ui| crate::layouts::switcher(app, ui));
                 }
-                if matches!(app.ui.window, crate::MainWindow::Mix | crate::MainWindow::Master) {
+                // Mix and Master have no Edit toolbar; a very narrow Edit/Record toolbar hands its
+                // transport to the bar (toolbar::ToolbarLayout::transport_moved).
+                if matches!(app.ui.window, crate::MainWindow::Mix | crate::MainWindow::Master) || app.toolbar_layout.transport_moved {
                     seg(ui, "transport", &mut |ui| transport(app, ui));
                 }
                 seg(ui, "tempo", &mut |ui| {

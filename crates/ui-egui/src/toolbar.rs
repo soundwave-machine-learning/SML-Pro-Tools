@@ -33,6 +33,15 @@ pub struct ToolbarLayout {
     pub full_width: f32,
     /// Natural width of the Nudge panel (measured with the full row).
     pub nudge_width: f32,
+    /// Natural width of the transport group (measured with the full row).
+    pub transport_width: f32,
+    /// Narrower still (e.g. the Record layout beside its panel on a compact window): the pinned
+    /// Nudge and transport would leave the tools almost no room, so the toolbar uses two rows —
+    /// the scrolling groups on top at full width, Nudge and transport underneath.
+    pub stacked: bool,
+    /// Stacked and still too narrow for Nudge and transport side by side: the transport is drawn
+    /// in the control bar instead (as in the Mix and Master layouts), never hidden.
+    pub transport_moved: bool,
     pub transport: Rect,
     pub nudge: Rect,
     /// The edit tools and audio tools groups (in compact mode they come first in the strip).
@@ -47,12 +56,37 @@ impl Default for ToolbarLayout {
             compact: false,
             full_width: 0.0,
             nudge_width: 0.0,
+            transport_width: 0.0,
+            stacked: false,
+            transport_moved: false,
             transport: Rect::NOTHING,
             nudge: Rect::NOTHING,
             tools: Rect::NOTHING,
             visible: Rect::NOTHING,
         }
     }
+}
+
+/// Height of the toolbar panel: one row, or two when stacked (see [`ToolbarLayout::stacked`]).
+pub fn height(app: &SoundApp) -> f32 {
+    if app.toolbar_layout.stacked { 2.0 * HEIGHT - 6.0 } else { HEIGHT }
+}
+
+/// The groups that scroll in the compact layouts, most-used first.
+fn scrolling_groups(app: &mut SoundApp, ui: &mut Ui, layout: &mut ToolbarLayout) {
+    ui.horizontal(|ui| {
+        ui.add_space(8.0);
+        ui.spacing_mut().item_spacing.x = 8.0;
+        // Most-used first, so the tools stay in view on common laptop widths;
+        // the edit modes also have F1–F4.
+        layout.tools = tool_groups(app, ui);
+        edit_modes(app, ui);
+        counters(app, ui);
+        grid_nudge(app, ui);
+        zoom_group(app, ui);
+        tempo_meter(app, ui);
+        output_meter(app, ui);
+    });
 }
 
 pub fn show(app: &mut SoundApp, ui: &mut Ui) {
@@ -66,7 +100,40 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
     // Nudge are pinned on the right where they are always visible; only the other groups
     // scroll, most-used first. The row's natural width is learned from a full-row frame.
     layout.compact = layout.full_width > 0.0 && full.width() < layout.full_width;
-    if !layout.compact {
+    // Pinned groups plus a usable 250-point strip do not fit: two rows.
+    let pinned = layout.transport_width + layout.nudge_width + 32.0;
+    layout.stacked = layout.compact && layout.nudge_width > 0.0 && full.width() < pinned + 250.0;
+    layout.transport_moved = false;
+    if layout.stacked {
+        let top = Rect::from_min_size(full.min, vec2(full.width(), HEIGHT - 2.0));
+        let bottom = Rect::from_min_max(pos2(full.min.x, top.max.y), pos2(full.max.x, full.min.y + 2.0 * HEIGHT - 6.0));
+        ui.scope_builder(egui::UiBuilder::new().max_rect(top).layout(egui::Layout::left_to_right(egui::Align::Min)), |ui| {
+            ui.add_space(4.0);
+            egui::ScrollArea::horizontal().id_salt("edit_toolbar_stacked").auto_shrink([false, true]).show(ui, |ui| {
+                scrolling_groups(app, ui, &mut layout);
+            });
+        });
+        layout.transport_moved = full.width() < pinned;
+        if layout.transport_moved {
+            // Nudge keeps the second row (scrolling only below its own width); the transport is
+            // in the control bar this frame.
+            layout.transport = Rect::NOTHING;
+            ui.scope_builder(egui::UiBuilder::new().max_rect(bottom).layout(egui::Layout::left_to_right(egui::Align::Min)), |ui| {
+                ui.add_space(8.0);
+                egui::ScrollArea::horizontal().id_salt("edit_toolbar_nudge").auto_shrink([false, true]).show(ui, |ui| {
+                    layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
+                });
+            });
+        } else {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(bottom).layout(egui::Layout::right_to_left(egui::Align::Min)), |ui| {
+                ui.spacing_mut().item_spacing.x = 8.0;
+                ui.add_space(8.0);
+                layout.transport = ui.scope(|ui| transport(app, ui)).response.rect;
+                layout.nudge = ui.scope(|ui| nudge_panel(app, ui)).response.rect;
+            });
+        }
+        ui.advance_cursor_after_rect(Rect::from_min_max(full.min, bottom.max));
+    } else if !layout.compact {
         let out = egui::ScrollArea::horizontal().id_salt("edit_toolbar").auto_shrink([false, true]).show(ui, |ui| {
             ui.horizontal(|ui| {
                 ui.add_space(8.0);
@@ -84,6 +151,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
         });
         layout.full_width = out.content_size.x + 16.0;
         layout.nudge_width = layout.nudge.width();
+        layout.transport_width = layout.transport.width();
     } else {
         ui.with_layout(egui::Layout::right_to_left(egui::Align::Min), |ui| {
             ui.spacing_mut().item_spacing.x = 8.0;
@@ -100,19 +168,7 @@ pub fn show(app: &mut SoundApp, ui: &mut Ui) {
                 .rect;
             ui.with_layout(egui::Layout::left_to_right(egui::Align::Min), |ui| {
                 egui::ScrollArea::horizontal().id_salt("edit_toolbar_compact").auto_shrink([false, true]).show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        ui.add_space(8.0);
-                        ui.spacing_mut().item_spacing.x = 8.0;
-                        // Most-used first, so the tools stay in view on common laptop widths;
-                        // the edit modes also have F1–F4.
-                        layout.tools = tool_groups(app, ui);
-                        edit_modes(app, ui);
-                        counters(app, ui);
-                        grid_nudge(app, ui);
-                        zoom_group(app, ui);
-                        tempo_meter(app, ui);
-                        output_meter(app, ui);
-                    });
+                    scrolling_groups(app, ui, &mut layout);
                 });
             });
         });
@@ -629,13 +685,39 @@ mod tests {
         crate::fonts::install(&ctx);
         ctx.set_visuals(if light { egui::Visuals::light() } else { egui::Visuals::dark() });
         let raw = || egui::RawInput { screen_rect: Some(Rect::from_min_size(pos2(0.0, 0.0), vec2(w, h))), ..Default::default() };
-        for _ in 0..3 {
+        for _ in 0..4 {
+            let hgt = height(&app);
             let mut out = ctx.run_ui(raw(), |ui| {
-                egui::Panel::top("edit_toolbar").exact_size(HEIGHT).frame(egui::Frame::NONE).show(ui, |ui| show(&mut app, ui));
+                egui::Panel::top("edit_toolbar").exact_size(hgt).frame(egui::Frame::NONE).show(ui, |ui| show(&mut app, ui));
             });
             out.textures_delta.clear();
         }
         app.toolbar_layout
+    }
+
+    /// The Record layout on a compact window leaves the toolbar about 611 points (911 minus the
+    /// 300-point RECORD panel): the toolbar stacks — tools strip on top at full width, Nudge and
+    /// transport fully visible underneath, nothing overlapping. Wider windows keep one row.
+    #[test]
+    fn narrow_toolbar_stacks_without_hiding_nudge_or_transport() {
+        for w in [520.0, 611.0] {
+            let l = layout_at(w, 512.0, false);
+            assert!(l.compact && l.stacked, "{w}: stacked {l:?}");
+            // 611: Nudge and transport share the second row; 520: the transport is in the
+            // control bar (asserted in tests/interface_polish.rs) and Nudge keeps the row.
+            assert_eq!(l.transport_moved, w < 600.0, "{w}: {l:?}");
+            let pinned: &[(&str, Rect)] = if l.transport_moved { &[("nudge", l.nudge)] } else { &[("transport", l.transport), ("nudge", l.nudge)] };
+            for (name, r) in pinned {
+                assert!(r.width() > 20.0 && r.min.x >= 0.0 && r.max.x <= w + 0.5, "{w} {name} fully on screen: {r:?}");
+                assert!(r.min.y >= HEIGHT - 8.0 && r.max.y <= 2.0 * HEIGHT, "{w} {name} on the second row: {r:?}");
+            }
+            assert!(!l.transport.intersects(l.nudge.shrink(1.0)), "{w}: transport and Nudge do not overlap");
+            assert!(l.tools.min.y < HEIGHT - 8.0 && l.tools.min.x < 40.0, "{w}: tools lead the first row: {l:?}");
+            assert!(!l.tools.intersects(l.nudge), "{w}: tools never under Nudge");
+        }
+        for w in [911.0, 1366.0, 2560.0] {
+            assert!(!layout_at(w, 768.0, false).stacked, "{w}: one row");
+        }
     }
 
     /// RC09: at 1366×768 at 150 % (911×512 logical points) the transport/record group and the

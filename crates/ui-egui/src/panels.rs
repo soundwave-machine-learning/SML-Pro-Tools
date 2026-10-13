@@ -299,11 +299,8 @@ pub(crate) fn recording_essentials(app: &mut SoundApp, ui: &mut egui::Ui) {
                 });
                 // A real input level only; nothing is simulated.
                 let lvl = app.meters.get(&tr.id).map_or(0.0, |m| m.level[0].max(m.level[1]));
-                ui.add(egui::ProgressBar::new(lvl.clamp(0.0, 1.0)).text(if lvl > 0.0 {
-                    format!("{:.1} dBFS", 20.0 * lvl.max(1e-6).log10())
-                } else {
-                    "-inf".into()
-                }));
+                let idle = if app.recorder.is_some() { "input: no signal" } else { "input: no signal (input device not open)" };
+                crate::widgets::input_level_bar(ui, lvl, idle);
             }
             None => {
                 ui.label(egui::RichText::new("Select an audio track to arm it here.").color(t.text_dim));
