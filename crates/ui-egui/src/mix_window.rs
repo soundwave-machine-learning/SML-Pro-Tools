@@ -614,6 +614,11 @@ fn strip_tags(ui: &mut Ui, r: Rect, kind: &str, track: &Track, fault: Option<&st
         x += gw + 4.0;
     }
     let mut tips = Vec::new();
+    let names: Vec<&str> = tags.iter().map(|t| t.0).collect();
+    let state = if names.is_empty() { "none".to_string() } else { names.join(", ") };
+    // Accessible: "Kick state: REC, MUTE" (screen readers and the UI tests read it).
+    let row = ui.interact(r, ui.id().with(("strip_tags", track.id.0)), Sense::hover());
+    row.widget_info(|| egui::WidgetInfo::labeled(egui::WidgetType::Label, true, format!("{} state: {state}", track.name)));
     for (label, col, tip) in tags {
         let g = painter.layout_no_wrap(label.to_string(), bold(9.0), t.text_dark);
         let tr = Rect::from_min_size(pos2(x, r.min.y + 1.0), vec2(g.size().x + 6.0, r.height() - 2.0));
@@ -626,7 +631,7 @@ fn strip_tags(ui: &mut Ui, r: Rect, kind: &str, track: &Track, fault: Option<&st
         tips.push(tip);
     }
     if !tips.is_empty() {
-        ui.interact(r, ui.id().with(("strip_tags", track.id.0)), Sense::hover()).on_hover_text(tips.join(" · "));
+        row.on_hover_text(tips.join(" · "));
     }
 }
 

@@ -266,17 +266,29 @@ pub fn show(app: &mut SoundApp, ctx: &egui::Context) {
                         ui.label("File");
                         ui.add(egui::TextEdit::singleline(path).desired_width(360.0));
                     });
+                    // Labels before their controls (read left to right), as everywhere else.
                     ui.horizontal(|ui| {
-                        egui::ComboBox::from_label("Format").selected_text(format.to_uppercase()).show_ui(ui, |ui| {
-                            for f in ["wav", "aiff", "flac"] {
-                                ui.selectable_value(format, f.to_string(), f.to_uppercase());
-                            }
-                        });
-                        egui::ComboBox::from_label("Bit Depth").selected_text(format!("{bit_depth}-bit")).show_ui(ui, |ui| {
-                            for b in ["16", "24", "32f"] {
-                                ui.selectable_value(bit_depth, b.to_string(), format!("{b}-bit"));
-                            }
-                        });
+                        let l = ui.label("Format");
+                        egui::ComboBox::from_id_salt("bounce_format")
+                            .selected_text(format.to_uppercase())
+                            .show_ui(ui, |ui| {
+                                for f in ["wav", "aiff", "flac"] {
+                                    ui.selectable_value(format, f.to_string(), f.to_uppercase());
+                                }
+                            })
+                            .response
+                            .labelled_by(l.id);
+                        ui.add_space(crate::theme::metric::GROUP_GAP);
+                        let l = ui.label("Bit Depth");
+                        egui::ComboBox::from_id_salt("bounce_bit_depth")
+                            .selected_text(format!("{bit_depth}-bit"))
+                            .show_ui(ui, |ui| {
+                                for b in ["16", "24", "32f"] {
+                                    ui.selectable_value(bit_depth, b.to_string(), format!("{b}-bit"));
+                                }
+                            })
+                            .response
+                            .labelled_by(l.id);
                     });
                     ui.checkbox(normalize, "Normalize to -0.1 dBFS");
                     ui.label(
