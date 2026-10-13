@@ -242,7 +242,8 @@ fn win(ctx: &egui::Context, open: &mut bool, title: &str, size: egui::Vec2, body
     if !*open {
         return;
     }
-    egui::Window::new(title).open(open).default_size(size).show(ctx, body);
+    // Floating windows stay below the menu and control bars, so they never cover them.
+    egui::Window::new(title).open(open).default_size(size).constrain_to(crate::control_bar::area_below(ctx)).show(ctx, body);
 }
 
 fn automation(app: &mut SoundApp, ctx: &egui::Context) {
