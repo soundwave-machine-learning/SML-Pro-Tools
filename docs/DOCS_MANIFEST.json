@@ -35,6 +35,23 @@
   "known_builds": [
     {
       "version": "0.5.0",
+      "commit": "f6deab2fd2559748388cafbba859888dd5ec1aa3",
+      "program_code_identical_to": "30df4a94b45987082ebd4795108febace341ab38",
+      "documentation": "this edition (Hotfix Pass 02; compiled-in manual = USER_GUIDE.md at f6deab2)",
+      "artifacts": [
+        {
+          "name": "soundcraft-0.5.0-windows-x64-gnu-portable.zip",
+          "sha256": "026632febb88db5c07f878c5d237b99fe2dc9c5e256a0a0c3c959764c719759d",
+          "files": {
+            "soundcraft.exe": "21e4e463989b52bc6f2f35e2bd03882e7de452b68c9d38bae6f35fd3d935f781",
+            "soundcraft-cli.exe": "589c48ef538b84b3a66f05753c8f4b63bf04867a941f7aef73527b2caec6e504"
+          },
+          "notes": "Hotfix Pass 02 candidate, staged for review (not installed); unsigned GNU cross-build, WASAPI only; not yet run on Windows; reference A/B is open defect K1"
+        }
+      ]
+    },
+    {
+      "version": "0.5.0",
       "commit": "4d8749f822a872bfaa121c7c807a328b04910e31",
       "program_code_identical_to": "3aa655460c2a12f8eeb53ee503687b5f88583189",
       "documentation": "this edition (UI refinement pass 01; compiled-in manual = USER_GUIDE.md at 4d8749f)",

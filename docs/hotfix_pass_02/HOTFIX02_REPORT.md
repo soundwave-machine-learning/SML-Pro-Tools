@@ -334,7 +334,47 @@ the release candidate.
 
 ## Candidate (staged, not installed)
 
-CANDIDATE_SECTION
+Built with `OUT=dist/hotfix02-windows bash packaging/windows/cross-build.sh` from `f6deab2`
+(clean tree; program code identical to `30df4a9`, the compiled-in manual is the one at `f6deab2`).
+It is the GNU cross-build (`x86_64-pc-windows-gnu`, rustc 1.97.0, release, `--locked`): audio
+backend WASAPI only (no ASIO), **unsigned**, no installer. The ZIP was extracted and every file
+checked against its MANIFEST.json (5 files, all match; the manifest inside the ZIP is identical to
+the one beside it).
+
+| Artifact | SHA-256 |
+|---|---|
+| `soundcraft-0.5.0-windows-x64-gnu-portable.zip` | `026632febb88db5c07f878c5d237b99fe2dc9c5e256a0a0c3c959764c719759d` |
+| `soundcraft.exe` (inside) | `21e4e463989b52bc6f2f35e2bd03882e7de452b68c9d38bae6f35fd3d935f781` |
+| `soundcraft-cli.exe` (inside) | `589c48ef538b84b3a66f05753c8f4b63bf04867a941f7aef73527b2caec6e504` |
+| `MANIFEST.json` (beside the zip) | `ba3f0f0e506d7b1f45afa7b69d2bcd319a9d46216f4923bcfafb7386c677bdc4` |
+
+**Update script:** `packaging/windows/Update-SMLStudioCandidate.ps1` is reused unchanged (sha256
+`6b47db77…`). It was tested against fake installs with PowerShell 7.4.6 **on Linux, not
+Windows** (`evidence/update-script-test.log`). The old install was the refinement candidate
+`4d8749f` plus a user session folder. Results:
+- a wrong checksum is refused, with nothing changed;
+- an app running from the folder is refused (it is never stopped), with nothing changed;
+- `-WhatIf` changes nothing;
+- the update verifies all files, keeps the session folder, copies the settings and leaves the
+  originals unchanged;
+- `-Rollback` restores the old `soundcraft.exe` byte for byte, with the session still in place.
+
+**Compatibility and rollback:**
+- Preferences (`ui.json`) gain `mixer_window`. Older builds ignore it, and drop it when they save.
+- The plugin scan cache gains `diagnostics` and two new quarantine kinds. An older build that
+  meets a new kind cannot read the cache, starts from an empty one and rescans with its old
+  scanner; no session data is affected.
+- Sessions are unchanged in format.
+
+**Not installed.** The installed candidate was not touched and no shortcut was changed. To try
+this build:
+1. Save and close SML Studio.
+2. Back up `%APPDATA%\SoundCraft`.
+3. Verify the ZIP's SHA-256.
+4. Extract it into a new versioned folder.
+5. Run `soundcraft.exe` there with a disposable session.
+
+Parallel folders share `%APPDATA%\SoundCraft`, so they are not fully isolated.
 
 ## Open risks
 
