@@ -224,19 +224,31 @@ fn main_area_content(app: &mut SoundApp, ui: &mut Ui) {
     app.edit_layout.rows.clear();
     let clip_rect = Rect::from_min_max(pos2(full.min.x, tl.min.y), pos2(full.max.x, tl.max.y));
     let mut content_h = 0.0;
+    // Every row is laid out before any row draws (HF10): a gesture on one row (a clip dragged
+    // to another track, a selection across tracks) looks the other rows up while dragging, and
+    // rows below it used to be missing from this frame's list, so a drag downwards never left
+    // its own track.
+    let mut layout: Vec<(TrackId, Rect)> = Vec::new();
     for id in ids {
         let Some(h) = app.engine.session().track(id).map(track_height) else { continue };
         let row = Rect::from_min_max(pos2(full.min.x, y), pos2(tl.max.x, y + h));
-        // Registered before the row draws: a gesture on this row (a clip move or a tool sweep)
-        // looks its own row up while dragging.
         app.edit_layout.rows.push((id.0, [row.min.x, row.min.y, row.max.x, row.max.y]));
-        if row.max.y >= clip_rect.min.y && row.min.y <= clip_rect.max.y {
+        layout.push((id, row));
+        y += h + 1.0;
+        content_h += h + 1.0;
+    }
+    // The row a clip drag started on keeps receiving its pointer events even when the drag has
+    // scrolled it out of view (it draws clipped), so the release always commits or cancels.
+    let dragging_from = match &app.gesture {
+        Some(Gesture::MoveClips { from_track, .. }) => Some(*from_track),
+        _ => None,
+    };
+    for (id, row) in layout {
+        if (row.max.y >= clip_rect.min.y && row.min.y <= clip_rect.max.y) || dragging_from == Some(id) {
             let mut child = ui.new_child(egui::UiBuilder::new().max_rect(row));
             child.set_clip_rect(clip_rect);
             track_row(app, &mut child, id, row, tl);
         }
-        y += h + 1.0;
-        content_h += h + 1.0;
     }
     app.edit_layout.content_h = content_h;
     // Empty area click clears track selection.
@@ -1745,7 +1757,16 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
             Tool::Split | Tool::Listen | Tool::Arrow => None,
             Tool::Grabber => hit.as_ref().map(|c| {
                 let clips = if s.edit.selected_clips.contains(&c.id) { s.edit.selected_clips.clone() } else { vec![c.id] };
-                Gesture::MoveClips { clips, grab_at: at, delta: 0, from_track: track.id, to_track: track.id }
+                Gesture::MoveClips {
+                    clips,
+                    grab_at: at,
+                    delta: 0,
+                    from_track: track.id,
+                    to_track: track.id,
+                    origin: c.start,
+                    time_lock: false,
+                    invalid: None,
+                }
             }),
             Tool::Trim => hit.as_ref().map(|c| {
                 // Grabbed within 6 px of the end edge (and not of the start): trim the end.
@@ -1761,6 +1782,11 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
             Tool::Zoom => Some(Gesture::ZoomBox { start: p.x }),
         };
     }
+    // HF10: Escape cancels a clip move before release; nothing is changed.
+    if matches!(app.gesture, Some(Gesture::MoveClips { .. })) && ui.input(|i| i.key_pressed(egui::Key::Escape)) {
+        app.gesture = None;
+        app.ui.status = "Clip move cancelled".into();
+    }
     if resp.dragged() {
         let to_track = app.edit_layout.rows.iter().find(|(_, r)| p.y >= r[1] && p.y <= r[3]).map(|(i, _)| TrackId(*i));
         match &mut app.gesture {
@@ -1774,18 +1800,29 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
                     *tracks = order.get(lo..=hi).map(<[TrackId]>::to_vec).unwrap_or_default();
                 }
             }
-            Some(Gesture::MoveClips { grab_at, delta, to_track: tt, .. }) => {
+            Some(Gesture::MoveClips { clips, grab_at, delta, from_track, to_track: tt, origin, time_lock, invalid }) => {
                 let raw = at - *grab_at;
-                *delta = if s.edit.edit_mode.is_grid() {
-                    snap(&s, hit.as_ref().map_or(*grab_at, |c| c.start) + raw) - hit.as_ref().map_or(*grab_at, |c| c.start)
-                } else {
-                    raw
-                };
-                if s.edit.edit_mode == soundcraft_model::EditMode::Spot {
+                // Snap the grabbed clip's new start (not whatever clip is under the pointer now).
+                *delta = if s.edit.edit_mode.is_grid() { snap(&s, *origin + raw) - *origin } else { raw };
+                // HF10: Ctrl/Cmd while dragging keeps the exact time (tracks only).
+                *time_lock = mods.ctrl || mods.command;
+                if s.edit.edit_mode == soundcraft_model::EditMode::Spot || *time_lock {
                     *delta = 0;
                 }
                 if let Some(t2) = to_track {
                     *tt = t2;
+                }
+                *invalid = soundcraft_engine::edit::move_targets(&s, clips, *from_track, *tt).err();
+                // Near the top or bottom of the track area the tracks scroll, so a track below
+                // (or above) the view can be reached in one drag.
+                const EDGE: f32 = 18.0;
+                let max = (app.edit_layout.content_h - tl.height()).max(0.0);
+                if p.y > tl.max.y - EDGE && app.edit_layout.scroll_y < max {
+                    app.edit_layout.scroll_y = (app.edit_layout.scroll_y + 8.0).min(max);
+                    ui.ctx().request_repaint();
+                } else if p.y < tl.min.y + EDGE && app.edit_layout.scroll_y > 0.0 {
+                    app.edit_layout.scroll_y = (app.edit_layout.scroll_y - 8.0).max(0.0);
+                    ui.ctx().request_repaint();
                 }
             }
             Some(Gesture::TrimStart { to, .. } | Gesture::TrimEnd { to, .. }) => *to = snap(&s, at),
@@ -1864,13 +1901,18 @@ fn lane_interaction(app: &mut SoundApp, ui: &mut Ui, track: &Track, lane: Rect, 
     if resp.drag_stopped() {
         let g = app.gesture.take();
         match g {
-            Some(Gesture::MoveClips { clips, delta, from_track, to_track, .. }) => {
+            Some(Gesture::MoveClips { clips, delta, from_track, to_track, invalid, .. }) => {
                 let ids: Vec<u64> = clips.iter().map(|c| c.0).collect();
                 let mut params = json!({"clips": ids, "by": delta});
                 if to_track != from_track {
                     params["track"] = json!(to_track.0);
+                    params["from"] = json!(from_track.0);
                 }
-                if delta != 0 || to_track != from_track {
+                if let Some(why) = invalid {
+                    // Refused: the clips stay where they were.
+                    app.ui.status = format!("Clip not moved: {why}");
+                } else if delta != 0 || to_track != from_track {
+                    // One command: one undo step for the whole drag.
                     let _ = app.run("edit.move_clips", params);
                 }
             }
@@ -2167,20 +2209,35 @@ fn overlay(app: &mut SoundApp, ui: &mut Ui, tl: Rect, area: Rect) {
         layout.last_follow_to = follow_to;
         scroll_to = follow_to;
     }
-    // Ghost of a clip move.
-    if let Some(Gesture::MoveClips { clips, delta, to_track, .. }) = &app.gesture {
-        let row = app.edit_layout.rows.iter().find(|(i, _)| *i == to_track.0).map(|(_, r)| *r);
-        for c in clips {
+    // Ghost of a clip move (HF10): each clip at its destination track and time, the grabbed
+    // clip's new start written on it; red with the reason when the destination is refused.
+    if let Some(Gesture::MoveClips { clips, delta, from_track, to_track, origin, time_lock, invalid, .. }) = &app.gesture {
+        let targets = soundcraft_engine::edit::move_targets(s, clips, *from_track, *to_track)
+            .unwrap_or_else(|_| clips.iter().map(|c| (*c, *to_track)).collect());
+        let t = Tokens::current();
+        let color = if invalid.is_some() { t.error } else { Color32::WHITE };
+        for (c, target) in &targets {
+            let row = app.edit_layout.rows.iter().find(|(i, _)| *i == target.0).map(|(_, r)| *r);
             if let (Some((_, clip)), Some(r)) = (s.find_clip(*c), row) {
                 let x0 = x_of(s, tl, clip.start + delta);
                 let x1 = x_of(s, tl, clip.end() + delta);
-                painter.rect_stroke(
-                    Rect::from_min_max(pos2(x0, r[1] + 1.0), pos2(x1, r[3] - 1.0)),
-                    2.0,
-                    Stroke::new(2.0, Color32::WHITE),
-                    StrokeKind::Inside,
-                );
+                painter.rect_stroke(Rect::from_min_max(pos2(x0, r[1] + 1.0), pos2(x1, r[3] - 1.0)), 2.0, Stroke::new(2.0, color), StrokeKind::Inside);
             }
+        }
+        if let Some(r) = app.edit_layout.rows.iter().find(|(i, _)| *i == to_track.0).map(|(_, r)| *r) {
+            let start = origin + delta;
+            let mut text = format_position(start, s.edit.main_counter, s.sample_rate, &s.tempo, s.frame_rate, s.timecode_start);
+            if *time_lock {
+                text.push_str("  (time locked)");
+            }
+            if let Some(why) = invalid {
+                text = format!("Cannot move here: {why}");
+            }
+            let x = x_of(s, tl, start).max(tl.min.x + 2.0);
+            let g = painter.layout_no_wrap(text, regular(10.0), if invalid.is_some() { t.text } else { t.text_dark });
+            let bg = Rect::from_min_size(pos2(x, r[1] - g.size().y - 4.0).max(pos2(tl.min.x, tl.min.y)), g.size() + vec2(6.0, 2.0));
+            painter.rect_filled(bg, 2.0, if invalid.is_some() { t.error } else { t.counter_text });
+            painter.galley(bg.min + vec2(3.0, 1.0), g, t.text);
         }
     }
     if let Some(Gesture::TrimStart { to, clip, .. } | Gesture::TrimEnd { to, clip, .. }) = &app.gesture

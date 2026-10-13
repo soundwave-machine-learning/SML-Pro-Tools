@@ -148,7 +148,7 @@ pub fn specs() -> Vec<CommandSpec> {
             "Move Clips",
             [],
             None,
-            "{clips?: [id], by?: samples, to?: position (first clip start), track?: target}",
+            "{clips?: [id], by?: samples, to?: position (first clip start), track?: target, from?: track of the grabbed clip} — with `from`, every clip keeps its distance in tracks from the grabbed one; a target that cannot take a clip (wrong kind, fewer channels) refuses the whole move",
             has_selection,
             move_clips
         ),
@@ -741,10 +741,33 @@ fn move_clips(e: &mut Engine, p: &Value) -> Result<Value> {
     } else {
         delta
     };
+    let from = track_param(e, "edit.move_clips", p, "from")?;
+    // HF10: validate every destination first; an invalid one refuses the whole move.
+    let targets: Vec<(ClipId, TrackId)> = match to_track {
+        Some(to) => {
+            let s = e.session();
+            let anchor = from.or_else(|| ids.first().and_then(|id| s.find_clip(*id)).map(|(t, _)| t)).unwrap_or(to);
+            let mut t = ops::move_targets(s, &ids, anchor, to).map_err(|why| bad("edit.move_clips", why))?;
+            if from.is_none() {
+                // Without `from`, the documented behaviour: every clip goes to `track`.
+                for x in &mut t {
+                    if let Some(c) = s.find_clip(x.0).map(|(_, c)| c)
+                        && let Some(why) = ops::move_target_problem(s, c, to)
+                    {
+                        return Err(bad("edit.move_clips", why));
+                    }
+                    x.1 = to;
+                }
+            }
+            t
+        }
+        None => ids.iter().filter_map(|id| e.session().find_clip(*id).map(|(t, _)| (*id, t))).collect(),
+    };
+    let locked = ids.iter().filter(|id| e.session().find_clip(**id).is_some_and(|(_, c)| c.time_locked || c.edit_locked)).count();
     let s = e.session_mut();
-    let n = ops::move_clips(s, &ids, delta, to_track);
+    let n = ops::move_clips_to(s, &targets, delta);
     s.edit.selected_clips = ids;
-    Ok(json!({"moved": n, "by": delta}))
+    Ok(json!({"moved": n, "by": delta, "locked_skipped": locked}))
 }
 
 fn consolidate(e: &mut Engine, p: &Value) -> Result<Value> {

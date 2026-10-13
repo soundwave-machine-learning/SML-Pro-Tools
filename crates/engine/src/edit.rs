@@ -280,6 +280,73 @@ pub fn heal(s: &mut Session, track: TrackId, range: Range) -> usize {
 }
 
 /// Move clips by `delta` (and optionally to another track), overwriting what they land on.
+/// Why `clip` cannot be placed on `target` (HF10), or `None` when it can. Rules, from the mixer's
+/// channel handling (a strip channel `k` reads source channel `k mod n`): audio clips go on audio
+/// tracks, MIDI clips on MIDI/instrument tracks, video on video tracks; a mono clip on a stereo
+/// track plays on both sides (as recorded mono does), but a clip with more channels than the
+/// track would lose channels, so it is refused — the track's format is never changed.
+pub fn move_target_problem(s: &Session, clip: &Clip, target: TrackId) -> Option<String> {
+    use soundcraft_model::TrackKind;
+    let Some(t) = s.track(target) else { return Some("the target track does not exist".into()) };
+    let kind_ok = match &clip.content {
+        ClipContent::Audio { .. } => t.kind == TrackKind::Audio,
+        ClipContent::Midi { .. } => t.kind.is_midi(),
+        ClipContent::Video { .. } => t.kind == TrackKind::Video,
+    };
+    if !kind_ok {
+        let what = match &clip.content {
+            ClipContent::Audio { .. } => "an audio clip",
+            ClipContent::Midi { .. } => "a MIDI clip",
+            ClipContent::Video { .. } => "a video clip",
+        };
+        return Some(format!("{what} cannot go on {} ({} track)", t.name, t.kind.label().to_lowercase()));
+    }
+    if let ClipContent::Audio { source, .. } = clip.content {
+        let src = s.source(source).map_or(0, |x| usize::from(x.channels));
+        let width = t.channels();
+        if src > width {
+            return Some(format!(
+                "{} is {} and the clip has {src} channels: it would lose channels (the track format is not changed)",
+                t.name,
+                t.format.label().to_lowercase()
+            ));
+        }
+    }
+    None
+}
+
+/// Where each of `ids` lands when the clip on track `from` is dragged to track `to` (HF10): every
+/// clip keeps its distance in rows from the grabbed one, counted over the visible tracks that hold
+/// clips, in session order. Errors (nothing moves) when a clip would leave the track list or land
+/// on a track that cannot take it.
+pub fn move_targets(s: &Session, ids: &[ClipId], from: TrackId, to: TrackId) -> Result<Vec<(ClipId, TrackId)>, String> {
+    let order: Vec<TrackId> = s.tracks.iter().filter(|t| !t.hidden && t.kind.has_playlist()).map(|t| t.id).collect();
+    let idx = |t: TrackId| order.iter().position(|x| *x == t);
+    let shift = match (idx(from), idx(to)) {
+        (Some(a), Some(b)) => b as i64 - a as i64,
+        _ => 0,
+    };
+    let mut out = Vec::new();
+    for id in ids {
+        let Some((src, clip)) = s.find_clip(*id) else { continue };
+        let target = if from == to {
+            src
+        } else if src == from || idx(src).is_none() {
+            to
+        } else {
+            let i = idx(src).map_or(-1, |i| i as i64 + shift);
+            usize::try_from(i).ok().and_then(|i| order.get(i).copied()).ok_or_else(|| format!("{} would move past the last track", clip.name))?
+        };
+        if target != src
+            && let Some(why) = move_target_problem(s, clip, target)
+        {
+            return Err(why);
+        }
+        out.push((*id, target));
+    }
+    Ok(out)
+}
+
 pub fn move_clips(s: &mut Session, ids: &[ClipId], delta: Samples, to_track: Option<TrackId>) -> usize {
     let mut moving: Vec<(TrackId, Clip)> = Vec::new();
     for t in &mut s.tracks {
@@ -299,6 +366,35 @@ pub fn move_clips(s: &mut Session, ids: &[ClipId], delta: Samples, to_track: Opt
     for (tid, mut c) in moving {
         c.start = c.start.saturating_add(delta).max(0);
         place_clip(s, to_track.unwrap_or(tid), c);
+    }
+    n
+}
+
+/// Moves clips by `delta` onto the tracks chosen per clip (HF10). Callers validate the targets
+/// with [`move_targets`] first; a target without a playlist keeps the clip on its own track
+/// rather than dropping it.
+pub fn move_clips_to(s: &mut Session, targets: &[(ClipId, TrackId)], delta: Samples) -> usize {
+    let ids: Vec<ClipId> = targets.iter().map(|(c, _)| *c).collect();
+    let mut moving: Vec<(TrackId, Clip)> = Vec::new();
+    for t in &mut s.tracks {
+        let tid = t.id;
+        if let Some(pl) = t.playlist_mut() {
+            pl.clips.retain(|c| {
+                if ids.contains(&c.id) && !c.time_locked && !c.edit_locked {
+                    moving.push((tid, c.clone()));
+                    false
+                } else {
+                    true
+                }
+            });
+        }
+    }
+    let n = moving.len();
+    for (tid, mut c) in moving {
+        c.start = c.start.saturating_add(delta).max(0);
+        let to = targets.iter().find(|(id, _)| *id == c.id).map_or(tid, |(_, t)| *t);
+        let to = if s.track(to).is_some_and(|t| t.kind.has_playlist()) { to } else { tid };
+        place_clip(s, to, c);
     }
     n
 }

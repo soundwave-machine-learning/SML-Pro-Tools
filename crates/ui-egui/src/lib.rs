@@ -390,6 +390,12 @@ pub enum Gesture {
         delta: Samples,
         from_track: TrackId,
         to_track: TrackId,
+        /// Start of the grabbed clip when the drag began (snapping is measured from it).
+        origin: Samples,
+        /// Ctrl (Windows/Linux) or Cmd (macOS) held: tracks only, the exact time is kept (HF10).
+        time_lock: bool,
+        /// Why the current destination is refused (shown on the ghost; nothing moves on release).
+        invalid: Option<String>,
     },
     TrimStart {
         clip: soundcraft_model::ClipId,
