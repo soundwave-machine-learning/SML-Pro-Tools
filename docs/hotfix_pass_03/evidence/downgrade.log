@@ -1,0 +1,37 @@
+# Downgrade check: a session saved by Hotfix 03 (360acf3) opened by Hotfix 02 (d75158f), Linux CLI builds
+## Hotfix 03 build: SoundCraft CLI 0.5.0
+## Hotfix 02 build: SoundCraft CLI 0.5.0
+## Hotfix 02: info
+SESSION NAME:	hf03
+SAMPLE RATE:	48000
+BIT DEPTH:	Int24
+TIMECODE FORMAT:	30
+# OF AUDIO TRACKS:	2
+# OF AUDIO CLIPS:	1
+# OF AUDIO FILES:	2
+
+F I L E S  I N  S E S S I O N
+Filename	Location
+t	Audio Files/t.wav
+t	Audio Files/t_01.wav
+
+T R A C K  L I S T I N G
+TRACK NAME:	t
+COMMENTS:	
+STATE:	
+CHANNEL	EVENT	CLIP NAME	START TIME	END TIME	DURATION	STATE
+
+TRACK NAME:	t 1
+## Hotfix 02: open, inspect master/playlists/reference, bounce, save as
+mastering.reference: {"gain_db":0.0,"listening":true,"source":4}
+track.inspect: {"automation":[],"automation_mode":"read","clips":[],"format":"Stereo","height":"medium","hidden":false,"id":7,"inactive":false,"input":"Main","inserts":[],"kind":"master","mute":true,"name":"Master 1","output":"Main","pan":[-1.0,1.0],"playlist":"Master 1","playlists":1,"record_arm":false,"sends":[],"solo":false,"surround":null,"view":"volume","volume_db":0.0}
+file.bounce_mix: {"bytes":576104,"loudness_range_lu":0.0,"lufs":-15.127547264099121,"path":"<scratch>/downgrade/old-bounce.wav","peak_db":-14.224148750305176,"rate":48000,"seconds":2.0,"tail_samples":0,"true_peak_db":-14.224148750305176,"verified":{"content_fnv":"06450e649487a82b","decoded_channels":2,"decoded_frames":960
+session.save_as: {"audio_files_written":0,"path":"<scratch>/downgrade/hf02-resaved.scraft"}
+## Hotfix 03: reopen the session re-saved by Hotfix 02
+mastering.reference: {"gain_db":0.0,"listening":true,"source":4}
+file.bounce_mix: {"bytes":576104,"loudness_range_lu":0.0,"lufs":-144.0,"master_muted":true,"path":"<scratch>/downgrade/new-bounce.wav","peak_db":-144.0,"rate":48000,"seconds":2.0,"tail_samples":0,"true_peak_db":-144.0,"verified":{"content_fnv":"a71068f7ebfdee17","decoded_channels":2,"decoded_frames":96000,"decoded_peak_db
+## Field differences between the two saved files (keys only)
+only in Hotfix 03 file: []
+only in Hotfix 02 re-save: []
+Master 1 mute after Hotfix 02 re-save: True
+playlists of t after re-save: ['t', 't.02']

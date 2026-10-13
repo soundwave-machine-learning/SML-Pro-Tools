@@ -3,6 +3,43 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
+## 2026-10-13 — revision 2026-10-13.6 — Hotfix Pass 03, source `f98af69`
+
+**Changed**
+- [USER_GUIDE.md](USER_GUIDE.md):
+  - Header and §1: Hotfix 03 additions. Every main window has a menu entry, menus scroll, and
+    disabled entries say why.
+  - §2 capability table: recording guard, non-destructive punch, WASAPI Low Latency/Exclusive,
+    Master mute, reference A/B, MP3/M4A on Windows, authenticated control, SDKs.
+  - §4.1, §4.3, §4.6: the new driver types (output only, not yet run on Windows) and the
+    "Driver output latency" ledger row.
+  - §6.3: what a punch keeps, and the "before take" playlist. §6.6: the recording-guard message.
+  - §13.4, §16.1: Master mute and where it sits in Main's signal order.
+  - §18.1, §18.2, §18.4, §24 E: reference A/B listening, and MP3/AAC export (encoders, limits,
+    verification).
+  - §23.2: Recover Autosave refuses while recording.
+  - §25.2: token, auth handshake, limits, External Control window, `soundcraft-cli token`,
+    migration, no replay. §25.4: guard. §25.5 (new): SDKs.
+  - §26: K1, the mute part of K2, K8, K15 and K21 removed (numbers not reused); K23 updated. §27, §28.
+- [control-protocol.md](control-protocol.md): protocol 2 (auth, error codes, token, limits,
+  no replay, recording guard, migration). [mcp.md](mcp.md): `--connect` authenticates; export notes.
+- [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) and
+  [grok/GROK_BOT_INSTRUCTIONS.md](grok/GROK_BOT_INSTRUCTIONS.md):
+  - token handling (never print it), migration, no replay, refusal while recording;
+  - new cookbook rows (Master mute, reference A/B, MP3/M4A);
+  - updated "not available" list; new recovery rows.
+- Generated references regenerated (`cargo xtask docs`).
+- New: [hotfix_pass_03/HOTFIX03_REPORT.md](hotfix_pass_03/HOTFIX03_REPORT.md),
+  [hotfix_pass_03/TARGET_PENDING.md](hotfix_pass_03/TARGET_PENDING.md), `sdk/README.md`.
+
+**Verified**
+- Source review against `360acf3` of every chapter `docs-check` flagged.
+- `cargo xtask ci` passed: all seven steps, 791 tests.
+- The Grok cookbook was re-run through the authenticated control channel with the Python SDK
+  against `soundcraft-cli serve` on a disposable session
+  (`hotfix_pass_03/evidence/cookbook-serve.log`: 53 calls OK, 0 failed).
+- Nothing was observed on Windows.
+
 ## 2026-10-13 — revision 2026-10-13.5 — Hotfix Pass 02, source `30df4a9`
 
 **Changed**

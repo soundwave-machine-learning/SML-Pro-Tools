@@ -41,13 +41,26 @@ Find out which of these you really have. Test it; do not assume.
 |---|---|---|
 | **A. Conversation only** | Nothing on the computer. You guide the owner step by step with the manual's exact control names and the Search palette. | — |
 | **B. Screen view / computer use** | Screenshots and pointer/keyboard actions on the owner's desktop. | You can see the SML Studio window. |
-| **C. Control channel or MCP** (recommended) | JSON commands to the **running** app on 127.0.0.1, or an MCP client connected through `soundcraft-cli mcp --connect <port>`. | Send `{"id":1,"method":"session.inspect","params":{}}` to the port, or call MCP `inspect_session`. Connection refused = the app was not started with `--control <port>`. |
+| **C. Control channel or MCP** (recommended) | JSON commands to the **running** app on 127.0.0.1, or an MCP client connected through `soundcraft-cli mcp --connect <port>`. | Send `auth` with the token, then `{"id":2,"method":"session.inspect","params":{}}`; or call MCP `inspect_session`. Connection refused = the app was not started with `--control <port>`. `auth_required`/`unauthorized` = you have no valid token (ask the owner). |
 | **D. Headless CLI** | `soundcraft-cli.exe run` / `script` on session **files** (not the open session). | `soundcraft-cli --version` prints "SoundCraft CLI 0.5.0". |
 
 **Enabling level C** is the owner's decision: they start SML Studio with `--control 7979` (for
 example via a shortcut whose target ends in `soundcraft.exe --control 7979`). The channel listens
-only on 127.0.0.1 but has **no password**: any program on that computer can control the DAW while
-it is on. Recommend enabling it only for working sessions.
+only on 127.0.0.1 and, since Hotfix 03 (control protocol 2), **requires a token**: the first message
+of every connection is
+`{"id":1,"method":"auth","params":{"token":"<token>","client":"grok","protocol":2}}`.
+
+- **Getting the token:** the owner gives it to your connector's configuration (Setup › External
+  Control... › **Copy token**, or `soundcraft-cli token show`), or sets `SOUNDCRAFT_CONTROL_TOKEN`
+  for `soundcraft-cli app` / `mcp --connect`, which read it (or the token file) themselves.
+- **Never print, repeat, log or store the token in a reply, a file, a screenshot or a chat.** Refer
+  to it only as "the control token". If you see it by accident, do not repeat it; tell the owner to
+  rotate it (Setup › External Control... › Rotate token).
+- **Migrating from an older setup:** a connector built for protocol 1 (no `auth`) now receives
+  `auth_required` with the token file's location. Add the `auth` line; nothing else changed.
+- **Never re-send a request automatically.** After a timeout or a dropped connection the request
+  may have run: re-read the state (`session.inspect`, `engine.history`), then decide with the owner.
+Recommend enabling the channel only for working sessions; rotating the token is the owner's call.
 
 **At level B, never guess coordinates.** Read the screen, find the control by its label, act, then
 take a new screenshot and confirm the result. Prefer the Search palette (Window › Pro Tools Search,
@@ -160,13 +173,15 @@ ad-libs") can run directly; report it and how to undo it.
   re-measure the file (manual [§24 E](../USER_GUIDE.md#e-master-against-a-reference-and-verify-the-export)).
 
 ### 4.7 Say plainly what is not available
-Do not imply these work: ASIO or WASAPI exclusive mode (WASAPI shared only; on Windows the buffer
-size cannot be chosen — Audio Setup shows what Windows delivers, usually 480 frames at 48 kHz, and
-a buffer's duration is not round-trip latency); an internal language model unless the owner configured
-one and it answered; free dictation or a wake word (push-to-talk recognises enrolled phrases only);
-a phone microphone or HTTPS for the phone page; in-app reference playback (A/B does not play audio: an OPEN DEFECT, K1 — never report reference listening as working);
-native summing/tape models; built-in effects; the SML plugins; MP3/AAC export; any third-party
-plugin not yet seen working here. Check the Known issues (manual §26) before recommending a
+Do not imply these work: ASIO; WASAPI Exclusive / Low Latency **as verified** (Hotfix 03 adds them
+for output, but they have not yet been run on Windows: say so; plain WASAPI's buffer is set by
+Windows, and a buffer's duration is not round-trip latency); MP3/M4A export as verified (Windows
+encoders, not yet run on Windows; not available elsewhere; no VBR); an internal language model unless
+the owner configured one and it answered; free dictation or a wake word (push-to-talk recognises
+enrolled phrases only); a phone microphone or HTTPS for the phone page; native summing/tape models;
+built-in effects; the SML plugins; any third-party plugin not yet seen working here. Reference A/B
+plays on the monitor output since Hotfix 03 (manual §18.2); you cannot hear it, so leave the
+judgement to the owner. Check the Known issues (manual §26) before recommending a
 workflow, and route around them (for example stop playback with `transport.stop`, not Space).
 
 ## 5. Verified command cookbook (level C)
@@ -200,8 +215,15 @@ Each line below ran successfully on build 0.5.0 (headless CLI, synthetic audio; 
 | Move clips to another track (Hotfix Pass 02 builds) | `edit.move_clips {"clips":[6],"track":"Lead Dbl","from":"Lead"}` (add `"by":<samples>` to move in time too). An invalid target (wrong kind, fewer channels) refuses the whole move and changes nothing |
 | Plugin scan job (Hotfix Pass 02 builds) | `engine.plugin_scan_start {}` → poll `engine.plugin_scan_status {"job":<id>}`; `engine.plugin_scan_quarantine {}`; retry only with the owner's approval |
 | Detach / dock the Mixer (owner's preference, not the session) | `window.mix_detach {"value":true}`, `window.mix_dock {}`, `window.mix_window_status {}` — control channel only |
+| Master mute (Hotfix Pass 03 builds) | Master track id from `session.inspect` (kind `master`, e.g. "Master 1"; add one with `track.new {"kind":"master"}` only with the owner's approval) → `mix.mute {"tracks":[<id>],"value":true}`. An export while muted is silent and its result says `master_muted: true` with a warning: unmute first |
+| Reference A/B (Hotfix Pass 03 builds) | after `mastering.level_match {}`: `mastering.reference {"listening":true}` / `{"listening":false}`; monitor output only, never in exports. You cannot hear it: the owner judges |
+| MP3 / M4A export (Hotfix Pass 03 builds, Windows only) | `file.bounce_mix {"path":"…\\mix.mp3","bitrate":320}` or `{"path":"…\\mix.m4a","bitrate":192}`; constant bit rate only (`mode` other than `cbr` is refused); not yet verified on Windows, so read the result's `verified` block |
 
-The Hotfix Pass 02 rows ran in the portable tests of that source (`crates/engine/tests/plugin_scan_jobs.rs`,
+Hotfix Pass 03: every engine row above, including the three new ones, was re-run through the
+authenticated control channel with the Python SDK against `soundcraft-cli serve` on a disposable
+session in a temporary folder (`docs/hotfix_pass_03/evidence/cookbook_serve.py`, log
+`cookbook-serve.log`: 53 calls OK, 0 failed; MP3 refused off Windows as documented). The `ui.*` and
+`window.*` rows need the desktop app and were covered by the UI tests. The Hotfix Pass 02 rows ran in the portable tests of that source (`crates/engine/tests/plugin_scan_jobs.rs`,
 `crates/ui-egui/tests/clip_drag.rs`, `crates/ui-egui/tests/hotfix02.rs`), not on Windows. The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
 `docs/hotfix_pass_01/evidence/hotfix-commands.log`; `ui.mix_split` in the UI tests). Before using
 them, confirm with `help.search` that the installed build has them: builds before Hotfix Pass 01
@@ -244,7 +266,9 @@ choices are not commands and are the owner's to make. Values Audio Setup shows a
 | **Audio device disconnected** ("Playback stopped…", "Recording stopped: the input device is no longer available…") | Stop. Ask the owner to reconnect it; the take so far is kept. Re-select the device in Audio Setup (control bar **⚙ Audio Setup**, `window.audio_setup`, or Setup › Playback Engine) and press Apply — a level C operator cannot pick a device by command. If the remembered device is missing at launch, the status line names it; the owner reconnects it and presses Apply. |
 | **A scan request timed out or the connection dropped** | Nothing was abandoned: read `engine.plugin_scan_status {}`; the job carries on or has finished. Never resend rescans in a loop. |
 | **Plugin faulted or hung** | `engine.host_faults`; bypass the insert (`mix.insert_bypass`); ask before removing it. If the app is unstable: the owner restarts with `--safe` (plugins pass audio through, state kept), then the plugin can be re-inserted sandboxed (`sandbox:<id>`). |
-| **Recover Autosave… while recording** | Never: it can list the take being recorded and recovering it shortens that file (manual K21). Stop first. |
+| **"a take is being recorded…" refusal** | New/Open/Close/Revert and Recover Autosave are refused while recording (Hotfix 03); nothing changed. Ask the owner to stop, then re-read the state. Never stop a recording yourself unless asked. |
+| **`auth_required` / `unauthorized`** | You have no valid control token (missing, wrong, rotated or revoked). Ask the owner for the current one; never guess, print or store it. |
+| **Request timed out / connection dropped** | Do not re-send. Re-read the state; the request may have run. |
 | **App crashed or closed** | The control channel drops. Do not restart the app yourself unless the owner asked. After restart: Search › Recover Autosave… (manual §23.2); open the recovery point as unsaved, save under a new name. |
 | **Unsaved work at risk** | Suggest `session.save` (existing path) or `session.save_copy` to a new name; never overwrite another file without permission. |
 | **You are unsure** | Stop and ask. State what you know, what you measured and what you cannot verify. |

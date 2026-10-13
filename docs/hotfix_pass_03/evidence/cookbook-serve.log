@@ -1,0 +1,58 @@
+server protocol 2, app 0.5.0; settings in a temporary folder; token not shown
+OK    new disposable session: {"name": "Cookbook (disposable)", "sample_rate": 48000}
+OK    import lead: {"imported": [{"channels": 1, "clip": 3, "frames": 144000, "source": 1, "track": 2}]}
+OK    import dbl_l: {"imported": [{"channels": 1, "clip": 6, "frames": 144000, "source": 4, "track": 5}]}
+OK    import dbl_r: {"imported": [{"channels": 1, "clip": 9, "frames": 144000, "source": 7, "track": 8}]}
+OK    import adlib: {"imported": [{"channels": 1, "clip": 12, "frames": 144000, "source": 10, "track": 11}]}
+tracks: ['lead', 'dbl_l', 'dbl_r', 'adlib']
+OK    Rename a track: {"name": "Lead"}
+OK    rename dbl_l: {"name": "Dbl L"}
+OK    rename dbl_r: {"name": "Dbl R"}
+OK    rename adlib: {"name": "Adlib"}
+OK    Select tracks and a range: {"clips": [], "selection": {"end": 480, "start": 0}, "tracks": [2]}
+OK    Fade over the selection: {"fades": 1}
+OK    Clip gain: {"clips": 2}
+OK    Nudge set: {"accumulated_steps": 0, "applied_samples": 0, "sample_rate": 48000, "step_ms": 10.0, "step_samples_exact": 480.0, "target": "clips", "target_label": "Selected clips", "unit": "ms", "value": 10.0}
+OK    select clip: {"clips": [3], "selection": {"end": 144000, "start": 0}, "tracks": [2]}
+OK    Nudge later: {"accumulated_samples": 480, "applied_samples": 480, "below_one_sample": false, "changed": [3], "requested_steps": 1, "target": "clips"}
+OK    Nudge back: {"accumulated_samples": 0, "applied_samples": -480, "below_one_sample": false, "changed": [3], "requested_steps": -1, "target": "clips"}
+OK    Fader: {"tracks": 2}
+OK    Pan: {"pan": -0.6000000238418579}
+OK    Mute: {"value": true}
+OK    select for bus: {"clips": [3], "selection": {"end": 144000, "start": 0}, "tracks": [2, 5, 8, 11]}
+OK    Vocal bus: {"bus": 13, "bus_track": 14, "name": "Vocal Bus", "output": "main", "rerouted": [{"from": "Main", "to": "bus", "track": "Lead"}, {"from": "Main", "to": "bus", "track": "Dbl L"}, {"from": "Main", "to": "bus", "track": "Dbl R"}, {"from": "Mai
+OK    Reverb return: {"bus": 15, "note": "sends start at -inf; an empty return duplicates the dry signal once raised", "return_track": 16, "sends": [{"slot": 0, "track": "Lead"}, {"slot": 0, "track": "Dbl L"}, {"slot": 0, "track": "Dbl R"}, {"slot": 0, "track":
+OK    Send level: {"send": {"follow_main_pan": true, "level_db": -18.0, "mute": false, "pan": 0.0, "pre_fader": false, "surround": null, "target": {"Bus": 15}}}
+OK    bus.validate: {"ok": true}
+OK    mix.signal_flow: {"inserts": [], "note": "inserts marked post_fader run after the fader (graph v2)", "order": ["source (comp, clip gain/fades, edits)", "utility trim/polarity", "Tape [empty]", "user Pre inserts", "Width 100%", "pre-fader send tap", "fader",
+OK    mix.latency_report: {"latent_processors": [], "provenance": "plugin-reported latency (inserts + dedicated slots; bypassed inserts keep theirs as a plain delay); device/driver latency is Unknown until measured", "sidechains": [], "strips": [{"latency_samples": 
+OK    Snapshot save: {"channels": 6, "excluded": "plugins, slots, routing, trims, automation", "scope": "gain, pan, width, mute, solo, visibility", "slot": "A"}
+OK    Snapshot recall: {"applied": 6, "excluded": "plugins, slots, routing, trims, automation", "missing": [], "slot": "A"}
+OK    Measure: {"correlation": 0.9702638387680054, "integrated_lufs": -17.15028190612793, "loudness_range_lu": 0.0, "max_momentary_lufs": -17.148683547973633, "max_short_term_lufs": -17.154422760009766, "mono_peak_db": -13.3360013961792, "range": [0, 1440
+OK    import reference: {"imported": [{"channels": 1, "clip": 19, "frames": 144000, "source": 17, "track": 18}]}
+OK    delete reference track: {"deleted": 1}
+OK    register reference: {"gain_db": 0.0, "listening": false, "source": 17}
+OK    level match: {"gain_db": -2.049497604370117, "note": "audition only; apply with mastering.reference {gain_db}", "program_lufs": -17.15028190612793, "reference_lufs": -15.100784301757812}
+OK    HF15 A/B on: {"gain_db": 0.0, "listening": true, "source": 17}
+OK    HF15 A/B off: {"gain_db": 0.0, "listening": false, "source": 17}
+OK    HF16 add a Master track: {"tracks": [20]}
+OK    HF16 Master mute: {"value": true}
+OK    HF16 export with Master muted (warns): {"bytes": 288104, "loudness_range_lu": 0.0, "lufs": -144.0, "master_muted": true, "path": "<tmp>/muted.wav", "peak_db": -144.0, "rate": 48000, "seconds": 1.0, "tail_samples": 0, "true_peak_db": -144.0, "verified": {"con
+      master_muted: True | warning: the Master track is muted: the exported program is silent (unmute Master and export again)
+OK    HF16 Master unmute: {"value": false}
+OK    Export with verification: {"bytes": 864104, "loudness_range_lu": 0.0, "lufs": -17.15028190612793, "master_muted": false, "path": "<tmp>/mix.wav", "peak_db": -12.596722602844238, "rate": 48000, "report": "<tmp>/mix.wav.report
+OK    HF20 MP3 export off Windows (refused as documented): <tmp>/mix.mp3: MP3 (CBR) export uses the encoder built into Windows (Media Foundation); it is not available on this platform; nothing was written
+OK    HF20 VBR refused (refused as documented): bad parameters for `file.bounce_mix`: only constant bit rate (mode: cbr) is available: the Windows encoders have no VBR mode
+OK    HF20 extension mismatch refused (refused as documented): bad parameters for `file.bounce_mix`: MP3 (CBR) files end in .mp3; the path ends in .wav
+OK    Undo history: {"can_redo": false, "undo": ["Audio...", "Audio...", "Audio...", "Audio...", "Rename Track", "Rename Track", "Rename Track", "Rename Track", "Create...", "Clip Gain", "Nudge Clips", "Nudge Clips", "Set Volume", "Set Pan", "Mute", "Create Bu
+OK    Undo: {"undone": true}
+OK    Tempo: {"bpm": 120.0, "tick": 0}
+OK    Meter: {"meter": "6/8"}
+OK    loop.info: {"enabled": false, "loop_record": false, "range": {"end": 144000, "length": 144000, "start": 0}, "source": "selection"}
+OK    loop.set: {"end": 96000, "length": 48000, "start": 48000}
+OK    loop.clear: {"cleared": true}
+OK    track for move: {"tracks": [21]}
+OK    Move clips to another track: {"by": 0, "locked_skipped": 0, "moved": 1}
+OK    Plugin scan job (headless serve has no scan service) (refused as documented): unsupported: the isolated plugin scanner is not running in this process (SML Studio starts it; tools without it list plugins with engine.vst3_plugins / engine.clap_plugins)
+
+53 OK, 0 failed; ui.*/window.* rows need the desktop app and were not run here.

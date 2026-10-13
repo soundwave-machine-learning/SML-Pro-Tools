@@ -1,7 +1,7 @@
 # SML Studio user manual
 
 Product: SML Studio (the SoundCraft engine), version 0.5.0. This is the one authoritative manual.
-Documented source: branch `fable/recording-core` at Hotfix Pass 02 (code commit `30df4a9`). Hotfix Pass 02 adds plugin scan jobs and scan diagnostics (§17.1), the driver type and honest buffer reporting in Audio Setup (§4.1, §4.6), dragging clips to other tracks (§8.4), the Edit window's bottom bar (§22), the new fader handling (§13.2) and the detachable Mixer window (§13.5); builds made before it (such as `4d8749f`) do not have them. Hotfix Pass 01 (code `1d71089`) added the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1) — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
+Documented source: branch `fable/recording-core` at Hotfix Pass 03 (code commit `f98af69`). Hotfix Pass 03 adds a recording guard against session replacement (§6.6), non-destructive punch (§6.3), a working Master mute (§13.4), working reference A/B listening (§18.2), the WASAPI Exclusive and WASAPI Low Latency driver types (§4.1, §4.6), menu entries for every main window with scrolling menus (§1), MP3 and AAC (M4A) export on Windows (§18.4), an authenticated control channel (§25.2) and local Python/JavaScript SDKs (§25.5); builds made before it (such as `f6deab2`) do not have them. Hotfix Pass 02 (code `30df4a9`) added plugin scan jobs and scan diagnostics (§17.1), the driver type and honest buffer reporting in Audio Setup (§4.1, §4.6), dragging clips to other tracks (§8.4), the Edit window's bottom bar (§22), the new fader handling (§13.2) and the detachable Mixer window (§13.5); builds made before it (such as `4d8749f`) do not have them. Hotfix Pass 01 (code `1d71089`) added the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1) — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
 Verification status, applicable builds and history: [DOCS_MANIFEST.json](DOCS_MANIFEST.json), [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md).
 Every command named here exists in this build; parameters and chords for all of them: [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md).
 
@@ -33,9 +33,12 @@ changelog for differences. The previous edition of this manual, exactly as compi
 appear; command ids are written like `mix.volume`. Every command can also be run from the
 **Search** palette (Window › Pro Tools Search; type a label or id, Enter), which runs it as if
 chosen from its menu: commands with a dialog open it, commands without one run with their
-defaults. Several windows have **no menu-bar entry** and open only from Search: Recording,
-Recover Autosave…, SML Remote, Assistant and Command Help (Command Help also with F1). This manual
-writes them as **Search › Recording** (open Search, type "Recording", Enter). Key chords use Windows names (`Ctrl` where macOS uses `Cmd`). The default shortcut
+defaults. Since Hotfix 03 every main window has a menu-bar entry: **Window › Recording**,
+**File › Recover Autosave...**, **Window › SML Remote**, **Help › Assistant**, **Help › Command
+Help** (also F1), **Window › Detach Mixer** / **Dock Mixer** and **Setup › External Control...**.
+Where this manual writes **Search › Recording** (open Search, type "Recording", Enter), the menu
+entry works too. A menu taller than the window scrolls (mouse wheel or the scroll bar); a disabled
+entry says why when you hover it. Key chords use Windows names (`Ctrl` where macOS uses `Cmd`). The default shortcut
 profile is "Pro Tools style" (§21).
 
 **Procedure layout.** Procedures give: purpose, before you start, steps, result, undo and
@@ -48,8 +51,9 @@ for typical material, not rules. Trust your ears and your meters over any number
 
 | Area | Status in 0.5.0 | Notes |
 |---|---|---|
-| Recording to disk (dry, 32-bit float WAV), punch with selection, pre/post-roll, loop record, Count Off | Implemented; pending target check on your interface | §6 |
-| Audio Setup: driver type, output/input device, buffer request, delivered callback (smallest–largest), monitoring, track input, latency ledger; choices remembered | Implemented; headless-tested; pending target check | Windows: WASAPI **shared mode** only — the buffer is set by Windows (usually 10 ms = 480 frames at 48 kHz), not by the request. ASIO and WASAPI exclusive: **not in this build** (§4.6) |
+| Recording to disk (dry, 32-bit float WAV), punch with selection, pre/post-roll, loop record, Count Off | Implemented; pending target check on your interface | §6. Since Hotfix 03 punch never removes clips outside the punch range (§6.3) |
+| Recording guard: New/Open/Close/Revert and Recover Autosave are refused while a take is being recorded | Implemented (Hotfix 03); tested headless and through the menus | §6.6 |
+| Audio Setup: driver type, output/input device, buffer request, delivered callback (smallest–largest), monitoring, track input, latency ledger; choices remembered | Implemented; headless-tested; pending target check | Windows: **WASAPI** (shared; the buffer is set by Windows), **WASAPI Low Latency** and **WASAPI Exclusive** (Hotfix 03, a smaller buffer; compiled for Windows, **not yet run on Windows**). ASIO: **not in this build** (§4.6) |
 | Control bar in every layout: tempo, time signature, Click, Count Off, Loop, Audio Setup | Implemented (Hotfix 01); headless-tested; not yet seen on Windows | §3.5 |
 | Loop locators: stored loop range, Loop lane, loop settings | Implemented (Hotfix 01); headless-tested | §6.7 |
 | QuickPunch, TrackPunch, Destructive Record/Punch | Not available | Menu entries are disabled |
@@ -61,6 +65,7 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Console / Visual / Split mixer (Split divider remembered), width, snapshots A/B/C | Implemented | §13–§14 |
 | Faders: larger cap, unity mark, exact value, keyboard steps, typed value | Implemented (Hotfix 02; an interpretation of a Logic-like look, not a copy); gain law unchanged | §13.2 |
 | Mixer in its own window (Window › Detach Mixer) for a second display | Implemented (Hotfix 02); headless-tested as an embedded window; **native multi-monitor behaviour not yet observed** | §13.5 |
+| Master mute (M on the Master strip): silences Main and Master Tape with a short ramp; exports say so | Implemented (Hotfix 03) | §13.4 |
 | Volume automation writing (Write/Touch/Latch), automation drawing | Implemented | Only volume is written live (§14) |
 | Buses, FX returns, sends, Spill | Implemented | §15 |
 | Sidechain into a plugin from a bus | Implemented (CLAP first aux port, VST3 first aux bus); no UI | Command only (§15.5); pending target check with real plugins |
@@ -72,8 +77,9 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Built-in effects (EQ, compressor, reverb…) | **Not available** | No plugin ships with the app |
 | SML plugins (Channel EQ, Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align) | **Not available**: separate projects | Listed as AWAITING_EXTERNAL_PLUGIN |
 | Mastering meters (true peak, LUFS, LRA), level-match measurement | Implemented; checked against analytic and independent (FFmpeg) results, not certified | §18 |
-| Reference playback (A/B listening) inside the app | **Open defect** (the button stores a setting; no reference audio plays) | Known issue K1 (§26); defect record `docs/refinement_pass_01/REFERENCE_AB_DEFECT.md` |
-| Export: WAV/AIFF/FLAC, 16/24/32f, dither, rate conversion, tails, report | Implemented | No MP3/AAC export |
+| Reference playback (A/B listening) inside the app | Implemented (Hotfix 03): the reference plays on the monitor output at its level-match gain, with a 10 ms crossfade; never in exports, recordings or meters | §18.2; pending listening check on your system |
+| Export: WAV/AIFF/FLAC, 16/24/32f, dither, rate conversion, tails, report | Implemented | §18.4 |
+| Export: MP3 (CBR) and AAC-LC in M4A through the encoders built into Windows | Implemented (Hotfix 03); compiled for Windows, **not yet run on Windows**; not available on other platforms | §18.4 |
 | Phone remote (plain HTTP on your network) | Implemented; pending target check with a real phone | No HTTPS, no phone microphone |
 | Internal assistant: grounded answers, previewed plans | Implemented | §20 |
 | Internal assistant: local language model | Implemented client; **no model ships; never observed with a real model** | Loopback servers only |
@@ -81,7 +87,8 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Wake word, free dictation, cloud assistant | Not available | |
 | Shortcut profiles, themes, interface scale, layouts | Implemented | Known keyboard issues K5–K7 |
 | Autosave generations, crash recovery, Safe Open | Implemented; power-loss behaviour pending target check | §23 |
-| External control: CLI, local control channel, MCP | Implemented | §25 and [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) |
+| External control: CLI, local control channel (token-authenticated since Hotfix 03, protocol 2), MCP | Implemented | §25 and [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) |
+| Python and JavaScript SDKs (local files in `sdk/`, not published) | Implemented (Hotfix 03); tested against a headless server | §25.5 |
 
 ## 3. First launch, settings, versions and Safe Open
 
@@ -196,9 +203,17 @@ Setup…** in a channel strip's input menu (§6.1). The window "Audio Setup" ope
 bar.
 
 **Steps (in the order of the window):**
-1. **Driver type:** the audio systems this build can use, each with what it is ("WASAPI — Windows
-   audio, shared mode"). On Windows the list also shows **ASIO** and **WASAPI Exclusive** greyed
-   out with "(not in this build)"; hover for the reason (§4.6). Choosing a driver type filters the
+1. **Driver type:** the audio systems this build can use, each with what it is. On Windows:
+   - **WASAPI** — shared with other programs; Windows sets the buffer (usually 10 ms).
+   - **WASAPI Low Latency** — still shared, at a smaller period when the driver offers one
+     (IAudioClient3). Runs at the device's own rate and channel count; the buffer is rounded to
+     the driver's period step.
+   - **WASAPI Exclusive** — SML Studio owns the output: other programs cannot play through it
+     while it is open. The buffer is the size you choose, aligned to what the driver accepts.
+     Output only; recording stays on the shared input.
+   - **ASIO** greyed out with "(not in this build)"; hover for the reason (§4.6).
+   The two new WASAPI modes are compiled for Windows but **not yet run on Windows** (pending
+   target check). Choosing a driver type filters the
    device lists below to it. **Driver panel…** opens Windows' Sound control panel for WASAPI
    (device formats and levels); it is disabled for anything else.
 2. **Output device:** click **Scan** and pick "default device" or "<host>: <device>". The line
@@ -206,9 +221,10 @@ bar.
 3. **Input device** and **Sample rate:** see §4.2 and §5.1.
 4. **Buffer size (requested):** "driver default" or 32, 64, 128, 256, 512, 1024 frames, each with
    its duration at the session rate (64 frames = 1.333 ms and 128 frames = 2.667 ms at 48 kHz).
-   With WASAPI the control reads **set by Windows (shared mode)** and is disabled: in shared mode
-   Windows' audio engine calls the app once per engine period (usually 10 ms = 480 frames at
-   48 kHz) whatever buffer is asked for. A buffer saved earlier that WASAPI cannot use is shown with
+   With plain WASAPI the control reads **set by Windows (shared mode)** and is disabled: in shared
+   mode Windows' audio engine calls the app once per engine period (usually 10 ms = 480 frames at
+   48 kHz) whatever buffer is asked for. Choose **WASAPI Low Latency** or **WASAPI Exclusive** for a
+   smaller buffer; the delivered size is then shown as below. A buffer saved earlier that WASAPI cannot use is shown with
    "A N-frame buffer is saved but cannot be applied with this driver." and **Use driver default**.
 5. Click **Apply**. Until then the choice is a draft ("unapplied changes"); **Cancel** or closing
    the window returns to what is applied.
@@ -272,7 +288,8 @@ cannot be set with WASAPI)" when it could not be applied), driver-reported buffe
 when WASAPI reports no limit), delivered callback (the last one, and the smallest and largest since
 the stream opened), output buffering (calculated — "an estimate, not a
 measurement"), stream clock, input buffer requested, **Driver input/output latency: "Unknown (not
-reported by this backend; not assumed zero)"**, the plugin/host path (largest channel delay,
+reported by this backend; not assumed zero)"** (with WASAPI Exclusive or Low Latency the row is
+**Driver output latency** with the value the driver reports for the output stream), the plugin/host path (largest channel delay,
 including the one-block delay of sandboxed plugins) and **Measured round trip: "Not measured:
 this build has no loopback calibration"**. Nothing here is invented.
 
@@ -313,8 +330,8 @@ recovers after a device was unplugged; it opens the default output, not your rem
   licence, or GPLv3), plus the MSVC toolchain and LLVM on a Windows build machine; this candidate
   is cross-built with the GNU toolchain. Your interface's ASIO driver is what would deliver 64- or
   128-frame buffers (repository file `docs/remote_continuation/WINDOWS_AUDIO_BACKENDS.md`).
-- **WASAPI exclusive mode** is not available: the audio library this build uses (cpal 0.16)
-  opens WASAPI in shared mode only. It needs a separate Windows audio backend.
+- **WASAPI Exclusive** and **WASAPI Low Latency** are available since Hotfix 03 (a native backend,
+  §4.1) for **output**; input still uses shared WASAPI. They have not yet been run on Windows.
 Aggregate-device clock correction and measured driver latency are not available. "Low Latency
 Monitoring" (`options.low_latency_monitoring`) stores a setting that nothing uses yet.
 
@@ -414,11 +431,17 @@ A take replaces whatever it covers on the active playlist (use playlists to keep
 3. Record.
 
 **Result:** playback starts at selection start − pre-roll, the take is trimmed to the selection,
-playback stops at end + post-roll. One undo step.
+playback stops at end + post-roll. One undo step ("Record").
 
-**Limits:** existing clips inside the pre-roll and post-roll zones on that track can be removed by
-the punch (Known issue K8); duplicate the playlist first (§7.1) when the surrounding material
-matters. Without a selection, pre-roll audio stays in the take.
+**What is kept (since Hotfix 03):** pre-roll, count-off and post-roll are timing only. The take is
+trimmed to the punch range **before** it is placed, so clips outside the range (in the roll zones
+or anywhere else) keep their position, offsets, fades and gain exactly. The capture file keeps
+every recorded frame (the trim is non-destructive; extend the clip edge to reveal more). When the
+take covers existing material, the playlist as it was before the take is kept as an alternate
+playlist "<track>.NN before take NN" (§7.1). Undo restores the track as it was.
+
+**Limits:** without a selection the take starts at the record point; pre-roll audio is not placed
+(it stays in the capture file).
 
 ### 6.4 Count Off
 
@@ -451,6 +474,7 @@ eighth of the loop is dropped.
 | "Playback stopped: … Reopen the device in Setup › Playback Engine." | The output vanished. The take so far is kept. |
 | "Recording stopped early (WriteFailed / Overflow / DeviceLost): N frames kept in <path> — …" (shown at Stop) | Disk full or too slow. Capture stopped accepting audio earlier; the transport kept running until Stop. Everything written before the problem is kept. |
 | "Recorded … — input ran at X Hz, resampled to the session's Y Hz" | Rate mismatch (§4.2). |
+| "… a take is being recorded. Stop the transport so the take is finished and placed, save the session if you want to keep it, then try again. Nothing was changed and the take continues." | You (or a script) chose New, Open, Close, Revert, a recovery point or an unfinished take while recording. Nothing happened; recording goes on. Stop first (Hotfix 03). |
 
 After a crash, use **Search › Recover Autosave…** → "Unfinished takes" (§23.2).
 
@@ -841,8 +865,13 @@ floating point ("graph v2"); sessions from older builds keep their arithmetic un
   letting unrelated tracks into a shared return; soloing a bus keeps the tracks that feed it;
   solo-safe channels stay audible.
 - A VCA's mute mutes its members.
-- **Muting the Master track has no effect** in this build (Known issue K2). Use the monitor
-  controls (§4.4) or stop the transport.
+- **Master mute** (the **M** button on the Master strip, "Master mute", or `mix.mute` on the
+  Master track — a track of kind `master`, named "Master 1" when added with Track › New or
+  `track.new {kind: "master"}`) silences Main after the Master fader and the Master Tape slot, with a 5 ms ramp
+  (no click). The Master meter shows the muted signal; the metronome click, added after Main,
+  still sounds. Mute automation in Read mode counts.
+  An export with Master muted is silent: `file.bounce_mix` still writes it, but its result has
+  `master_muted: true` and a warning, and the report records it (Hotfix 03).
 
 ### 13.5 The Mixer in its own window (second display)
 
@@ -968,7 +997,7 @@ one audio block late. `mix.latency_report` lists every sidechain with its lag.
 ## 16. Signal order, Summing and Tape slots
 
 ### 16.1 Signal order
-`mix.signal_flow {track}` prints the order for any channel (its Master output has errors, see K2).
+`mix.signal_flow {track}` prints the order for any channel (its Master output lists stages Main does not have, see K2).
 
 **Audio, instrument and MIDI tracks**
 1. Clips with clip gain and fades (or the live input when monitoring/armed)
@@ -990,9 +1019,10 @@ Post (default on buses) → alignment → sends → output panner.
 
 **Main (Master track):** Main sum → **Summing** slot → **Master Tape** if Pre (default on Main) →
 **all Master inserts in slot order, before the fader** (the Post-fader setting is ignored on
-Master) → fader (volume automation only) → **Master Tape** if Post → output. Main has no trim,
-width, mute or sends. The click is added after Main; monitor volume/dim/mono act at the device
-output only.
+Master) → fader (volume automation only) → **Master Tape** if Post → **Master mute** (5 ms ramp;
+Hotfix 03) → Master meter → output. Main has no trim, width or sends. The click is added after
+Main, so it is still heard while Master is muted; monitor volume/dim/mono act at the device output
+only.
 
 ### 16.2 Summing and Tape slots
 
@@ -1129,8 +1159,9 @@ interface as hosted, not the sound. The SML plugins appear as AWAITING_EXTERNAL_
 Menu-bar layout button **Master** (or `window.master`). It shows "MASTER" and **Back to Mix**, the
 Master strip (its inserts are the mastering chain, applied exactly once), and three cards:
 - **PROGRAM AND REFERENCE**: the program source and the reference. When a reference is set, the
-  card says "OPEN DEFECT": A/B stores the setting only and plays no audio (Known issue K1).
-  Without a reference it says how to set one (`mastering.reference`; there is no menu entry).
+  card has **A/B: listen to reference**, **Level match** and **Clear**, and a line saying what you
+  hear (§18.2). Without a reference it says how to set one (`mastering.reference`; there is no
+  menu entry).
 - **METERS (OFFLINE, OVER THE PROGRAM)**: **Measure**, then a table with sample peak, true peak,
   integrated, short-term max and momentary max loudness, loudness range, correlation and mono
   peak, each with its unit. Before the first measurement it says "Not measured yet".
@@ -1143,11 +1174,15 @@ Master strip (its inserts are the mastering chain, applied exactly once), and th
 - **Reference:** `mastering.reference {source, gain_db?}` registers an imported file as the
   reference; **Level match** (`mastering.level_match`) measures both integrated loudnesses and
   stores an audition gain; **Clear** removes it.
-- **Open defect: listening to the reference inside the app does not work.** "A/B: listen to
-  reference" stores a setting, but no reference audio reaches the speakers (Known issue K1).
-  The Master card says "OPEN DEFECT". There is no menu entry for choosing a reference; use the
-  command (the card now says so). Compare by ear in another player at the level-matched gain
-  (§24 walkthrough E).
+- **A/B listening (since Hotfix 03):** **A/B: listen to reference** (or
+  `mastering.reference {listening: true}`) plays the reference instead of the program on the
+  **monitor output**, with the transport, at its level-match gain (`gain_db`). Frame 0 of the
+  reference is aligned to the session start; a different file rate is converted. Switching is a
+  10 ms crossfade. The card says what you hear: "Hearing: the reference (B) at its level-match
+  gain", "Reference audio is not loaded (missing media): the program is heard", or "The playhead
+  is past the reference's end: silence on the B side". The reference is monitor-only: it never
+  reaches an export, a recording or the meters. Pending a listening check on your system.
+- There is no menu entry for choosing a reference; use the command.
 - When a program file is set, Meters and Level match measure that file **without** the Master
   chain.
 
@@ -1160,8 +1195,9 @@ implementation (FFmpeg 6.1.1) on 54 of 56 comparisons; they are not certified.
 
 ### 18.4 Export the mix
 
-**Dialog:** **File › Bounce Mix...** (Ctrl+Alt+B): **File**, **Format** (WAV, AIFF, FLAC),
-**Bit Depth** (16, 24, 32f), **Normalize to -0.1 dBFS**.
+**Dialog:** **File › Bounce Mix...** (Ctrl+Alt+B): **File**, **Format** (WAV, AIFF, FLAC; on
+Windows also **MP3 (MP3 (CBR))** and **M4A (AAC-LC in M4A)**), **Bit Depth** (16, 24, 32f) or, for
+MP3/M4A, **Bit Rate**, **Normalize to -0.1 dBFS**.
 
 **Command (all options):** `file.bounce_mix {path, format?, bit_depth?, start?, end?,
 normalize?, dither?, rate?, tail?, fold_down?, metadata?, report?, overwrite?, acknowledge_missing?}`.
@@ -1175,9 +1211,25 @@ normalize?, dither?, rate?, tail?, fold_down?, metadata?, report?, overwrite?, a
 | `report` | Writes `<file>.report.json`: settings, revision, plugin ids/versions, measured levels and a decoded-file check |
 | `overwrite` | Required to replace an existing file (otherwise refused) |
 | `acknowledge_missing` | Export anyway with a missing/failed plugin passed through |
-FLAC cannot be 32f. No MP3/AAC export. The exporter adds no limiter or normaliser of its own
+FLAC cannot be 32f. The exporter adds no limiter or normaliser of its own
 (normalize is off unless chosen). Reference audio, monitor controls and assistant speech never
 reach an export. The parameter `source` is documented but ignored (Known issue K13).
+
+**MP3 and AAC (Hotfix 03, Windows only):** `file.bounce_mix {path: "mix.mp3" | "mix.m4a", bitrate?,
+mode?: "cbr", metadata?: {title?, originator?}, …}` uses the encoders built into Windows (Media Foundation), so
+nothing extra is installed and no codec licence is accepted on your behalf.
+| | MP3 | AAC-LC in M4A |
+|---|---|---|
+| Bit rates (kbps, constant) | 128, 160, 192, 224, 256, **320** (default) | 96, 128, 160, **192** (default) |
+| Sample rates | 32 000, 44 100, 48 000 Hz (use `rate` to convert) | 44 100, 48 000 Hz |
+| Channels | mono or stereo (`fold_down` for more) | mono or stereo |
+The mix is rendered as for WAV, converted to 16-bit with TPDF dither, encoded to a hidden temporary
+file next to it (".<name>.sml-partial.mp3"), decoded again and checked (rate, channels, length within one codec frame), and
+only then renamed to your file name: a failed or cancelled export leaves no file under that name.
+Refused with the reason before any work: VBR (`mode` other than `cbr`), `loudness_target`/limiter options, an extension that
+does not match the format, settings the encoder does not take, and any MP3/M4A on Linux/macOS.
+MP3 gets an ID3v2 title/artist tag. Compressed files are for sharing; keep a WAV master.
+Status: compiled for Windows, **not yet run on Windows**.
 
 **Verify:** check the report's `verified` block (header, frames, rate, channels) or reopen the file
 and measure it (§24 E).
@@ -1394,7 +1446,7 @@ and how old the plugin state is. Autosave is separate from Save.
   Files\`. **Recover to a new track** keeps every journaled frame and imports the take at the
   session start (all device channels).
 
-**Careful:** do not use this window while recording (K21). Recovering a take shortens the capture file in place to its last durable checkpoint
+**While recording** (since Hotfix 03) the window refuses both **Open as unsaved session** and **Recover to a new track** with the recording-guard message (§6.6); stop first. Recovering a take shortens the capture file in place to its last durable checkpoint
 and rewrites its header (the window's footnote says otherwise; Known issue K14). Copy the WAV
 first if you want the untouched file. Only the newest generation per session is offered; older
 generations stay in `Autosave\<session>\gen-NNNNNN.scraft` (opening one directly with File › Open
@@ -1457,8 +1509,8 @@ untouched.
 
 **Undo/recovery:** each promotion and fade is one undo step; a crash → Search › Recover Autosave… (§23.2).
 
-**Limits:** pending target check on your interface and microphone. Punching into a gap with
-pre/post-roll can clear clips in the roll zones (K8); duplicate the playlist first.
+**Limits:** pending target check on your interface and microphone. Punches keep the clips outside
+the punch range untouched (§6.3).
 
 ### B. Edit and mix a lead with doubles and ad-libs
 
@@ -1543,10 +1595,10 @@ target check. The SML plugin family is not available yet.
    source stays in the session); run `mastering.reference {source: <id>}`.
 3. **Measure:** **Measure** (or `mastering.meters`) for the program; `mastering.level_match` gives
    `program_lufs`, `reference_lufs` and the gain that would match the reference to the program.
-4. **Listen at matched loudness, outside the app:** in-app reference playback is an **open
-   defect** (K1: the A/B button plays no reference audio). Export your master (step 6), then play it and the reference in another player with the
-   reference turned down (or up) by the level-match gain. Judge tone, depth, dynamics and
-   translation at equal loudness: louder is not better, and loudness is not quality.
+4. **Listen at matched loudness:** **Level match**, then **A/B: listen to reference** on the
+   Master card while playing (§18.2): the reference plays at the level-match gain, so both sides
+   are at equal loudness. Judge tone, depth, dynamics and translation at equal loudness: louder is
+   not better, and loudness is not quality.
 5. **Targets (*starting point*, check your distributor's current specification):** many streaming
    services normalise to around −14 LUFS integrated; a true-peak ceiling of −1 dBTP leaves room for
    lossy encoding. Keep a dynamic master unless the genre demands otherwise.
@@ -1583,15 +1635,29 @@ and UI commands do nothing headless. Example:
 - **Enable:** start the app with `--control <port>`, for example a shortcut target
   `soundcraft.exe --control 7979` (or set `SOUNDCRAFT_CONTROL_PORT`). There is no menu setting. Use
   a fixed port on Windows (with port 0 the chosen port is printed to a console Windows does not show).
-- **Security:** listens on 127.0.0.1 only, **without a password**: any program on this computer can
-  control SML Studio while it is enabled. Enable it only when you want an operator to work.
+- **Security (protocol 2, Hotfix 03):** listens on 127.0.0.1 only and requires a **token**. At
+  start the app creates the token file `control-token` in its settings folder (Windows
+  `%APPDATA%\SoundCraft\control-token`; private to your user account) if it does not exist. Every
+  connection must first send `{"id":1,"method":"auth","params":{"token":"<token>","client":"<name>","protocol":2}}`;
+  anything else is refused before it can run a command (`auth_required` / `unauthorized`).
+  Limits: 1 MiB per message, 10 s to authenticate, 30 min idle, 8 connections.
+  **Setup › External Control...** shows whether the channel is on and its port, the token
+  (redacted: `smlc_…` and its last four characters) and its file, with **Copy token**, **Rotate token**
+  (new connections need the new one; connected clients keep running until they disconnect) and
+  **Revoke** (no new connections until you rotate). From a terminal: `soundcraft-cli token
+  path | show | rotate | revoke`. **The token is a password:** never paste it into chats, issues,
+  screenshots or files you share. Enable the channel only when you want an operator to work.
+- **Migrating a script from protocol 1:** a script that sends a command first now gets
+  `auth_required` with the token file's location. Add the `auth` message (the CLI, MCP bridge and
+  SDKs do it for you: they read `SOUNDCRAFT_CONTROL_TOKEN` or the token file).
 - **Protocol:** one JSON object per line, e.g.
   `{"id":1,"method":"engine.execute","params":{"command":"mix.mute","params":{"tracks":["Lead"],"value":true}}}`.
   Methods: `engine.execute`, `engine.commands`, `session.inspect`, `ui.inspect`, `ui.menu.list`,
   `ui.menu.invoke`, `ui.screenshot`, `ui.click`, `ui.drag`, `ui.key`, `ui.text`, `ui.move`,
   `ui.set`, `engine.parity`, `app.quit` ([reference/CAPABILITIES.md](reference/CAPABILITIES.md)).
   Replies time out after 90 s; a reply that times out does not cancel what was asked (the app
-  carries it out when it reaches it). Long work is never done inside a reply: plugin scans return
+  carries it out when it reaches it). Clients never re-send a request that was sent: after a
+  timeout or a lost connection, inspect the state before deciding to try again. Long work is never done inside a reply: plugin scans return
   a job at once (§17.1). Programmatic calls open no dialog, except theme/shortcut import/export
   without a path.
 - **CLI helper:** `soundcraft-cli app --port 7979 METHOD [JSON]`. A bare command id is wrapped in
@@ -1607,53 +1673,66 @@ its own undo step), `inspect_session`, `new_session`, `open_session`, `save_sess
 
 ### 25.4 What every external caller must know
 - Commands run exactly as asked, **without confirmation dialogs**: `session.new`, `session.open`
-  and `session.close` discard unsaved changes; `session.save`/`session.save_as` replace an
+  and `session.close` discard unsaved changes (while a take is being recorded they, and
+  `session.revert`, are refused: §6.6); `session.save`/`session.save_as` replace an
   existing file; `file.export_path` and `file.bounce_stems` replace files; only `file.bounce_mix`
   refuses an existing file without `overwrite`.
 - Undo: `engine.history` lists the undo stack; `edit.undo` steps back. Commands marked "no" under
   Undo in [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md) cannot be undone.
 - `assistant.ask` from outside always uses the grounded rules, never the local model.
 
+### 25.5 Python and JavaScript SDKs (local)
+The repository's `sdk/` folder holds two small clients with no dependencies: `sdk/python/sml_studio.py`
+(Python 3.8+) and `sdk/js/sml-studio.mjs` (Node.js 18+). They are local files, not published
+packages. Both authenticate with the token (argument, `SOUNDCRAFT_CONTROL_TOKEN`, or the token file),
+expose `capabilities()`, `inspect()`, `execute(command, params)`, `call(method, params)` and scan-job
+helpers, and raise typed errors (`AuthError`, `ProtocolError`, `CommandError`, `RequestTimeout`,
+`ConnectionLost`). They never retry a sent request. The examples in `sdk/examples/` only read unless
+given `--temporary-session`, which replaces the open session with an unsaved one and refuses when
+the open session has unsaved changes. Run anything that changes a session against
+`soundcraft-cli serve --port P` (a headless server with the same authentication) or a disposable
+session, never against real work. Details: `sdk/README.md`; wire format:
+`sdk/schema/sml-control-v2.schema.json` and [control-protocol.md](control-protocol.md).
+
 ## 26. Known issues in this build
 
 Found by reviewing the source of this build; most have not been observed on Windows. They are
-documented so that you and any operator can work around them. Workarounds in brackets.
+documented so that you and any operator can work around them. Workarounds in brackets. Fixed in
+Hotfix 03 and removed: K1 (reference A/B), the mute part of K2, K8 (punch roll zones), K15
+(windows without menu entries) and K21 (Recover Autosave while recording); their numbers are not
+reused.
 
 | # | Issue |
 |---|---|
-| K1 | **Open functional defect:** mastering reference audio never plays. "A/B: listen to reference" only stores a setting; nothing feeds the reference to the monitor output. Level match and meters do work. [Compare in another player at the level-matched gain, §24 E.] Source path and reproduction: `docs/refinement_pass_01/REFERENCE_AB_DEFECT.md`. There is no menu entry for choosing a reference (use `mastering.reference`). |
-| K2 | Master track: mute has no effect; all Master inserts run before the fader even if set Post; `mix.signal_flow` for Master lists stages Main does not have. |
+| K2 | Master track: all Master inserts run before the fader even if set Post; `mix.signal_flow` for Master lists stages Main does not have. (Master mute works since Hotfix 03, §13.4.) |
 | K3 | Monitoring modes Tracking and Mixing behave identically (only Hardware changes processing); "Low Latency Monitoring" does nothing. |
 | K4 | SML Remote "Start with the app" does not start the service at launch. [Press Start.] |
 | K5 | Pro Tools-style profile: Space starts playback but does not stop it. [Stop button / Transport window, or Studio One style.] |
 | K6 | Pro Tools-style profile: F1 opens Command Help (not Shuffle); Ctrl+= only goes to Mix; Ctrl+Alt+L runs Move Selection Left (not Loop). |
 | K7 | Studio One-style N (snap) and Alt+X (split) report errors; clip rating chords Ctrl+Alt+0–5 do nothing; the Nudge help mentions remapping `nudge.apply`, which has no row in the Keyboard Shortcuts window. |
-| K8 | Punch recording with pre/post-roll can remove existing clips in the roll zones (code reading; not reproduced). [Duplicate the playlist first.] |
 | K9 | The "SAFE OPEN" and "previous run did not close properly" status messages are overwritten when preferences load. Safe Open itself works. |
 | K10 | Partly fixed in Hotfix 01: device, buffer and input choices are now remembered (§4.1). Remaining: **Reopen the system default output** (Audio Setup › Advanced) opens the default output, not your choice [Apply your device again]; no control sets a recording offset. |
 | K11 | Send pan and send mute automation can be drawn but is not played back. |
 | K12 | Clicking an empty snapshot slot stores the current mix into it. |
 | K13 | `file.bounce_mix` ignores its documented `source` parameter; the Bounce Mix dialog has no dither, rate, tail, report or overwrite controls (use the command). |
 | K14 | Recover Autosave: recovering a take shortens the capture file in place (the window says nothing is overwritten); only the newest generation per session is listed. [Copy the WAV first.] |
-| K15 | Recording, Recover Autosave…, SML Remote, Assistant and Command Help have no menu-bar entry. [Search.] |
 | K16 | Programmatic New/Open/Close discard unsaved changes without asking; Save/Save As replace existing files; stems and named exports replace files. |
 | K17 | Interface scale and Reduce motion are not remembered after a restart. |
 | K18 | With a mastering program file set, Meters and Level match measure the raw file without the Master chain. |
 | K19 | Grid and Rel Grid snap a dragged clip the same way. |
 | K20 | Long exports: offline renders stop at about 93 minutes of stereo at 48 kHz (untested beyond). |
-| K21 | While a take is being recorded, Recover Autosave… can list that take as "unfinished"; recovering it would shorten the file being written. [Never use Recover Autosave… while recording.] |
 | K22 | Thirteen FabFilter VST3 plugins (Micro, One, Pro-C 2, Pro-DS, Pro-G, Pro-L 2, Pro-MB, Pro-Q 3, Pro-R, Saturn 2, Simplon, Twin 2, Volcano 2; Timeless 3 scanned fine) were reported quarantined with "exit code -1073741819" (an access violation) by 0.5.0 builds up to 4d8749f. This build makes the scan worker run each plugin's module exit before it ends (on Windows it used to skip it) and records the failing step; whether that is the cause is **not yet known**. [After installing, Retry them from **Quarantined (n)** or `engine.plugin_scan_retry {all: true}` and read `engine.plugin_scan_quarantine`.] |
-| K23 | On Windows the buffer cannot be set with WASAPI (shared mode): the request is replaced by the driver default and Audio Setup says so. 64/128-frame buffers need ASIO, which is not in this build (§4.6). |
+| K23 | On Windows, plain WASAPI (shared) cannot take a buffer size: the request is replaced by the engine period and Audio Setup says so. WASAPI Low Latency and WASAPI Exclusive (§4.1) take smaller buffers but have not yet been run on Windows; ASIO is not in this build (§4.6). |
 | K24 | Clip drag: with the Arrow tool and an alternate tool set, holding Ctrl when pressing picks the alternate tool rather than the time lock. [Press Ctrl after the drag has started.] |
 
 ## 27. Not available in this build
 
-ASIO and WASAPI exclusive mode (WASAPI shared only on Windows; §4.6); aggregate-device clock
+ASIO (§4.6); native WASAPI input (WASAPI Exclusive/Low Latency are output only); aggregate-device clock
 correction and measured driver latency; QuickPunch, TrackPunch, Destructive Record/Punch; a separate cue/headphone mix;
 native analog summing and tape models; built-in effects and instruments; the SML plugin family
 (Channel EQ, Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align); ARA and
-note-level pitch editing; Audio Unit editors and sidechains; in-app reference playback;
-MP3/AAC export; user session templates in File › New; crash containment for plugins hosted
+note-level pitch editing; Audio Unit editors and sidechains; MP3/AAC export outside Windows, VBR and
+other compressed formats; user session templates in File › New; crash containment for plugins hosted
 in-process (opt-in sandbox only); HTTPS, an installable app, a microphone and QR pairing for the
 phone remote; free dictation, wake word and an always-listening assistant; a bundled language
 model; keypad-vs-main-row key distinction and Windows-key chords. Help › Known Limits
@@ -1693,5 +1772,5 @@ assistant cites those numbers.
 Corrections to the previous edition made here: VST3 sidechain is routed (first aux bus); Bend
 joins are crossfaded (480 samples); the Master layout is a working mastering workspace; Keyboard
 Shortcuts is under Setup; Search is Window › Pro Tools Search; several windows are reached only
-through Search; the reference never plays; dither defaults to on; monitoring modes, snapshot,
+through Search (all have menu entries since Hotfix 03); the reference never played before Hotfix 03; dither defaults to on; monitoring modes, snapshot,
 recovery and keyboard details as listed in §26.

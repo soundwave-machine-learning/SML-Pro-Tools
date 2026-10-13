@@ -2,20 +2,20 @@
   "schema": "sml-docs-manifest-1",
   "product": "SML Studio (SoundCraft engine)",
   "product_version": "0.5.0",
-  "docs_revision": "2026-10-13.5",
+  "docs_revision": "2026-10-13.6",
   "updated": "2026-10-13",
   "verification": {
-    "source_sha": "30df4a94b45987082ebd4795108febace341ab38",
-    "previous_source_sha": "3aa655460c2a12f8eeb53ee503687b5f88583189",
+    "source_sha": "f98af69f0cf6f520ed7a37ab0cabeb3a94fa71ba",
+    "previous_source_sha": "30df4a94b45987082ebd4795108febace341ab38",
     "date": "2026-10-13",
-    "method": "source review + portable tests: Hotfix Pass 02 — chapters flagged by docs-check (3, 4, 6, 7, 8, 9, 12, 13, 15, 16, 17, 21) reviewed against this commit; 4, 8, 12, 13, 17, 22, 25, 26, 27 and §2/§3.5/§6.4 rewritten for HF07–HF13; 7, 9, 15, 16 and 21 changed only by code that does not alter their text (the clip-move command, stage tracing in the hosts, a module declaration, new Window menu items described in §13.5); tests crates/mix/src/scan_jobs.rs, crates/mix/tests/scan_worker_fixture.rs, crates/engine/tests/plugin_scan_jobs.rs, crates/ui-egui/tests/{clip_drag,hotfix02}.rs and all suites; renders docs/hotfix_pass_02/evidence. Before that: source review + portable tests: UI refinement pass 01 — chapters flagged by docs-check (2, 4, 6, 13, 18, 22, 24 E, 26 K1) reviewed against this commit; UI tests crates/ui-egui/tests/ui_refinement.rs and all soundcraft-ui-egui suites; before/after renders docs/refinement_pass_01/evidence. Before that: source review + portable tests: interface polish pass 01 — chapters flagged by docs-check (3, 6, 8, 13, 18, 20, 21, 22) reviewed against this commit (21 changed only by an error message and the menu-bar overflow, described in 22); UI tests crates/ui-egui/tests/interface_polish.rs and all soundcraft-ui-egui suites; headless render matrix docs/polish_pass_01/evidence. Before that: source review + portable tests: Hotfix Pass 01 review at this commit of every chapter docs-check flagged (3, 4, 5, 6, 7, 8, 13, 21; 7, 8 and 21 changed only by additions that do not alter their text); UI tests crates/ui-egui/tests/{mix_split,add_track,control_bar}.rs; headless CLI command check docs/hotfix_pass_01/evidence/hotfix-commands.log; offscreen renders docs/hotfix_pass_01/evidence/*.png. Earlier review at 018793f7c2f3d601800b7ddbcd38b45c2c30a255: source review of every chapter against the code and tests at source_sha (four cited audits: recording/device/recovery, editing/Nudge/shortcuts, mixer/plugins/mastering, remote/assistant/UI/external control), generated reference from the registry, headless CLI walkthroughs B/C/E on synthetic audio (docs/evidence/documentation/walkthrough-commands.log)",
+    "method": "source review + portable tests: Hotfix Pass 03 — chapters flagged by docs-check (3, 4, 5, 6, 13, 16, 18, 21, 22, 23, 25) reviewed against 360acf3 (this commit adds only a test and an SDK error message); §1, §2, §4.1/4.3/4.6, §6.3/6.6, §13.4, §16.1, §18.1/18.2/18.4, §23.2, §24 A/E, §25.2/25.4/25.5, §26 (K1, K2 mute, K8, K15, K21 removed; K23 updated), §27, §28 rewritten for HF15–HF22; 3, 5, 21 and 22 changed only by code that does not alter their text (token-file setup at start, the bounce dialog described in §18.4, menu entries described in §1, the Master card described in §18.1); tests crates/engine/tests/hf17_hf18_recording_safety.rs, crates/ui-egui/tests/hotfix03.rs, crates/playback (reference_ab_tests), crates/mix (Master mute), crates/automation (auth, server), crates/engine/tests/rc10_export.rs (HF20), apps/soundcraft-cli/tests/sdk_e2e.rs and all suites (cargo xtask ci); Grok cookbook re-run through the authenticated channel with the Python SDK against soundcraft-cli serve (docs/hotfix_pass_03/evidence/cookbook-serve.log: 53 calls OK). Before that: source review + portable tests: Hotfix Pass 02 — chapters flagged by docs-check (3, 4, 6, 7, 8, 9, 12, 13, 15, 16, 17, 21) reviewed against this commit; 4, 8, 12, 13, 17, 22, 25, 26, 27 and §2/§3.5/§6.4 rewritten for HF07–HF13; 7, 9, 15, 16 and 21 changed only by code that does not alter their text (the clip-move command, stage tracing in the hosts, a module declaration, new Window menu items described in §13.5); tests crates/mix/src/scan_jobs.rs, crates/mix/tests/scan_worker_fixture.rs, crates/engine/tests/plugin_scan_jobs.rs, crates/ui-egui/tests/{clip_drag,hotfix02}.rs and all suites; renders docs/hotfix_pass_02/evidence. Before that: source review + portable tests: UI refinement pass 01 — chapters flagged by docs-check (2, 4, 6, 13, 18, 22, 24 E, 26 K1) reviewed against this commit; UI tests crates/ui-egui/tests/ui_refinement.rs and all soundcraft-ui-egui suites; before/after renders docs/refinement_pass_01/evidence. Before that: source review + portable tests: interface polish pass 01 — chapters flagged by docs-check (3, 6, 8, 13, 18, 20, 21, 22) reviewed against this commit (21 changed only by an error message and the menu-bar overflow, described in 22); UI tests crates/ui-egui/tests/interface_polish.rs and all soundcraft-ui-egui suites; headless render matrix docs/polish_pass_01/evidence. Before that: source review + portable tests: Hotfix Pass 01 review at this commit of every chapter docs-check flagged (3, 4, 5, 6, 7, 8, 13, 21; 7, 8 and 21 changed only by additions that do not alter their text); UI tests crates/ui-egui/tests/{mix_split,add_track,control_bar}.rs; headless CLI command check docs/hotfix_pass_01/evidence/hotfix-commands.log; offscreen renders docs/hotfix_pass_01/evidence/*.png. Earlier review at 018793f7c2f3d601800b7ddbcd38b45c2c30a255: source review of every chapter against the code and tests at source_sha (four cited audits: recording/device/recovery, editing/Nudge/shortcuts, mixer/plugins/mastering, remote/assistant/UI/external control), generated reference from the registry, headless CLI walkthroughs B/C/E on synthetic audio (docs/evidence/documentation/walkthrough-commands.log)",
     "environment": "P: Linux x86_64 build container; no display, audio device, Windows host, phone, microphone, third-party plugin or listener",
     "observed": [],
     "pending": [
+      "Windows: Hotfix Pass 03 native gates (docs/hotfix_pass_03/TARGET_PENDING.md): WASAPI Exclusive and WASAPI Low Latency on the SSL 2 (open, delivered buffer, 30-minute playback, device loss); MP3/M4A export with the Windows Media Foundation encoders (decode check, players); reference A/B and Master mute by ear; menus at the owner's scale; Setup › External Control with the owner's Grok connector; token file in the update script's settings backup",
+      "BLOCKED: native ASIO (Steinberg SDK licence acceptance + MSVC/LLVM build machine). FabFilter quarantine cause: PENDING_NATIVE (needs the owner's plugins on Windows)",
       "Windows: Hotfix Pass 02 native gates (docs/hotfix_pass_02/TARGET_PENDING.md): control-channel rescan of the owner's 384-VST3 library without host exit; FabFilter retry and per-plugin results; SSL 2 delivered buffer, 30-minute playback/recording; clip drag with a mouse; bottom bar confirmation; fader look approval; detached Mixer on three displays",
-      "BLOCKED: native ASIO (Steinberg SDK licence acceptance + MSVC/LLVM build machine) and WASAPI exclusive (needs a new Windows audio backend)",
       "Windows: UI refinement pass 01 (Visual cluster chips and dragging coincident nodes, Compact density at the owner's scale, stacked Record toolbar with the transport in the control bar at 1366x768 at 150 %, input bar with a real signal)",
-      "OPEN DEFECT K1: reference A/B plays no audio — audio-path repair pending (docs/refinement_pass_01/REFERENCE_AB_DEFECT.md)",
       "Windows: interface polish pass 01 presentation (SML Studio Dark and Graphite palettes, control bar segments, mixer strip order and state tags, focus rings) at the owner's display scale",
       "Windows: Hotfix Pass 01 controls (control bar, Audio Setup with the owner's microphone/interface, Loop lane, Split divider, + Add Track) on the installed candidate; remembered device after a restart",
       "Windows: identify the installed build (USER_GUIDE.md §3.4) and walk through §4, §6, §17.3, §21 on it",
@@ -198,7 +198,7 @@
     },
     {
       "path": "docs/refinement_pass_01/REFERENCE_AB_DEFECT.md",
-      "role": "open defect K1 record (reference A/B)"
+      "role": "K1 defect record (reference A/B; repaired in Hotfix Pass 03)"
     },
     {
       "path": "docs/DOCS_MANIFEST.json",
@@ -211,6 +211,18 @@
     {
       "path": "docs/hotfix_pass_02/TARGET_PENDING.md",
       "role": "Hotfix Pass 02 native checks pending"
+    },
+    {
+      "path": "docs/hotfix_pass_03/HOTFIX03_REPORT.md",
+      "role": "Hotfix Pass 03 report"
+    },
+    {
+      "path": "docs/hotfix_pass_03/TARGET_PENDING.md",
+      "role": "Hotfix Pass 03 native checks pending"
+    },
+    {
+      "path": "sdk/README.md",
+      "role": "local Python/JavaScript SDKs (control protocol 2)"
     }
   ],
   "bundle": [
@@ -234,7 +246,9 @@
     "docs/refinement_pass_01/REFINEMENT_REPORT.md",
     "docs/refinement_pass_01/REFERENCE_AB_DEFECT.md",
     "docs/hotfix_pass_02/HOTFIX02_REPORT.md",
-    "docs/hotfix_pass_02/TARGET_PENDING.md"
+    "docs/hotfix_pass_02/TARGET_PENDING.md",
+    "docs/hotfix_pass_03/HOTFIX03_REPORT.md",
+    "docs/hotfix_pass_03/TARGET_PENDING.md"
   ],
   "non_command_identifiers": [],
   "chapters": [
@@ -274,7 +288,8 @@
         "crates/ui-egui/src/windows.rs",
         "crates/ui-egui/src/panels.rs",
         "crates/ui-egui/src/control_bar.rs",
-        "crates/ui-egui/src/lib.rs"
+        "crates/ui-egui/src/lib.rs",
+        "crates/wasapi-native/src"
       ]
     },
     {
@@ -323,7 +338,8 @@
         "crates/engine/src/cmd/loop_range.rs",
         "crates/ui-egui/src/control_bar.rs",
         "crates/ui-egui/src/edit_window.rs",
-        "crates/ui-egui/src/mix_window.rs"
+        "crates/ui-egui/src/mix_window.rs",
+        "crates/engine/src/lib.rs"
       ]
     },
     {
@@ -434,7 +450,8 @@
         "crates/engine/src/cmd/mix.rs",
         "crates/engine/src/cmd/snapshot.rs",
         "crates/ui-egui/src/detached_mixer.rs",
-        "crates/ui-egui/src/widgets.rs"
+        "crates/ui-egui/src/widgets.rs",
+        "crates/mix/src/lib.rs"
       ]
     },
     {
@@ -517,7 +534,11 @@
         "crates/engine/src/cmd/mastering.rs",
         "crates/engine/src/cmd/file.rs",
         "crates/ui-egui/src/layouts.rs",
-        "crates/audio-io/src"
+        "crates/audio-io/src",
+        "crates/mf-encode/src",
+        "crates/engine/src/lossy.rs",
+        "crates/playback/src/lib.rs",
+        "crates/ui-egui/src/dialogs.rs"
       ]
     },
     {
@@ -599,7 +620,8 @@
         "crates/ui-egui/src/control.rs",
         "apps/soundcraft/src/control_server.rs",
         "crates/automation/src",
-        "apps/soundcraft-cli/src/main.rs"
+        "apps/soundcraft-cli/src/main.rs",
+        "sdk"
       ]
     }
   ]

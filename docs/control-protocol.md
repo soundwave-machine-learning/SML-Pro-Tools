@@ -11,6 +11,8 @@ input), and every command is reachable from:
 | Headless CLI | `soundcraft-cli run --demo --cmd 'mix.volume={"track":"Kick","db":-6}' --bounce out.wav` |
 | MCP (headless) | `soundcraft-cli mcp [--demo]` |
 | MCP (bridged to the app) | `soundcraft-cli mcp --connect <port>` |
+| Headless authenticated server (SDK tests, scripts) | `soundcraft-cli serve [--port P] [--demo]` (prints `SOUNDCRAFT_CONTROL_PORT=…`; `ui.*` methods need the desktop app) |
+| Python / JavaScript SDKs | `sdk/python/sml_studio.py`, `sdk/js/sml-studio.mjs` (local files; see `sdk/README.md`) |
 
 ## Isolated automation profiles
 
@@ -24,28 +26,64 @@ input opened by arm/monitor commands. An automated UI smoke run must never arm a
 monitoring, or start recording. Control input injects egui events; it does not establish operating-system
 input delivery or screen-reader acceptance. Native screenshots use the presented viewport frame.
 
-## Wire format
+## Wire format (protocol 2)
 
-Newline-delimited JSON over TCP on `127.0.0.1`. One request per line, one reply per line:
+Newline-delimited JSON over TCP on `127.0.0.1`, UTF-8, at most 1 MiB per line. The schema is
+`sdk/schema/sml-control-v2.schema.json`. The **first** message of every connection must be `auth`:
+
+```json
+{"id": 1, "method": "auth", "params": {"token": "<token>", "client": "my-script", "protocol": 2}}
+{"id": 1, "ok": true, "result": {"protocol": 2, "app_version": "0.5.0", "authenticated": true}}
+```
+
+Then one request per line, one reply per line:
 
 ```json
 {"id": 1, "method": "engine.execute", "params": {"command": "track.new", "params": {"count": 2, "format": "Stereo"}}}
 {"id": 1, "ok": true, "result": {"tracks": [12, 13]}}
 ```
 
-Errors: `{"id": 1, "ok": false, "error": "bad parameters for `mix.volume`: no track named `Nope`"}`.
+Errors: `{"id": 1, "ok": false, "code": "error", "error": "bad parameters for `mix.volume`: no track named `Nope`"}`.
 
-**Security and limits.** The channel binds `127.0.0.1` only and has **no authentication**: any
-process on the machine can drive the app while it is enabled, so enable it only when needed. A
-reply that takes longer than 90 s returns `{"ok": false, "error": "timeout"}`; a malformed line
-returns `"bad JSON: …"`. `id` is echoed; `command` is an alias of `engine.execute` and
-`document.inspect` of `session.inspect`.
+| `code` | Meaning |
+|---|---|
+| `auth_required` | The first message was not `auth`. The text says where the token file is (migration from protocol 1). The connection is closed. |
+| `unauthorized` | Missing, wrong or revoked token. The connection is closed. |
+| `protocol` | The client asked for another protocol version. |
+| `busy` | Too many connections (8). |
+| `bad_request` | Not JSON, or a line over 1 MiB. |
+| `timeout` | No reply within 90 s. The request was **not** cancelled: check the state before retrying. |
+| `closed` | The app is closing. |
+| `error` | The request ran and was refused (the text says why). |
+
+**Token.** The app creates the token file `control-token` in its settings folder at start if it
+does not exist (Windows `%APPDATA%\SoundCraft\control-token`; elsewhere the platform settings
+folder, or `SOUNDCRAFT_CONFIG_DIR`; mode 0600 on Unix). Format `smlc_` + 64 hex digits (32 random
+bytes from the OS). It is compared in constant time and never logged; the app shows it redacted
+(`smlc_…` + last four). Manage it with **Setup › External Control...** (Copy, Rotate, Revoke) or
+`soundcraft-cli token path | show | rotate | revoke`. Rotation affects new connections only;
+revocation refuses every new connection until a token exists again. Clients (CLI `app`, MCP
+`--connect`, SDKs) read `SOUNDCRAFT_CONTROL_TOKEN`, else the token file.
+
+**Security and limits.** The channel binds `127.0.0.1` only. Authentication must finish within
+10 s; an idle connection closes after 30 minutes; at most 8 connections. `id` is echoed;
+`command` is an alias of `engine.execute` and `document.inspect` of `session.inspect`.
+
+**No replay.** A client must never re-send a request automatically once it was written to the
+socket: it may already have run. After a timeout or a lost connection, inspect the state
+(`session.inspect`, `engine.history`) and decide. The CLI, MCP bridge and SDKs follow this rule.
+
+**While recording**, `session.new`, `session.open`, `session.close` and `session.revert` (and
+recovery from Recover Autosave) are refused with "a take is being recorded…"; nothing changes.
+
+**Migrating from protocol 1 (before Hotfix 03):** add the `auth` message as the first line. A
+protocol 1 client receives `auth_required` with the token file's location and is disconnected.
 
 ## Methods
 
 | Method | Params | What it does |
 |---|---|---|
-| `engine.execute` (alias `command`) | `{command, params}` | Run a command programmatically. Never opens a dialog — except `ui.theme_import`, `ui.theme_export`, `ui.shortcuts_import` and `ui.shortcuts_export` called without `path`/`text`, which open a native file picker. Empty params use defaults or the current selection. No confirmation: `session.new/open/close` discard unsaved changes. |
+| `engine.execute` (alias `command`) | `{command, params}` | Run a command programmatically. Never opens a dialog — except `ui.theme_import`, `ui.theme_export`, `ui.shortcuts_import` and `ui.shortcuts_export` called without `path`/`text`, which open a native file picker. Empty params use defaults or the current selection. No confirmation: `session.new/open/close` discard unsaved changes (refused while recording). |
 | `engine.commands` | `{filter?}` | Every command: id, label, menu path, shortcut, params doc, enabled + reason. Includes UI-layer commands (`window.*`); those rows ignore `filter` and always report enabled with params `{}`. Undo/risk metadata: `help.search`. |
 | `engine.parity` | `{}` | Parity report against the incumbent's menu catalog. |
 | `session.inspect` | `{detail?: "summary"|"full"}` | The document: tracks, clips (with times), inserts (+params when full), sends, routing, automation, markers, groups, busses, sources (`loaded` true when decoded audio is in the pool), selection, transport, undo label. |
@@ -73,7 +111,7 @@ returns `"bad JSON: …"`. `id` is echoed; `command` is an alias of `engine.exec
 ## Examples
 
 ```sh
-soundcraft --demo --control 7979 &        # a fixed port; with 0, read the port from the app's stdout or log
+soundcraft --demo --control 7979 &        # creates the token file if needed        # a fixed port; with 0, read the port from the app's stdout or log
 P=7979
 soundcraft-cli app --port $P mix.solo '{"tracks":["Bass"]}'
 soundcraft-cli app --port $P transport.play
