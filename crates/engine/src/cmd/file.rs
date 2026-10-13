@@ -297,6 +297,12 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
     std::fs::write(&path, &bytes).map_err(|err| EngineError::Io(format!("{path}: {err}")))?;
     let verified = crate::io::verify_export(&bytes, &ext, &stats);
     let mut out = json!({"path": path, "bytes": bytes.len(), "seconds": e.session().sample_rate.seconds(r.len()), "peak_db": stats.peak_db, "lufs": stats.integrated_lufs, "true_peak_db": stats.true_peak_db, "loudness_range_lu": stats.loudness_range_lu, "rate": stats.rate, "tail_samples": stats.tail_samples, "verified": verified});
+    // HF16: a muted Master silences the program, so the export is silent too. Said, not refused.
+    let master_muted = e.session().tracks.iter().any(|t| t.kind == soundcraft_model::TrackKind::Master && !t.inactive && t.mixer.mute);
+    out["master_muted"] = json!(master_muted);
+    if master_muted {
+        out["warning"] = json!("the Master track is muted: the exported program is silent (unmute Master and export again)");
+    }
     // Export report (R34): settings, revision, plugins and measured facts, next to the file.
     let want_report = p.get("report").is_some_and(|v| v.as_bool().unwrap_or(v.is_string()));
     if want_report {
@@ -314,7 +320,7 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
         let report = json!({
             "sml_build": env!("CARGO_PKG_VERSION"),
             "session": {"name": s.name, "revision": e.revision, "sample_rate": s.sample_rate.hz(), "mastering_note": s.mastering.revision_note, "program": s.mastering.program.map(|x| x.0)},
-            "export": {"path": path, "format": format_name, "bit_depth": format!("{bit_depth:?}"), "dither": opts.dither, "rate": stats.rate, "channels": stats.channels, "range": [r.start, r.end], "tail_samples": stats.tail_samples, "normalize": normalize, "fold_down": fold},
+            "export": {"path": path, "format": format_name, "bit_depth": format!("{bit_depth:?}"), "dither": opts.dither, "rate": stats.rate, "channels": stats.channels, "range": [r.start, r.end], "tail_samples": stats.tail_samples, "normalize": normalize, "fold_down": fold, "master_muted": master_muted},
             "plugins": plugins,
             "pending_bend_renders": e.warp.is_busy(),
             "measured": stats,

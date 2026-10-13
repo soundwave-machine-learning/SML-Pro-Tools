@@ -634,6 +634,14 @@ pub(crate) fn strip(app: &mut SoundApp, ui: &mut Ui, id: TrackId, snap: Option<&
         if text_toggle(&mut row, vec2(bw, 18.0), "M", track.mixer.mute, t.mute, "Mute").clicked() {
             let _ = app.run("mix.mute", json!({"track": id.0}));
         }
+    } else {
+        // HF16: Master mute silences the program output (and exports); monitor-only sources
+        // (reference A/B, assistant speech, the click) are not part of the program.
+        let tip = "Mute the program output (Main) — also silences exports. The reference A/B, assistant speech and the click are monitor-only and not affected.";
+        row.add_space(bw + 6.0);
+        if crate::widgets::text_toggle_named(&mut row, vec2(bw, 18.0), "M", "Master mute", track.mixer.mute, t.mute, tip).clicked() {
+            let _ = app.run("mix.mute", json!({"track": id.0}));
+        }
     }
     // Selected strips: an outline as well as the lighter surface (not colour alone).
     if selected {

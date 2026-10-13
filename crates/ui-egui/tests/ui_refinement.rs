@@ -204,14 +204,16 @@ fn empty_input_meters_say_no_signal_and_draw_no_level() {
     assert!(bars.iter().all(|b| !b.contains("dBFS")), "no level is shown without an input: {bars:?}");
 }
 
-/// OPEN FUNCTIONAL DEFECT K1 — reproduction, not a specification. Turning on "A/B: listen to
-/// reference" stores `mastering.reference.listening = true`, but nothing feeds the reference to
-/// the monitor-only path that exists for it (`soundcraft_playback::AuxMonitor`: no `push`, no
-/// `solo`, no gain), so no reference audio can be heard. This test documents that state; when
-/// the audio path is repaired it fails, and must then be replaced by a test of the repaired
-/// behaviour (docs/refinement_pass_01/REFERENCE_AB_DEFECT.md).
+/// Was the reproduction of OPEN DEFECT K1 (refinement pass 01): the A/B toggle stored
+/// `listening = true` but no reference audio reached the output. Repaired in Hotfix Pass 03
+/// (HF15); the defect record stays at docs/refinement_pass_01/REFERENCE_AB_DEFECT.md. This test
+/// now checks the repaired behaviour on the user's path: the Master layout's A/B toggle, then
+/// Play. The audio callback (here the silent clock, which runs the same `fill`) reports that the
+/// reference is what the output plays, and the card says so. The sample-level behaviour (level
+/// match, alignment, crossfade, end, missing media, rate conversion, never in a render) is tested
+/// in `soundcraft_playback`'s `reference_ab_tests`.
 #[test]
-fn defect_k1_reference_ab_feeds_no_audio_to_the_monitor_path() {
+fn reference_ab_plays_the_reference_on_the_monitor_output() {
     let mut engine = soundcraft_engine::demo::demo_engine();
     let src = engine.session().tracks.iter().flat_map(|t| t.playlists.iter().flat_map(|p| &p.clips)).find_map(|c| c.source()).unwrap();
     engine.execute("mastering.reference", &json!({"source": src.0})).unwrap();
@@ -226,16 +228,22 @@ fn defect_k1_reference_ab_feeds_no_audio_to_the_monitor_path() {
     );
     h.state_mut().run("window.master", json!({})).unwrap();
     h.run_steps(4);
-    // The user's path: the Master layout's A/B toggle, then Play.
     h.get_by_label("A/B: listen to reference").click();
     h.run_steps(3);
     assert_eq!(h.state().engine.session().mastering.reference.as_ref().map(|r| r.listening), Some(true), "the setting is stored");
     h.state_mut().run("transport.play", json!({})).unwrap();
-    h.run_steps(30);
-    let aux = h.state().player.as_ref().unwrap().aux();
-    assert_eq!(aux.queued_frames(), 0, "DEFECT K1: no reference audio is queued for the monitor output");
-    assert!(!aux.solo.load(std::sync::atomic::Ordering::Relaxed), "DEFECT K1: the program is not switched off for the A side");
-    // The defect is visible on screen, not presented as working.
-    h.get_all_by_label_contains("OPEN DEFECT").next().expect("the Master card says it is an open defect");
+    let mut state = soundcraft_playback::ReferenceState::Off;
+    for _ in 0..200 {
+        h.run_steps(1);
+        state = h.state().player.as_ref().unwrap().reference_state();
+        if state == soundcraft_playback::ReferenceState::Playing {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert_eq!(state, soundcraft_playback::ReferenceState::Playing, "the output plays the reference");
+    h.run_steps(2);
+    h.get_all_by_label_contains("Hearing: the reference (B)").next().expect("the card shows what is heard");
+    assert!(h.query_all_by_label_contains("OPEN DEFECT").next().is_none(), "no defect text any more");
     h.state_mut().run("transport.stop", json!({})).unwrap();
 }

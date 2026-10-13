@@ -149,11 +149,19 @@ pub fn master(app: &mut SoundApp, ui: &mut Ui) {
                                     let _ = app.run("mastering.reference", json!({"source": null}));
                                 }
                             });
-                            // Known issue K1: be explicit rather than imply A/B plays audio.
+                            // HF15: what the output is actually doing (from the audio callback).
+                            let state = app.player.as_ref().map(|p| p.reference_state());
+                            let (text, warn) = match (listening, state) {
+                                (false, _) => ("Hearing: the program (A).".to_string(), false),
+                                (true, Some(soundcraft_playback::ReferenceState::Playing)) => ("Hearing: the reference (B) at its level-match gain. Monitor-only: never in exports, recordings or meters.".to_string(), false),
+                                (true, Some(soundcraft_playback::ReferenceState::Missing)) => ("Reference audio is not loaded (missing media): the program is heard. Relink or choose another reference.".to_string(), true),
+                                (true, Some(soundcraft_playback::ReferenceState::Ended)) => ("The playhead is past the reference's end: silence on the B side.".to_string(), true),
+                                (true, _) => ("A/B on: the reference plays with the transport, aligned to the session start.".to_string(), false),
+                            };
                             ui.label(
-                                egui::RichText::new("OPEN DEFECT: A/B stores the setting only — no reference audio reaches the speakers (known issue K1). Compare in another player at the level-matched gain.")
+                                egui::RichText::new(text)
                                     .font(regular(crate::theme::size::SMALL))
-                                    .color(t.warning),
+                                    .color(if warn { t.warning } else { t.text_dim }),
                             );
                         }
                     });

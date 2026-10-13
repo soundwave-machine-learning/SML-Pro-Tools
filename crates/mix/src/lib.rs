@@ -322,6 +322,9 @@ struct Strip {
     mute_only: bool,
     /// Keeps insert latency while inserts are audition-bypassed.
     audition_delay: DelayLine,
+    /// HF16: Master mute gain (1 open, 0 muted), ramped over 5 ms; `None` until the first block
+    /// (which starts at its target, so an offline render of a muted Master is silent from sample 0).
+    master_mute_gain: Option<f32>,
 }
 
 /// A multichannel delay line (samples), resized only when the delay changes.
@@ -450,6 +453,7 @@ impl Strip {
             soloed_out: false,
             mute_only: false,
             audition_delay: DelayLine::default(),
+            master_mute_gain: None,
         }
     }
 }
@@ -1471,6 +1475,24 @@ impl MixEngine {
                         }
                     }
                 }
+                // HF16: Master mute gates the program output (Main) after the Master fader and
+                // Master Tape, from the next block, with a 5 ms ramp (no click). Mute automation
+                // in a read mode counts as mute. The meter below is post-mute.
+                let auto_mute = t.mixer.automation_mode.reads() && t.lane(&AutoParam::Mute).is_some_and(|l| l.value_at(pos, 0.0) >= 0.5);
+                let target = if t.mixer.mute || auto_mute { 0.0f32 } else { 1.0 };
+                let step = 1.0 / (s.sample_rate.as_f64() * 0.005).max(1.0) as f32;
+                let mut g = strip.master_mute_gain.unwrap_or(target);
+                if g < 1.0 || target < 1.0 {
+                    for i in 0..frames {
+                        g = if g < target { (g + step).min(target) } else { (g - step).max(target) };
+                        for m in self.main.iter_mut() {
+                            if let Some(x) = m.get_mut(i) {
+                                *x *= g;
+                            }
+                        }
+                    }
+                }
+                strip.master_mute_gain = Some(g);
                 let m = self.meters.entry(t.id).or_default();
                 m.measure(&self.main, frames, 0.0);
                 m.slots = strip.slot_io;

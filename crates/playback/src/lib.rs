@@ -96,6 +96,8 @@ struct Shared {
     output_lost: std::sync::atomic::AtomicU8,
     /// Latest (presentation instant, session sample presented then) while playing (CL04).
     play_anchor: Mutex<Option<(cpal::StreamInstant, Samples)>>,
+    /// HF15: `ReferenceState` code written by the callback.
+    reference_state: std::sync::atomic::AtomicU8,
     /// Monitor-only controls (R37): applied to the device output after fold-down, never to a
     /// render or bounce. Volume in milli-dB (0 = unity), dim (−20 dB) and mono sum.
     monitor_db_milli: std::sync::atomic::AtomicI32,
@@ -218,6 +220,7 @@ impl Shared {
             monitor_mono: AtomicBool::new(false),
             aux: AuxMonitor::new(),
             play_anchor: Mutex::new(None),
+            reference_state: std::sync::atomic::AtomicU8::new(0),
         }
     }
 }
@@ -249,6 +252,40 @@ struct AudioState {
     clock: clock::StreamClock,
     /// A Count Off arrived for the next Play.
     countoff_armed: bool,
+    /// HF15: reference A/B crossfade position (0 = program, 1 = reference), ramped over 10 ms.
+    ref_mix: f32,
+}
+
+/// HF15: what the reference A/B is doing on the device output (`Player::reference_state`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+pub enum ReferenceState {
+    /// Program is heard (no reference, or A/B off, or stopped).
+    Off,
+    /// The reference is heard instead of the program.
+    Playing,
+    /// A/B is on but the reference audio is not loaded (missing media): the program is heard.
+    Missing,
+    /// A/B is on and the playhead is past the reference's end: silence (the program stays muted).
+    Ended,
+}
+
+impl ReferenceState {
+    fn code(self) -> u8 {
+        match self {
+            ReferenceState::Off => 0,
+            ReferenceState::Playing => 1,
+            ReferenceState::Missing => 2,
+            ReferenceState::Ended => 3,
+        }
+    }
+    fn from_code(c: u8) -> ReferenceState {
+        match c {
+            1 => ReferenceState::Playing,
+            2 => ReferenceState::Missing,
+            3 => ReferenceState::Ended,
+            _ => ReferenceState::Off,
+        }
+    }
 }
 
 /// What the audio thread hands back to the UI thread to drop.
@@ -315,7 +352,13 @@ impl AudioState {
             recording: false,
             clock: clock::StreamClock::new(device_rate as u32),
             countoff_armed: false,
+            ref_mix: 0.0,
         }
+    }
+
+    /// HF15: whether the reference should be heard now (A/B on, playing, audio loaded).
+    fn reference_wanted(&self) -> bool {
+        self.playing && self.session.mastering.reference.as_ref().is_some_and(|r| r.listening && self.session.pool.get(r.source).is_some())
     }
 
     fn drain(&mut self) {
@@ -374,6 +417,8 @@ impl AudioState {
                     self.pending_len = 0;
                     self.read = 0.0;
                     self.mix.reset();
+                    // Starting from silence: the reference (if A/B is on) starts at full level.
+                    self.ref_mix = if self.reference_wanted() { 1.0 } else { 0.0 };
                 }
                 Cmd::Stop => {
                     self.mix.click_until = Samples::MIN;
@@ -495,12 +540,33 @@ impl AudioState {
         let monitoring = self.input.is_some() && self.session.tracks.iter().any(|t| t.mixer.input_monitor || t.mixer.record_arm);
         if !self.playing && !monitoring {
             out.iter_mut().for_each(|x| *x = 0.0);
+            self.ref_mix = 0.0;
+            self.shared.reference_state.store(ReferenceState::Off.code(), Ordering::Relaxed);
             if let Ok(mut m) = self.shared.meters.try_lock() {
                 m.main = StripMeter::default();
                 m.tracks.clear();
             }
             return;
         }
+        // HF15: the reference A/B (monitor-only). The reference audio is already decoded in the
+        // session's pool (at import, off this thread); here it is only read and interpolated.
+        // Alignment: reference frame 0 plays at session position 0, so the same moment of the
+        // song is heard on both sides of the A/B. Its level-match gain applies. Program and
+        // reference crossfade linearly over 10 ms (never both at full level).
+        let session = Arc::clone(&self.session);
+        let reference = session.mastering.reference.as_ref().filter(|r| r.listening).map(|r| (session.pool.get(r.source), r.gain_db));
+        let ref_target = if self.reference_wanted() { 1.0f32 } else { 0.0 };
+        let ref_step = 1.0 / (self.device_rate * 0.010).max(1.0) as f32;
+        let (ref_buf, ref_gain, ref_ratio) = match reference {
+            Some((Some(a), g)) => (Some(&a.buffer), 10f32.powf(g / 20.0), f64::from(a.buffer.sample_rate) / session.sample_rate.as_f64()),
+            _ => (None, 1.0, 1.0),
+        };
+        let mut ref_state = match reference {
+            None => ReferenceState::Off,
+            Some((None, _)) => ReferenceState::Missing,
+            Some(_) if !self.playing => ReferenceState::Off,
+            Some(_) => ReferenceState::Playing,
+        };
         let speed = f64::from(self.shared.speed.load(Ordering::Relaxed)) / 1000.0;
         let step = self.session.sample_rate.as_f64() / self.device_rate.max(1.0) * speed.clamp(0.1, 4.0);
         let mon_gain = monitor_gain(self.shared.monitor_db_milli.load(Ordering::Relaxed), self.shared.monitor_dim.load(Ordering::Relaxed));
@@ -552,8 +618,41 @@ impl AudioState {
                     *o = if c < nch.max(1) && sounding { sample(c).clamp(-1.0, 1.0) } else { 0.0 };
                 }
             }
-            // Monitor-only auxiliary audio (speech, reference): after the program, before the
-            // monitor stage; never in a render or a capture.
+            // HF15 reference A/B: after the program (and Master mute), before the monitor stage.
+            if self.ref_mix != ref_target {
+                self.ref_mix =
+                    if self.ref_mix < ref_target { (self.ref_mix + ref_step).min(ref_target) } else { (self.ref_mix - ref_step).max(ref_target) };
+            }
+            if self.ref_mix > 0.0 {
+                let xf = self.ref_mix;
+                // Session position of this output frame.
+                let at = (self.pos - self.pending_len as i64) as f64 + self.read;
+                let idx = at * ref_ratio;
+                let (mut v, nref) = ([0.0f32; 2], ref_buf.map_or(0, |b| b.channels.len()));
+                if let Some(b) = ref_buf
+                    && idx >= 0.0
+                {
+                    let i0 = idx.floor() as usize;
+                    let fr = (idx - i0 as f64) as f32;
+                    let len = b.channels.first().map_or(0, Vec::len);
+                    if i0 < len {
+                        for (c, vv) in v.iter_mut().enumerate() {
+                            let ch = &b.channels[c % nref.max(1)];
+                            let a = ch.get(i0).copied().unwrap_or(0.0);
+                            let n = ch.get(i0 + 1).copied().unwrap_or(a);
+                            *vv = (a + (n - a) * fr) * ref_gain;
+                        }
+                    } else if ref_state == ReferenceState::Playing {
+                        ref_state = ReferenceState::Ended;
+                    }
+                }
+                for (c, o) in frame.iter_mut().enumerate() {
+                    let r = if c < 2 { v[c] } else { 0.0 };
+                    *o = (*o * (1.0 - xf) + r * xf).clamp(-1.0, 1.0);
+                }
+            }
+            // Monitor-only auxiliary audio (speech): after the program, before the monitor stage;
+            // never in a render or a capture.
             if self.shared.aux.solo.load(Ordering::Relaxed) {
                 frame.iter_mut().for_each(|x| *x = 0.0);
             }
@@ -561,6 +660,7 @@ impl AudioState {
             apply_monitor(frame, mon_gain, mon_mono);
             self.read += step;
         }
+        self.shared.reference_state.store(ref_state.code(), Ordering::Relaxed);
     }
 }
 
@@ -964,6 +1064,11 @@ impl Player {
     /// True once after the audio thread saw the compensation latency change while recording.
     /// Why the output stream stopped (device unplugged / driver error), if it did. The
     /// transport cannot advance on this stream; reopen the device (Playback Engine).
+    /// HF15: what the reference A/B is doing on the device output right now.
+    pub fn reference_state(&self) -> ReferenceState {
+        ReferenceState::from_code(self.shared.reference_state.load(Ordering::Relaxed))
+    }
+
     pub fn output_lost(&self) -> Option<&'static str> {
         lost_reason(self.shared.output_lost.load(Ordering::Acquire))
     }
@@ -1456,5 +1561,166 @@ mod aux_monitor_tests {
         aux.push_speech(&speech, soundcraft_speech::SPEECH_RATE, 44_100);
         aux.clear();
         assert_eq!(aux.queued_frames(), 0);
+    }
+}
+
+#[cfg(test)]
+mod reference_ab_tests {
+    //! HF15 (reference A/B) and HF16 (Master mute) on the device output path.
+    use super::*;
+    use soundcraft_model::{ChannelFormat, Clip, Reference, SourceAudio, SourceId, TrackKind};
+
+    const PROG: f32 = 0.2;
+    const REF: f32 = 0.6;
+
+    /// A program of constant `PROG` on one stereo track (and a Master), and a reference source
+    /// whose sample `i` is `REF + i * 1e-7` (so position alignment is visible), at `ref_rate`.
+    fn session(ref_rate: u32, ref_len: usize, listening: bool, gain_db: f32) -> soundcraft_model::Session {
+        let mut s = soundcraft_model::Session::default();
+        let t = s.add_track(TrackKind::Audio, ChannelFormat::Stereo, Some("Mix"));
+        s.add_track(TrackKind::Master, ChannelFormat::Stereo, Some("Master 1"));
+        s.pool.insert(
+            SourceId(1),
+            Arc::new(SourceAudio::new(soundcraft_audio_io::AudioBuffer { sample_rate: 48_000, channels: vec![vec![PROG; 96_000]; 2] })),
+        );
+        let id = s.new_clip_id();
+        s.track_mut(t).unwrap().playlist_mut().unwrap().clips.push(Clip::audio(id, "mix", SourceId(1), 0, 0, 96_000));
+        let r: Vec<f32> = (0..ref_len).map(|i| REF + i as f32 * 1e-7).collect();
+        s.pool.insert(SourceId(2), Arc::new(SourceAudio::new(soundcraft_audio_io::AudioBuffer { sample_rate: ref_rate, channels: vec![r] })));
+        s.mastering.reference = Some(Reference { source: SourceId(2), gain_db, listening });
+        s
+    }
+
+    fn state(s: soundcraft_model::Session) -> (AudioState, Sender<Cmd>, Arc<Shared>) {
+        let shared = Arc::new(Shared::new());
+        let (tx, rx) = channel();
+        let s = Arc::new(s);
+        let mut st = AudioState::new(rx, Arc::clone(&shared), Arc::clone(&s), 48_000.0, channel().0);
+        tx.send(super::tests_support::session_cmd(s)).unwrap();
+        st.drain();
+        (st, tx, shared)
+    }
+
+    fn run(st: &mut AudioState, frames: usize) -> Vec<f32> {
+        let mut out = vec![0.0f32; frames * 2];
+        st.fill(&mut out, 2);
+        out
+    }
+
+    /// With A/B on, the device output is the reference at its level-match gain instead of the
+    /// program, aligned so reference frame N plays at session position N; the program is silent.
+    #[test]
+    fn reference_replaces_the_program_on_the_output_only() {
+        let (mut st, tx, shared) = state(session(48_000, 200_000, true, -6.0));
+        tx.send(Cmd::Play { from: 10_000, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 512);
+        let g = 10f32.powf(-6.0 / 20.0);
+        for f in [0usize, 100, 511] {
+            let want = (REF + (10_000 + f) as f32 * 1e-7) * g;
+            assert!((out[2 * f] - want).abs() < 1e-5 && (out[2 * f + 1] - want).abs() < 1e-5, "frame {f}: {} vs {want}", out[2 * f]);
+        }
+        assert_eq!(ReferenceState::from_code(shared.reference_state.load(Ordering::Relaxed)), ReferenceState::Playing);
+        // The program meter (post-Master) still measures the program, never the reference.
+        let peak = shared.meters.lock().unwrap().main.peaks.first().copied().unwrap_or(0.0);
+        assert!((peak - PROG).abs() < 1e-3, "meter shows the program: {peak}");
+    }
+
+    /// Live switching: a 10 ms (480-frame) linear crossfade, both directions; no frame is louder
+    /// than the louder of the two sources (never a full-level sum).
+    #[test]
+    fn live_switch_crossfades_in_ten_ms() {
+        let (mut st, tx, _) = state(session(48_000, 200_000, false, 0.0));
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 256);
+        assert!((out[0] - PROG).abs() < 1e-6, "program while A/B is off");
+        tx.send(super::tests_support::session_cmd(Arc::new(session(48_000, 200_000, true, 0.0)))).unwrap();
+        let out = run(&mut st, 1024);
+        let reached = (0..1024).find(|f| (out[2 * f] - (REF + (256 + f) as f32 * 1e-7)).abs() < 1e-5).unwrap();
+        assert!((470..=490).contains(&reached), "crossfade length {reached} frames");
+        assert!(out.iter().all(|x| x.abs() <= REF + 0.01), "never a full-level sum");
+        assert!(out[2] > PROG && out[2] < REF, "mid-fade is between the two: {}", out[2]);
+        tx.send(super::tests_support::session_cmd(Arc::new(session(48_000, 200_000, false, 0.0)))).unwrap();
+        let out = run(&mut st, 1024);
+        let back = (0..1024).find(|f| (out[2 * f] - PROG).abs() < 1e-6).unwrap();
+        assert!((470..=490).contains(&back), "{back}");
+    }
+
+    /// Reference end (silence, state Ended), missing media (program heard, state Missing) and a
+    /// reference at another rate (converted: 44.1 kHz frame k plays at session sample k·48/44.1).
+    #[test]
+    fn end_missing_and_rate_conversion() {
+        let (mut st, tx, shared) = state(session(48_000, 5_000, true, 0.0));
+        tx.send(Cmd::Play { from: 4_900, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 512);
+        assert!(out[2 * 50] > 0.5 && out[2 * 300] == 0.0, "reference, then silence after its end");
+        assert_eq!(ReferenceState::from_code(shared.reference_state.load(Ordering::Relaxed)), ReferenceState::Ended);
+
+        let mut s = session(48_000, 5_000, true, 0.0);
+        s.pool.remove(SourceId(2));
+        let (mut st, tx, shared) = state(s);
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 256);
+        assert!((out[20] - PROG).abs() < 1e-6, "missing media: the program is heard");
+        assert_eq!(ReferenceState::from_code(shared.reference_state.load(Ordering::Relaxed)), ReferenceState::Missing);
+
+        let (mut st, tx, _) = state(session(44_100, 200_000, true, 0.0));
+        tx.send(Cmd::Play { from: 48_000, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 4);
+        let want = REF + 44_100.0 * 1e-7;
+        assert!((out[0] - want).abs() < 2e-6, "{} vs {want}", out[0]);
+    }
+
+    /// Monitor-only: an offline render (the export path) is bit-identical with A/B on or off, and
+    /// the input/capture path is untouched (the reference is added in `fill` after the program).
+    #[test]
+    fn reference_never_enters_a_render() {
+        let r = soundcraft_time::Range::new(0, 8_192);
+        let on = soundcraft_mix::render_range(&session(48_000, 200_000, true, 0.0), r, 512);
+        let off = soundcraft_mix::render_range(&session(48_000, 200_000, false, 0.0), r, 512);
+        assert_eq!(on, off);
+        assert!((on[0][100] - PROG).abs() < 1e-6);
+    }
+
+    /// HF16: Master mute silences the program output (and so an offline render) with a 5 ms ramp
+    /// on the live output and from sample 0 offline; unmuting ramps back. The reference A/B is
+    /// monitor-only and is not affected by Master mute.
+    #[test]
+    fn master_mute_gates_the_program_with_a_ramp() {
+        let master_muted = |mute: bool| {
+            let mut s = session(48_000, 200_000, false, 0.0);
+            let m = s.tracks.iter().find(|t| t.kind == TrackKind::Master).unwrap().id;
+            s.track_mut(m).unwrap().mixer.mute = mute;
+            s
+        };
+        let r = soundcraft_time::Range::new(0, 4_096);
+        assert!(soundcraft_mix::render_range(&master_muted(true), r, 512).iter().flatten().all(|x| *x == 0.0), "a muted Master renders silence");
+        let (mut st, tx, shared) = state(master_muted(false));
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        let _ = run(&mut st, 512);
+        tx.send(super::tests_support::session_cmd(Arc::new(master_muted(true)))).unwrap();
+        let out = run(&mut st, 1024);
+        let silent = (0..1024).find(|f| out[2 * f] == 0.0).unwrap();
+        assert!(silent <= 512 + 240 + 1, "silent within the next block plus 5 ms: {silent}");
+        for w in out.chunks(2).collect::<Vec<_>>().windows(2) {
+            assert!((w[0][0] - w[1][0]).abs() <= PROG / 200.0, "no step larger than the ramp");
+        }
+        assert_eq!(shared.meters.lock().unwrap().main.peaks.first().copied().unwrap_or(1.0), 0.0, "post-mute meter shows silence");
+        // Reference A/B with Master muted: still heard (monitor-only).
+        let mut s = master_muted(true);
+        s.mastering.reference.as_mut().unwrap().listening = true;
+        let (mut st, tx, _) = state(s);
+        tx.send(Cmd::Play { from: 0, end: None, looped: None }).unwrap();
+        let out = run(&mut st, 64);
+        assert!((out[20] - REF - 10.0 * 1e-7).abs() < 1e-5, "{}", out[20]);
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod tests_support {
+    use super::*;
+    /// A session command with its graph prepared the way `update_session` does it.
+    pub(crate) fn session_cmd(s: Arc<soundcraft_model::Session>) -> Cmd {
+        let prep = GraphPrep::build(&s, s.sample_rate.as_f64() as f32, BLOCK, Vec::new(), 0);
+        Cmd::Session(s, Box::new(prep), None)
     }
 }

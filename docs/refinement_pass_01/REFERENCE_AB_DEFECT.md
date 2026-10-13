@@ -1,6 +1,15 @@
 # Open functional defect K1: reference A/B produces no audio
 
-**Status: OPEN.** Reference listening is **not** complete. The UI pass that records this defect
+**Status: REPAIRED in Hotfix Pass 03 (HF15)**, in source and portable tests; native listening on
+Windows is pending. The repair: `crates/playback/src/lib.rs` `AudioState::fill` reads the
+reference from the session pool (decoded at import), applies its level-match gain, aligns
+reference frame 0 with session position 0, crossfades program and reference over 10 ms, and
+reports `Player::reference_state()`. It is added on the device output only (never in renders,
+exports, captures or the program meters). The reproduction test below was replaced by
+`ui_refinement.rs::reference_ab_plays_the_reference_on_the_monitor_output` and
+`soundcraft_playback` `reference_ab_tests`. The history below is kept as it was.
+
+**Status at refinement pass 01: OPEN.** Reference listening was **not** complete. The UI pass that records this defect
 (refinement pass 01) changes only presentation: it states the defect on screen and corrects a
 wrong hint. It does not repair the audio path. The repair is separate work.
 
