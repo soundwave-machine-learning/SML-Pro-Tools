@@ -3,6 +3,36 @@
 Newest first. Each entry: date, documentation revision, source commit described, what changed,
 how it was verified. The verification state itself lives in [DOCS_MANIFEST.json](DOCS_MANIFEST.json).
 
+## 2026-10-13 — revision 2026-10-13.5 — Hotfix Pass 02, source `30df4a9`
+
+**Changed**
+- [USER_GUIDE.md](USER_GUIDE.md):
+  - §2 capability table: scan jobs, WASAPI shared-mode buffer, clip drag between tracks, bottom bar,
+    faders, detached Mixer.
+  - §3.5: the transport is in the Edit/Record bottom bar.
+  - §4.1, §4.3, §4.6: driver type, buffer only where the driver takes it, requested vs delivered,
+    callback spread, buffer duration is not latency; ASIO and WASAPI exclusive not in this build.
+  - §6.4: Count Off shown in the control bar.
+  - §8.4 (new): dragging clips to other tracks, time lock, refusals, `edit.move_clips {from}`.
+  - §12.1: NUDGE in the bottom bar; favourites in the unit menu; displacement on hover.
+  - §13.2: fader look and handling; §13.5 (new): the Mixer in its own window.
+  - §17.1: scan jobs, quarantine diagnostics, Retry, recovery point before scanning.
+  - §22: the Edit/Record rows (tools on top, bottom bar, overflow menus).
+  - §25.2: timeouts do not cancel; scans return jobs.
+  - §26: K22 (FabFilter), K23 (WASAPI buffer), K24 (Arrow + Ctrl); §27.
+- [grok/GROK_OPERATOR_GUIDE.md](grok/GROK_OPERATOR_GUIDE.md) and
+  [grok/GROK_BOT_INSTRUCTIONS.md](grok/GROK_BOT_INSTRUCTIONS.md): scan jobs and polling, never
+  forcing quarantined plugins, `edit.move_clips {from}`, detaching the Mixer, the bottom bar, no
+  ASIO/WASAPI exclusive and buffer ≠ latency.
+- Generated references regenerated (`cargo xtask docs`): `engine.plugin_scan_*`,
+  `window.mix_detach`, `window.mix_dock`, `window.mix_window_status`, new parameter docs of
+  `engine.vst3_plugins`, `engine.clap_plugins` and `edit.move_clips`.
+- New: [hotfix_pass_02/HOTFIX02_REPORT.md](hotfix_pass_02/HOTFIX02_REPORT.md),
+  [hotfix_pass_02/TARGET_PENDING.md](hotfix_pass_02/TARGET_PENDING.md), evidence renders.
+
+**Verified:** source review of every chapter docs-check flagged at `30df4a9`, portable tests; not
+observed on Windows.
+
 ## 2026-10-13 — revision 2026-10-13.4 — UI refinement pass 01, source `3aa6554`
 
 **Changed**

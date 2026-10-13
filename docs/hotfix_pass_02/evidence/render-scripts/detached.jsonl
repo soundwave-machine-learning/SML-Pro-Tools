@@ -1,0 +1,3 @@
+{"method":"engine.execute","params":{"command":"window.edit","params":{}}}
+{"method":"engine.execute","params":{"command":"window.mix_detach","params":{"value":true}}}
+{"steps":12}

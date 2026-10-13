@@ -6,6 +6,17 @@ Branch: `fable/recording-core` (local commits only — not pushed, nothing merge
 Base: `7414719f3760de1c9359ec9723351a7232442e61` (= planning SHA).
 Final source commit: see the "Checkpoint" line at the bottom (written after committing).
 
+## Latest: Hotfix Pass 02 (HF07–HF13), 2026-10-13
+- Checkout `/home/user/SML-Pro-Tools`, branch `fable/recording-core`, started at `cde8ae2`
+  (in sync with origin, clean). Code commits `9b06131`..`30df4a9`, then documentation. Local
+  commits only: not pushed, merged, published or installed.
+- Report: `docs/hotfix_pass_02/HOTFIX02_REPORT.md`; native gates: `docs/hotfix_pass_02/TARGET_PENDING.md`.
+- State: all seven tickets implemented and tested portably. HF13 PARTIAL (FabFilter outcome
+  unknown). HF07 ASIO and WASAPI exclusive BLOCKED (SDK licence and build machine / new backend).
+  Every native check pending. Release ready: **NO**.
+- Next action: owner runs TARGET_PENDING on Windows with the staged candidate
+  (`dist/hotfix02-windows`, delivered as attachments).
+
 ## State by target
 | Target/readiness | State |
 |---|---|

@@ -128,6 +128,19 @@ ad-libs") can run directly; report it and how to undo it.
   latency, tail and parameter count — not how the plugin sounds. Compatibility of any specific
   third-party plugin with this build is unverified until it works on the owner's computer.
 - If a plugin crashes or hangs: see §6.
+- **Scanning (Hotfix Pass 02 builds):** a scan is a *job*; never wait on it inside a request.
+  Start or join one with `engine.plugin_scan_start {}` (`{"rescan": true}` re-reads cached
+  plugins too), then poll `engine.plugin_scan_status {"job": <id>}` every few seconds until
+  `state` is `done` or `cancelled`. `engine.vst3_plugins {"rescan": true}` and
+  `engine.clap_plugins {"rescan": true}` also return `{job, coalesced}` now, not a list — the list
+  is `engine.vst3_plugins {}` once the job is done. Overlapping requests join the running job or
+  the one queued job (`coalesced: true`); do not send repeats. Starting a scan writes a recovery
+  point of unsaved changes, but ask before scanning while the owner has unsaved work in progress.
+  `engine.plugin_scan_cancel {}` stops it (finished plugins keep their results). Quarantined
+  plugins: `engine.plugin_scan_quarantine {}` (reason, last step reached, exit meaning,
+  architecture); retrying is the owner's decision: `engine.plugin_scan_retry {"paths": […]}` or
+  `{"all": true}` — it never loads a plugin into the app itself. Never suggest disabling
+  quarantine, scanning in-process or updating plugins as a fix.
 
 ### 4.6 Measure before you claim
 - You cannot hear. Never say something "sounds" a certain way. State measurements, and label each
@@ -147,7 +160,9 @@ ad-libs") can run directly; report it and how to undo it.
   re-measure the file (manual [§24 E](../USER_GUIDE.md#e-master-against-a-reference-and-verify-the-export)).
 
 ### 4.7 Say plainly what is not available
-Do not imply these work: ASIO (WASAPI only); an internal language model unless the owner configured
+Do not imply these work: ASIO or WASAPI exclusive mode (WASAPI shared only; on Windows the buffer
+size cannot be chosen — Audio Setup shows what Windows delivers, usually 480 frames at 48 kHz, and
+a buffer's duration is not round-trip latency); an internal language model unless the owner configured
 one and it answered; free dictation or a wake word (push-to-talk recognises enrolled phrases only);
 a phone microphone or HTTPS for the phone page; in-app reference playback (A/B does not play audio: an OPEN DEFECT, K1 — never report reference listening as working);
 native summing/tape models; built-in effects; the SML plugins; MP3/AAC export; any third-party
@@ -182,8 +197,12 @@ Each line below ran successfully on build 0.5.0 (headless CLI, synthetic audio; 
 | Loop range (Hotfix 01 builds) | `loop.info {}` first; `loop.set {"start":48000,"end":96000}` or `{"start":…,"length":…}` (positions may use the counter format, e.g. `"bars_beats:3\|1\|000"`); `loop.to_selection {}`, `loop.select {}`, `loop.clear {}`; `options.loop_playback {"value":true}` |
 | Mixer Split share (owner's preference, not the session) | `ui.mix_split {"fraction":0.6}`; `{}` resets — control channel only |
 | Mixer density (owner's preference, not the session) | `ui.mix_density {"density":"compact"}` or `"comfortable"`; `{}` reports it — control channel only |
+| Move clips to another track (Hotfix Pass 02 builds) | `edit.move_clips {"clips":[6],"track":"Lead Dbl","from":"Lead"}` (add `"by":<samples>` to move in time too). An invalid target (wrong kind, fewer channels) refuses the whole move and changes nothing |
+| Plugin scan job (Hotfix Pass 02 builds) | `engine.plugin_scan_start {}` → poll `engine.plugin_scan_status {"job":<id>}`; `engine.plugin_scan_quarantine {}`; retry only with the owner's approval |
+| Detach / dock the Mixer (owner's preference, not the session) | `window.mix_detach {"value":true}`, `window.mix_dock {}`, `window.mix_window_status {}` — control channel only |
 
-The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
+The Hotfix Pass 02 rows ran in the portable tests of that source (`crates/engine/tests/plugin_scan_jobs.rs`,
+`crates/ui-egui/tests/clip_drag.rs`, `crates/ui-egui/tests/hotfix02.rs`), not on Windows. The tempo, loop and Split rows ran on the Hotfix Pass 01 source (evidence
 `docs/hotfix_pass_01/evidence/hotfix-commands.log`; `ui.mix_split` in the UI tests). Before using
 them, confirm with `help.search` that the installed build has them: builds before Hotfix Pass 01
 (such as `b641b5a`) do not.
@@ -204,8 +223,12 @@ In the Visual mixer, channels at the same position share one label ("Snare +3");
 name is "N channels at this position: …". Click it and choose a channel, then act on the
 selection. Each node is named "<track> node". Mixer density is a UI preference:
 `ui.mix_density {"density": "compact" | "comfortable"}` (control channel; it changes nothing in
-the session). On narrow Record layouts Stop/Play/Record may be in the control bar rather than the
-toolbar.
+the session). In Hotfix Pass 02 builds the Edit and Record layouts have the tools on top and a bottom bar
+with locate buttons, Stop / Play / Record ("■ Stop", "▶ Play", "● Record"), the counters, NUDGE,
+Grid and the output meter; on narrow windows groups move into "More tools…" / "More controls…"
+menus (never Stop / Play / Record). Faders are sliders named "<track> volume"; the readout under
+each ("<track> volume readout") takes a typed value on double-click. **Window › Detach Mixer**
+puts the Mixer in its own window; both windows act on the one session.
 Audio Setup (`window.audio_setup`) is where the owner picks the microphone/interface; device
 choices are not commands and are the owner's to make. Values Audio Setup shows as "Unknown" or
 "Not measured" are unknown: do not estimate them.
@@ -219,6 +242,7 @@ choices are not commands and are the owner's to make. Values Audio Setup shows a
 | **Command failed** | Read the error text: commands are atomic, so a failure changed nothing. Do not retry blindly or loosen parameters to force it. Explain the reason and the options. |
 | **Command refused as stale / document changed** | Re-read the state and rebuild the plan. |
 | **Audio device disconnected** ("Playback stopped…", "Recording stopped: the input device is no longer available…") | Stop. Ask the owner to reconnect it; the take so far is kept. Re-select the device in Audio Setup (control bar **⚙ Audio Setup**, `window.audio_setup`, or Setup › Playback Engine) and press Apply — a level C operator cannot pick a device by command. If the remembered device is missing at launch, the status line names it; the owner reconnects it and presses Apply. |
+| **A scan request timed out or the connection dropped** | Nothing was abandoned: read `engine.plugin_scan_status {}`; the job carries on or has finished. Never resend rescans in a loop. |
 | **Plugin faulted or hung** | `engine.host_faults`; bypass the insert (`mix.insert_bypass`); ask before removing it. If the app is unstable: the owner restarts with `--safe` (plugins pass audio through, state kept), then the plugin can be re-inserted sandboxed (`sandbox:<id>`). |
 | **Recover Autosave… while recording** | Never: it can list the take being recorded and recovering it shortens that file (manual K21). Stop first. |
 | **App crashed or closed** | The control channel drops. Do not restart the app yourself unless the owner asked. After restart: Search › Recover Autosave… (manual §23.2); open the recovery point as unsaved, save under a new name. |

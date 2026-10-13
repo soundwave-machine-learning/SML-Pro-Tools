@@ -28,6 +28,8 @@ Documentation for SML Studio (the SoundCraft engine), version 0.5.0. Start with 
 | [polish_pass_01/POLISH_REPORT.md](polish_pass_01/POLISH_REPORT.md) | Interface polish pass 01: what changed per workspace, tests, before/after renders, gaps for native review. |
 | [refinement_pass_01/REFINEMENT_REPORT.md](refinement_pass_01/REFINEMENT_REPORT.md) | UI refinement pass 01: Visual labels and coincident channels, mixer density, compact Record toolbar, empty input meters. |
 | [refinement_pass_01/REFERENCE_AB_DEFECT.md](refinement_pass_01/REFERENCE_AB_DEFECT.md) | **Open defect K1**: reference A/B plays no audio — source path and reproduction. |
+| [hotfix_pass_02/HOTFIX02_REPORT.md](hotfix_pass_02/HOTFIX02_REPORT.md) | Hotfix Pass 02 (HF07–HF13): plugin scan jobs and diagnostics, Windows buffer reporting, clip drag between tracks, bottom bar, faders, detached Mixer. |
+| [hotfix_pass_02/TARGET_PENDING.md](hotfix_pass_02/TARGET_PENDING.md) | What Hotfix Pass 02 still needs checked on Windows, and what is blocked. |
 | [manual_archive/](manual_archive/) | Earlier manual editions exactly as compiled into released builds. |
 | [hotfix_pass_01/HOTFIX_REPORT.md](hotfix_pass_01/HOTFIX_REPORT.md) | Hotfix Pass 01 (Split divider, + Add Track, control bar with BPM/Loop/Audio Setup): what changed, tests, evidence, pending Windows checks. |
 

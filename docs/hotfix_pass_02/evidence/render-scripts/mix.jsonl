@@ -1,0 +1,3 @@
+{"method":"engine.execute","params":{"command":"window.mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.view","params":{"view":0}}}
+{"steps":10}

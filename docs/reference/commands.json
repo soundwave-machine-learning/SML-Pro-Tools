@@ -19,9 +19,9 @@
   ],
   "counts": {
     "control_methods": 16,
-    "engine_commands": 538,
+    "engine_commands": 543,
     "mcp_tools": 17,
-    "ui_commands": 94
+    "ui_commands": 97
   },
   "engine_commands": [
     {
@@ -1869,7 +1869,7 @@
       "label": "Move Clips",
       "limits": [],
       "menu": [],
-      "params": "{clips?: [id], by?: samples, to?: position (first clip start), track?: target}",
+      "params": "{clips?: [id], by?: samples, to?: position (first clip start), track?: target, from?: track of the grabbed clip} — with `from`, every clip keeps its distance in tracks from the grabbed one; a target that cannot take a clip (wrong kind, fewer channels) refuses the whole move",
       "pro_tools": [],
       "risk": "reversible",
       "shortcut": null,
@@ -2616,7 +2616,7 @@
       "label": "List CLAP Plugins",
       "limits": [],
       "menu": [],
-      "params": "{rescan?: bool} → [{id: \"clap:…\", plugin_id, name, vendor, version, description, features, category, is_instrument, path}]",
+      "params": "{rescan?: bool} → list, or with rescan in SML Studio a scan job {job, coalesced} (see engine.plugin_scan_status; a process without the scan service rescans in-process and returns the list) — list: [{id: \"clap:…\", plugin_id, name, vendor, version, description, features, category, is_instrument, path}]",
       "pro_tools": [],
       "risk": "reversible",
       "shortcut": null,
@@ -2692,6 +2692,71 @@
       "undoable": false
     },
     {
+      "id": "engine.plugin_scan_cancel",
+      "label": "Cancel Plugin Scan",
+      "limits": [],
+      "menu": [],
+      "params": "{job?: int} → {job: {…} | null}. Stops starting workers and kills the running ones (only the scanner's own); finished bundles keep their results, interrupted ones are not recorded.",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "engine.plugin_scan_quarantine",
+      "label": "List Quarantined Plugins",
+      "limits": [],
+      "menu": [],
+      "params": "{} → [{path, name, reason, diagnostics: {last_stage, exit_code, exit_meaning, output_complete, classes_reported, architecture, worker_pid, elapsed_ms, scanner} | null, older_scanner}]",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "engine.plugin_scan_retry",
+      "label": "Retry Quarantined Plugins",
+      "limits": [],
+      "menu": [],
+      "params": "{paths: [string]} | {all: true} → {job, coalesced}. Forgets and rescans only those quarantined bundles; other quarantines and cached results stay.",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "engine.plugin_scan_start",
+      "label": "Start Plugin Scan",
+      "limits": [],
+      "menu": [],
+      "params": "{rescan?: bool} → {job: {id, kind, state, total, completed, scanned_ok, quarantined, cached, current, requests, clap, vst3, elapsed_ms}, coalesced}. Returns at once. rescan: scan cached successes again (quarantines are kept). A request the running job already covers joins it; otherwise one job waits and later requests join that one.",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
+      "id": "engine.plugin_scan_status",
+      "label": "Plugin Scan Status",
+      "limits": [],
+      "menu": [],
+      "params": "{job?: int} → {job: {…} | null, jobs: [{…}]} (the newest job when none is given)",
+      "pro_tools": [],
+      "risk": "reversible",
+      "shortcut": null,
+      "status": "implemented",
+      "studio_one": [],
+      "undoable": false
+    },
+    {
       "id": "engine.plugins",
       "label": "List Plugins",
       "limits": [],
@@ -2709,7 +2774,7 @@
       "label": "List VST3 Plugins",
       "limits": [],
       "menu": [],
-      "params": "{rescan?: bool} → [{id: \"vst3:<class id hex>\", class_id, name, vendor, version, sdk_version, sub_categories, category, is_instrument, path}]",
+      "params": "{rescan?: bool} → list, or with rescan in SML Studio a scan job {job, coalesced} (see engine.plugin_scan_status; a process without the scan service rescans in-process and returns the list) — list: [{id: \"vst3:<class id hex>\", class_id, name, vendor, version, sdk_version, sub_categories, category, is_instrument, path}]",
       "pro_tools": [],
       "risk": "reversible",
       "shortcut": null,
@@ -8558,6 +8623,30 @@
       "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
       "menu": "View > Narrow Mix",
       "pro_tools": "Ctrl+Alt+M",
+      "studio_one": null
+    },
+    {
+      "id": "window.mix_detach",
+      "label": "Detach Mixer",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "Window > Detach Mixer",
+      "pro_tools": null,
+      "studio_one": null
+    },
+    {
+      "id": "window.mix_dock",
+      "label": "Dock Mixer",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "Window > Dock Mixer",
+      "pro_tools": null,
+      "studio_one": null
+    },
+    {
+      "id": "window.mix_window_status",
+      "label": "Mixer Window Status",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "",
+      "pro_tools": null,
       "studio_one": null
     },
     {

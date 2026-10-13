@@ -1,0 +1,4 @@
+{"method":"engine.execute","params":{"command":"window.mix","params":{}}}
+{"method":"engine.execute","params":{"command":"mix.view","params":{"view":0}}}
+{"method":"engine.execute","params":{"command":"ui.mix_density","params":{"density":"compact"}}}
+{"steps":10}

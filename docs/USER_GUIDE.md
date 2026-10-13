@@ -1,7 +1,7 @@
 # SML Studio user manual
 
 Product: SML Studio (the SoundCraft engine), version 0.5.0. This is the one authoritative manual.
-Documented source: branch `fable/recording-core` at Hotfix Pass 01 (code commit `1d71089`, on top of `018793f7c2f3d601800b7ddbcd38b45c2c30a255`). Hotfix Pass 01 adds the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1); builds made before it (such as `b641b5a`) do not have them — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
+Documented source: branch `fable/recording-core` at Hotfix Pass 02 (code commit `30df4a9`). Hotfix Pass 02 adds plugin scan jobs and scan diagnostics (§17.1), the driver type and honest buffer reporting in Audio Setup (§4.1, §4.6), dragging clips to other tracks (§8.4), the Edit window's bottom bar (§22), the new fader handling (§13.2) and the detachable Mixer window (§13.5); builds made before it (such as `4d8749f`) do not have them. Hotfix Pass 01 (code `1d71089`) added the control bar (§3.5), Audio Setup (§4.1–4.3), the + Add Track button (§5.3), loop locators (§6.7) and the Split view divider (§13.1) — see [DOCS_MANIFEST.json](DOCS_MANIFEST.json) `known_builds`.
 Verification status, applicable builds and history: [DOCS_MANIFEST.json](DOCS_MANIFEST.json), [DOCS_CHANGELOG.md](DOCS_CHANGELOG.md).
 Every command named here exists in this build; parameters and chords for all of them: [COMMAND_REFERENCE.md](COMMAND_REFERENCE.md).
 
@@ -49,19 +49,24 @@ for typical material, not rules. Trust your ears and your meters over any number
 | Area | Status in 0.5.0 | Notes |
 |---|---|---|
 | Recording to disk (dry, 32-bit float WAV), punch with selection, pre/post-roll, loop record, Count Off | Implemented; pending target check on your interface | §6 |
-| Audio Setup: output/input device, buffer request, delivered callback, monitoring, track input, latency ledger; choices remembered (WASAPI on Windows) | Implemented; headless-tested; pending target check | ASIO: not in the standard build (§4.6) |
+| Audio Setup: driver type, output/input device, buffer request, delivered callback (smallest–largest), monitoring, track input, latency ledger; choices remembered | Implemented; headless-tested; pending target check | Windows: WASAPI **shared mode** only — the buffer is set by Windows (usually 10 ms = 480 frames at 48 kHz), not by the request. ASIO and WASAPI exclusive: **not in this build** (§4.6) |
 | Control bar in every layout: tempo, time signature, Click, Count Off, Loop, Audio Setup | Implemented (Hotfix 01); headless-tested; not yet seen on Windows | §3.5 |
 | Loop locators: stored loop range, Loop lane, loop settings | Implemented (Hotfix 01); headless-tested | §6.7 |
 | QuickPunch, TrackPunch, Destructive Record/Punch | Not available | Menu entries are disabled |
 | Playlists, promote-to-main comping, take rating | Implemented | §7 |
 | Eight audio tools, edit modes, clip gain, fades, strip silence, Bend | Implemented | §8–§10 |
+| Dragging clips to other tracks (time lock with Ctrl/Cmd, invalid targets refused) | Implemented (Hotfix 02); tested through the real pointer path; not yet seen on Windows | §8.4 |
+| Edit window: tools row on top, transport/counters/Nudge in the bottom bar, no scrolling toolbar | Implemented (Hotfix 02); headless renders; not yet seen on Windows | §22 |
 | Nudge panel and keypad Nudge | Implemented; keypad and Windows-key limits | §12 |
 | Console / Visual / Split mixer (Split divider remembered), width, snapshots A/B/C | Implemented | §13–§14 |
+| Faders: larger cap, unity mark, exact value, keyboard steps, typed value | Implemented (Hotfix 02; an interpretation of a Logic-like look, not a copy); gain law unchanged | §13.2 |
+| Mixer in its own window (Window › Detach Mixer) for a second display | Implemented (Hotfix 02); headless-tested as an embedded window; **native multi-monitor behaviour not yet observed** | §13.5 |
 | Volume automation writing (Write/Touch/Latch), automation drawing | Implemented | Only volume is written live (§14) |
 | Buses, FX returns, sends, Spill | Implemented | §15 |
 | Sidechain into a plugin from a bus | Implemented (CLAP first aux port, VST3 first aux bus); no UI | Command only (§15.5); pending target check with real plugins |
 | Summing / Tape / Master Tape slots | Implemented as plugin slots; **native analog summing/tape models: Planned** | §16 |
 | CLAP and VST3 hosting, isolated scanning, quarantine | Implemented; pending target check with your plugins | §17 |
+| Plugin scan jobs (start/status/cancel/retry from menus and the control channel), scan diagnostics | Implemented (Hotfix 02); fault-injection tests; **not yet run on your plugin library** | §17.1; FabFilter: §26 K22 |
 | VST3 editor windows on Windows | Implemented (Win32 window); **not yet observed on Windows** | §17.3 |
 | Sandboxed (out-of-process) plugin instances | Implemented, command only | §17.7 |
 | Built-in effects (EQ, compressor, reverb…) | **Not available** | No plugin ships with the app |
@@ -165,7 +170,7 @@ the first segment, so they never cover the menus.
 | **Audio Setup** (gear icon) | Opens or closes Audio Setup (§4.1). | `window.audio_setup` |
 | Device status mark and summary | A filled green dot: audio is running. An amber ring: a device is open but no audio callback yet. A red ✕: no audio output. The text reads "<host> · <device> · <rate> kHz · <frames> fr = <ms> ms" from the open stream, "… requested (not running yet)", or "No audio output — open Audio Setup". Hover: the input device and "Driver latency: Unknown". Click: opens Audio Setup. | — |
 | Recording status | "No track armed", "Armed: <track> · <input>" (red dot) or "Armed: N tracks", plus "I n" when n tracks monitor their input. Hover: every armed track and the input it records, the monitoring mode and the input device ("opens on the first record or arm" until it is open). Click: opens Audio Setup on the first armed track. Lit red while recording. | — |
-| **Stop / Play / Record** and the position | In the Mix and Master layouts (Edit and Record have the transport in their toolbar), and in Edit/Record when the toolbar is too narrow to keep it beside Nudge (§22). Play lights green while playing, Record lights red while recording. | `transport.*` |
+| **Stop / Play / Record** and the position | In the Mix and Master layouts. Edit and Record have them in their bottom bar (§22). Play lights green while playing, Record lights red while recording. | `transport.*` |
 | **BPM** field | The tempo in effect at the playhead (stopped: the selection start). Click, type a value from 5 to 1000 and press **Enter**: one undo step. **Escape** or clicking elsewhere cancels; typing never triggers shortcuts. Disabled while recording. | `event.tempo {bpm, at}` |
 | **MAP** badge | Shown when the session has more than one tempo change. The BPM field then edits only the change in effect at the playhead; the others are kept (the map is never flattened). | — |
 | Time signature (e.g. **4/4**) | Click: a popover with the numerator (1–64) and denominator (1–64); **Apply** changes the signature in effect at the playhead (one undo step), **Cancel** or clicking away changes nothing. | `event.meter` |
@@ -190,18 +195,33 @@ delivers.
 Setup…** in a channel strip's input menu (§6.1). The window "Audio Setup" opens below the control
 bar.
 
-**Steps:**
-1. **Output device:** click **Scan** and pick "default device" or "<host>: <device>" (on Windows
-   the host is WASAPI). The line "open now: …" under it shows what is actually open.
-2. **Buffer size (requested):** "default buffer" or 32, 64, 128, 256, 512, 1024 frames (the
-   milliseconds at the session rate are shown).
-3. Click **Apply**. Until then the choice is a draft ("unapplied changes"); **Cancel** or closing
+**Steps (in the order of the window):**
+1. **Driver type:** the audio systems this build can use, each with what it is ("WASAPI — Windows
+   audio, shared mode"). On Windows the list also shows **ASIO** and **WASAPI Exclusive** greyed
+   out with "(not in this build)"; hover for the reason (§4.6). Choosing a driver type filters the
+   device lists below to it. **Driver panel…** opens Windows' Sound control panel for WASAPI
+   (device formats and levels); it is disabled for anything else.
+2. **Output device:** click **Scan** and pick "default device" or "<host>: <device>". The line
+   "open now: …" under it shows what is actually open.
+3. **Input device** and **Sample rate:** see §4.2 and §5.1.
+4. **Buffer size (requested):** "driver default" or 32, 64, 128, 256, 512, 1024 frames, each with
+   its duration at the session rate (64 frames = 1.333 ms and 128 frames = 2.667 ms at 48 kHz).
+   With WASAPI the control reads **set by Windows (shared mode)** and is disabled: in shared mode
+   Windows' audio engine calls the app once per engine period (usually 10 ms = 480 frames at
+   48 kHz) whatever buffer is asked for. A buffer saved earlier that WASAPI cannot use is shown with
+   "A N-frame buffer is saved but cannot be applied with this driver." and **Use driver default**.
+5. Click **Apply**. Until then the choice is a draft ("unapplied changes"); **Cancel** or closing
    the window returns to what is applied.
 
 **Result:** "Output opened with the requested settings". **Sample rate** shows the session rate
-and the device rate (and "converted" when they differ). **Buffer (delivered)** shows "N frames per
-callback (x.xx ms)" once audio runs — what the driver actually gives, which can differ from the
-request. Applied choices are remembered (in `ui.json`, §3.2) and reopened at the next launch.
+and the device rate (and "converted" when they differ). **Buffer (delivered)** shows what the
+driver actually gives once audio runs: "N frames per callback (x.xxx ms)" when every callback has
+been the same size, or "smallest–largest frames per callback (…; varies)", followed by the driver
+type and mode and the device rate. When the delivered size differs from a requested one, an amber
+line says "Requested 128 frames; the driver delivers 480." A request the driver cannot take is
+never passed on silently: the reason is shown under it. **A buffer's duration is one callback's
+length, not the total or round-trip monitoring latency** (the window says so). Applied choices are
+remembered (in `ui.json`, §3.2) and reopened at the next launch.
 
 **If it fails:** "Device not changed: …" with the reason (device not found, rate not supported,
 buffer outside the driver's range, no 32-bit float format). The previous device stays open and
@@ -211,7 +231,7 @@ opened (…); the system default is in use. Reconnect it and press Apply in Audi
 another device." Audio Setup then shows "the saved output is not open — Apply retries it".
 
 **Limits:** Apply is disabled while playing or recording. Pending target check: actual buffer
-sizes on your interface.
+sizes, callback spread and xruns on your interface (SSL 2) over 30-minute playback and recording.
 
 ### 4.2 Audio Setup: microphone / interface input and the track's input
 
@@ -246,8 +266,11 @@ match the device (§5.1).
 
 ### 4.3 Delay compensation and the latency ledger
 **Advanced / Latency** (collapsed, at the bottom of Audio Setup) lists each term with its source:
-requested buffer, driver-reported buffer range ("Unknown (not reported)" when the driver does not
-say), delivered callback (observed), output buffering (calculated — "an estimate, not a
+requested buffer, the buffer actually asked of the driver ("driver default (the requested N frames
+cannot be set with WASAPI)" when it could not be applied), driver-reported buffer range ("Unknown
+(not reported)" when the driver does not say; "not limited by the driver (software audio engine)"
+when WASAPI reports no limit), delivered callback (the last one, and the smallest and largest since
+the stream opened), output buffering (calculated — "an estimate, not a
 measurement"), stream clock, input buffer requested, **Driver input/output latency: "Unknown (not
 reported by this backend; not assumed zero)"**, the plugin/host path (largest channel delay,
 including the one-block delay of sandboxed plugins) and **Measured round trip: "Not measured:
@@ -285,8 +308,13 @@ recovers after a device was unplugged; it opens the default output, not your rem
 - Recording is always the dry input, whatever you monitor.
 
 ### 4.6 What is not available
-ASIO is not in the standard build: it exists only as a build option that needs Steinberg's SDK
-on a Windows build machine (repository file `docs/remote_continuation/WINDOWS_AUDIO_BACKENDS.md`).
+- **ASIO** is not in this build. The audio library has an ASIO option, but building it needs
+  Steinberg's ASIO SDK, used under a licence the project owner must accept (Steinberg's own
+  licence, or GPLv3), plus the MSVC toolchain and LLVM on a Windows build machine; this candidate
+  is cross-built with the GNU toolchain. Your interface's ASIO driver is what would deliver 64- or
+  128-frame buffers (repository file `docs/remote_continuation/WINDOWS_AUDIO_BACKENDS.md`).
+- **WASAPI exclusive mode** is not available: the audio library this build uses (cpal 0.16)
+  opens WASAPI in shared mode only. It needs a separate Windows audio backend.
 Aggregate-device clock correction and measured driver latency are not available. "Low Latency
 Monitoring" (`options.low_latency_monitoring`) stores a setting that nothing uses yet.
 
@@ -395,7 +423,7 @@ matters. Without a selection, pre-roll audio stays in the take.
 ### 6.4 Count Off
 
 **Steps:** tick **Count Off** in the Recording window and set its bars (1–16; default 2), or use
-`options.countoff` and `setup.click_countoff {countoff_bars}`. The toolbar shows "N bars".
+`options.countoff` and `setup.click_countoff {countoff_bars}`. The control bar shows "Count Off N".
 
 **Result:** recording starts that many whole bars before the record point with the click sounding
 (even if the click is off); the clip starts exactly at the record point.
@@ -540,6 +568,35 @@ is one undo record, recorded only if something changed; a failed command restore
 **Window › Undo History** lists the steps. Undo history is not saved: opening, reopening or
 recovering a session starts with an empty history.
 
+### 8.4 Dragging clips to other tracks
+
+**Steps:** with the Smart tool (lower half of a clip), Grabber or Arrow, press on a clip and drag
+it up or down onto another track; release to drop it.
+- While you drag, an outline shows where each clip will land, with the new start time written
+  above it.
+- **Grid** snaps the new start; **Spot** keeps the time and changes only the track.
+- Hold **Ctrl** (Windows/Linux) or **Cmd** (macOS) while dragging to keep the exact sample position
+  and change only the track ("(time locked)" is shown). With the Arrow tool and an alternate tool
+  set, Ctrl held when you *press* picks the alternate tool instead; press it after the drag starts.
+- Dragging near the top or bottom edge of the tracks scrolls them, so a track below the view can
+  be reached in one drag.
+- **Escape** before releasing cancels; nothing changes.
+
+**Result:** the clip keeps its start (unless moved in time), length, source offset, fades, clip
+gain and media file; only its track changes. A selection on several tracks moves together, each
+clip keeping its distance in tracks from the one you grabbed. One drag is one undo step.
+
+**If it is refused:** the outline turns red with the reason and, on release, the status line says
+"Clip not moved: …"; nothing changes. Refused: an audio clip onto a track that holds no audio clips
+(Aux, Master, MIDI, VCA, Folder), a MIDI clip onto an audio track, and a clip with more channels
+than the track (a stereo clip onto a mono track would lose a channel; the track's format is never
+changed). A mono clip on a stereo track plays on both sides, as a recorded mono take does. Locked
+clips do not move.
+
+**Command:** `edit.move_clips {clips, by?, track, from}` (with `from`, the track of the grabbed
+clip, each clip keeps its distance in tracks; without it every clip goes to `track`). The same
+checks refuse the whole move.
+
 ## 9. Clip gain, fades and strip silence
 
 ### 9.1 Clip gain
@@ -627,16 +684,16 @@ The original file is never modified.
 **Purpose:** move clips, clip contents, trims or the selection by an exact amount.
 
 ### 12.1 The NUDGE panel
-In the Edit toolbar, separate from Grid. It stays visible (pinned at the right, next to the
-transport) when the window is too narrow for the whole toolbar; the other groups then scroll.
+In the Edit window's bottom bar (§22), separate from Grid, next to the transport. On a window too
+narrow for the whole bar it is one of the last groups to move into **More controls…**.
 - **◀ / ▶**: nudge earlier/later with the panel's target (`nudge.apply`).
 - **Value** (0.001–100000) and **unit**: "samples", "ms", "s", "ticks" (960 per quarter note,
   through the tempo map), "frames".
+- The unit menu also holds the favourites **1 smp**, **1 ms**, **10 ms**.
 - **Target**: "Selected clips", "Clip contents", "Left trim edge", "Right trim edge",
   "Selection/cursor only", "Selection start", "Selection end".
-- Favourites **1 smp**, **1 ms**, **10 ms**.
-- Readout of the exact displacement, e.g. "= 480.00 smp @ 48.0 kHz" for 10 ms (ticks: "N ticks
-  (tempo map)").
+- Hover the value or the NUDGE label for the exact displacement, e.g. "= 480.00 smp @ 48.0 kHz"
+  for 10 ms (ticks: "N ticks (tempo map)").
 
 Defaults: 1 ms, Selected clips. Setting the value: `nudge.set`; current state: `nudge.info`.
 
@@ -711,7 +768,7 @@ share is a preference of this computer (`ui.json`), not part of the session; `ui
 2. **Processing:** PREAMP, INSTRUMENT, inserts and SLOTS (when shown).
 3. **Sends and routing:** sends, I / O (input, output, automation mode) and the group.
 4. **Pan and width:** the pan knob(s) with their values, then "W n%" on stereo channels.
-5. **Fader and meter,** with the dB readout under the fader.
+5. **Fader and meter,** with the dB readout under the fader (double-click it to type a value).
 6. **Channel actions:** I and record, then S and M.
 
 The selected strip has a lighter surface and an outline. An insert shows its plugin's name (hosted
@@ -752,7 +809,22 @@ meter clips.
 width shown as "100%"). It is a preference of this computer (`ui.json`), the same one as
 **View › Narrow Mix**, and is set with `ui.mix_density {"density": "comfortable" | "compact"}`.
 
-**Undo:** fader, pan, width, mute and solo changes are undoable (a fader drag is one step).
+**Faders:** a slim groove with a signless dB scale (6 3 **0** 3 6 10 15 20 30 40 60; labels that
+would collide are left out, their ticks stay), a line across the groove at 0 dB, and a large cap
+with a centre line. The travel grows with the strip's height. While you hover or drag, the exact
+value shows beside the cap. Handling:
+- Drag the cap; **Ctrl/Cmd**-drag moves at 1/10 speed for fine changes.
+- **Double-click** the fader or **Alt-click** it: 0 dB.
+- Click it (or Tab to it), then **↑ / ↓** 0.5 dB, **Shift+↑ / ↓** 0.1 dB, **Home** 0 dB.
+- **Double-click the dB readout** under the fader and type a level ("-6", "-12.5", "-inf"; values
+  are kept within −144…+12 dB), **Enter** to apply, **Escape** to cancel. A value that is not a
+  level is refused with "Not a level: …".
+The look is our interpretation of a Logic-like fader, not a copy; the gain law, range, taper,
+smoothing and automation mapping are unchanged. Screen readers find it as a slider "<track>
+volume" with its value.
+
+**Undo:** fader, pan, width, mute and solo changes are undoable (a fader drag is one step; each
+key step or typed value is one step).
 
 ### 13.3 Mix profile and pan law
 `mix.profile` (Search: "Mix Profile"; no other control): **standard** (constant-power −3 dB pan
@@ -771,6 +843,34 @@ floating point ("graph v2"); sessions from older builds keep their arithmetic un
 - A VCA's mute mutes its members.
 - **Muting the Master track has no effect** in this build (Known issue K2). Use the monitor
   controls (§4.4) or stop the transport.
+
+### 13.5 The Mixer in its own window (second display)
+
+**Purpose:** Edit on one display and the full-size Mixer on another.
+
+**Steps:** **Window › Detach Mixer** (`window.mix_detach`). The Mixer opens in its own window
+"SML Studio — Mixer" (move it to another display, resize or maximise it); the main window shows
+the Edit layout. The Mixer window has Stop / Play / Record, **Dock Mixer**, and the whole mixer
+(Console, Visual, Split, density); the same shortcuts work in it.
+
+**Result:** both windows show the one session live: a fader, mute, send or insert changed in
+either is one change and one undo step. Plugin editors open as usual. The main window's Mix
+layout, while the Mixer is detached, says "The Mixer is in its own window" with **Show Mixer
+window** and **Dock Mixer**.
+
+**Dock:** close the Mixer window, click **Dock Mixer**, or **Window › Dock Mixer**
+(`window.mix_dock`). The transport keeps running. `window.mix_window_status` reports whether it
+is detached and its saved position and size.
+
+**Remembered:** whether it is detached, its position, size, maximised state and the size and scale
+of the display it was on are preferences of this computer (`ui.json`), not session data; it
+reopens detached at the next launch. If the saved position is not on any display the app can see
+(for example the display was disconnected), it opens on the main display and the status line
+says so.
+
+**Limits:** not yet observed on Windows with several displays (pending: three displays, mixed
+scaling, a display removed while it is open). The window system decides the exact placement on
+mixed-DPI setups.
 
 ## 14. Automation and mixer snapshots
 
@@ -919,13 +1019,45 @@ exist.
 ## 17. Plugins
 
 ### 17.1 Scanning
-At start-up, when nothing is recording, the app scans CLAP and VST3 plugins in separate worker
-processes, one bundle at a time ("Scanning installed plugins…", **Cancel scan**). A plugin that
-crashes, hangs (20 s), fails or returns bad data is **quarantined** with the reason and skipped
-later; it never takes the app down. Results are cached by path, size and date, so only new or
-changed plugins are rescanned. The insert menu ends with **Quarantined (n)** (with **Re-enable**)
-and **Rescan plugins**. Audio Units (macOS) are not scanned in isolation. In Safe Open nothing is
-scanned (§3.3).
+One scan service in the app does all plugin scanning: the start-up scan, the insert menu's
+**Rescan plugins** and requests from the control channel all become **scan jobs** in it. Each
+plugin file is loaded by a separate worker process, never by the app itself, so a plugin that
+crashes or hangs while being scanned cannot take the app down.
+- **At start-up** (when nothing is recording) a job scans new and changed CLAP and VST3 plugins
+  ("Scanning installed plugins… (n of N plugin files)", **Cancel scan**). Results are cached by
+  path, size and date in `plugin-scan-cache.json`; the plugin menus show the cached list at once.
+- **Workers:** up to 4 at a time (half the processor's threads), each with a 20-second deadline.
+  A plugin that crashes, hangs, fails or returns bad data is **quarantined** with the reason;
+  healthy plugins are listed. The cache is written every 8 plugins and at the end, so an
+  interrupted scan keeps what it finished.
+- **One job at a time.** A request the running job already covers joins it; any other waits as
+  the one queued job, and later requests join that. Every answer says which job and whether it
+  was joined ("coalesced").
+- **Cancel** stops new workers and kills the running ones (only the scanner's own); finished
+  plugins keep their results, interrupted ones are not recorded.
+- **Quarantined (n)** at the end of the insert menu lists each one with its reason; **Retry**
+  scans that plugin again at once in a worker. Other quarantined plugins and cached results are
+  untouched.
+- **Before any scan** the app writes a recovery point of unsaved changes into the autosave store
+  (§23); the session file itself is never written and the session stays modified.
+- **Diagnostics** (`engine.plugin_scan_quarantine`): for each quarantined plugin, the last step
+  the worker reached (`vst3 load_library`, `vst3 module_entry InitDll`, `vst3 get_factory`,
+  `vst3 class_info 2/5`, `vst3 output_written`, `vst3 module_exit`…), the exit code and what it
+  means (Windows: "access violation (0xC0000005)" is a crash, "a required DLL was not found
+  (0xC0000135)" a missing dependency), the binary's architecture, whether the plugin list was
+  complete before a crash ("listed its plugins, then crashed while unloading"), the worker's
+  process id and time, and whether an older scanner wrote the entry (**older_scanner**: worth a
+  Retry with this build).
+- A binary for another architecture (a 32-bit plugin in this 64-bit build) is reported as "cannot
+  load in this build: …" without starting a worker.
+- Audio Units (macOS) are not scanned in isolation. In Safe Open nothing is scanned (§3.3).
+
+**Control channel and CLI:** `engine.plugin_scan_start {rescan?}`, `engine.plugin_scan_status
+{job?}`, `engine.plugin_scan_cancel {job?}`, `engine.plugin_scan_retry {paths | all: true}` and
+`engine.plugin_scan_quarantine` return at once. In the app, `engine.vst3_plugins {rescan: true}`
+and `engine.clap_plugins {rescan: true}` start (or join) a job and return `{job, coalesced}`
+instead of a list; without `rescan` they return the current list. `soundcraft-cli` has no scan
+service: there the new commands say so, and a rescan loads plugins in the CLI process itself.
 
 ### 17.2 Insert a plugin
 
@@ -1228,12 +1360,19 @@ to the Mix window; **Ctrl+Alt+L** runs "Move selection left", not Loop. In Studi
 - **Window › Configurations:** **New Configuration…**, numbered recall buttons, ✕ to delete, Update
   Active Configuration (overwrites the last one). Stored in `ui.json`.
 - **Window › Reset Panel Layout** restores the default docking.
-- When the window is narrow (for example 1366×768 at 150 % scaling), the Edit toolbar keeps the
-  transport and Nudge pinned on the right and scrolls the other groups, tools first.
-- Narrower still (the Record layout beside its RECORD panel on such a window), the toolbar uses two
-  rows: the tools and other groups on top at full width, Nudge (and the transport, if it fits)
-  below. If the transport does not fit beside Nudge, Stop / Play / Record move into the control
-  bar (§3.5), as in the Mix layout. Nothing is hidden.
+- **Edit and Record layouts** have two fixed rows that never scroll:
+  - **Top (above the tracks):** the edit modes (SHUFFLE, SPOT, SLIP, GRID), the tools, the audio
+    tools and zoom.
+  - **Bottom bar (above the status line):** Return to Zero, Rewind, Fast Forward, Go to End;
+    **Stop / Play / Record** and Loop Playback; the counters (main counter — click for its format,
+    hover for the sub counter — and the selection's Start, End and Length); the NUDGE group (§12);
+    Grid lines and the grid value; the output meter.
+  - The MIDI EDITOR, MEMORY LOCATIONS and UNDO HISTORY tabs share the status line.
+  - When a row is too narrow for every group, the groups that do not fit go into its menu
+    **More tools…** or **More controls…** (on a very narrow row a small **…** button, with the same
+    name for screen readers), lowest priority first. Stop / Play / Record never go there; on a
+    narrow bar they show as icons only. From 1366 points wide nothing is in these menus.
+  - Tempo, time signature, Click and Count Off are in the control bar (§3.5) in every layout.
 
 ## 23. Autosave, recovery and troubleshooting
 
@@ -1451,8 +1590,10 @@ and UI commands do nothing headless. Example:
   Methods: `engine.execute`, `engine.commands`, `session.inspect`, `ui.inspect`, `ui.menu.list`,
   `ui.menu.invoke`, `ui.screenshot`, `ui.click`, `ui.drag`, `ui.key`, `ui.text`, `ui.move`,
   `ui.set`, `engine.parity`, `app.quit` ([reference/CAPABILITIES.md](reference/CAPABILITIES.md)).
-  Replies time out after 90 s. Programmatic calls open no dialog, except theme/shortcut
-  import/export without a path.
+  Replies time out after 90 s; a reply that times out does not cancel what was asked (the app
+  carries it out when it reaches it). Long work is never done inside a reply: plugin scans return
+  a job at once (§17.1). Programmatic calls open no dialog, except theme/shortcut import/export
+  without a path.
 - **CLI helper:** `soundcraft-cli app --port 7979 METHOD [JSON]`. A bare command id is wrapped in
   `engine.execute`, except ids beginning `ui.`, `engine.`, `session.` or `app.` — pass those inside
   `engine.execute` explicitly.
@@ -1501,11 +1642,14 @@ documented so that you and any operator can work around them. Workarounds in bra
 | K19 | Grid and Rel Grid snap a dragged clip the same way. |
 | K20 | Long exports: offline renders stop at about 93 minutes of stereo at 48 kHz (untested beyond). |
 | K21 | While a take is being recorded, Recover Autosave… can list that take as "unfinished"; recovering it would shorten the file being written. [Never use Recover Autosave… while recording.] |
+| K22 | Thirteen FabFilter VST3 plugins (Micro, One, Pro-C 2, Pro-DS, Pro-G, Pro-L 2, Pro-MB, Pro-Q 3, Pro-R, Saturn 2, Simplon, Twin 2, Volcano 2; Timeless 3 scanned fine) were reported quarantined with "exit code -1073741819" (an access violation) by 0.5.0 builds up to 4d8749f. This build makes the scan worker run each plugin's module exit before it ends (on Windows it used to skip it) and records the failing step; whether that is the cause is **not yet known**. [After installing, Retry them from **Quarantined (n)** or `engine.plugin_scan_retry {all: true}` and read `engine.plugin_scan_quarantine`.] |
+| K23 | On Windows the buffer cannot be set with WASAPI (shared mode): the request is replaced by the driver default and Audio Setup says so. 64/128-frame buffers need ASIO, which is not in this build (§4.6). |
+| K24 | Clip drag: with the Arrow tool and an alternate tool set, holding Ctrl when pressing picks the alternate tool rather than the time lock. [Press Ctrl after the drag has started.] |
 
 ## 27. Not available in this build
 
-ASIO in the standard build (WASAPI on Windows); aggregate-device clock correction and measured
-driver latency; QuickPunch, TrackPunch, Destructive Record/Punch; a separate cue/headphone mix;
+ASIO and WASAPI exclusive mode (WASAPI shared only on Windows; §4.6); aggregate-device clock
+correction and measured driver latency; QuickPunch, TrackPunch, Destructive Record/Punch; a separate cue/headphone mix;
 native analog summing and tape models; built-in effects and instruments; the SML plugin family
 (Channel EQ, Gate/Expander, Compressor, Optical Leveler, Tune, Vocal Editor, Align); ARA and
 note-level pitch editing; Audio Unit editors and sidechains; in-app reference playback;
