@@ -48,6 +48,9 @@ Source: commit $SHA
 TXT
 # The user documentation of this source (manual, references, Grok guide, DOCS_MANIFEST.json).
 python3 "$ROOT/packaging/docs/build_docs.py" --bundle-dir "$STAGE/docs" >/dev/null
+# HF22: the local SDKs (no tests' caches).
+mkdir -p "$STAGE/sdk"
+(cd "$ROOT/sdk" && find . -type f ! -path '*/__pycache__/*' -print0 | while IFS= read -r -d '' f; do mkdir -p "$STAGE/sdk/$(dirname "$f")"; cp "$f" "$STAGE/sdk/$f"; done)
 export STAGE SHA DIRTY VERSION TARGET NAME OUT
 python3 - <<'PY'
 import hashlib, json, os, subprocess, zipfile, datetime
@@ -82,8 +85,12 @@ manifest = {
     "built_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
     "target": os.environ["TARGET"],
     "toolchain": {"rustc": run("rustc", "-V"), "cargo": run("cargo", "-V"), "mingw_gcc": run("x86_64-w64-mingw32-gcc", "--version").splitlines()[0] if run("x86_64-w64-mingw32-gcc", "--version") else ""},
-    "audio_backends": ["WASAPI (cpal default)"],
-    "not_included": ["ASIO (needs the Steinberg SDK and the MSVC toolchain; owner build)", "code signing", "installer (MSI comes from package.ps1)", "language model (none ships)"],
+    "audio_backends": ["WASAPI shared (cpal 0.16)", "WASAPI Exclusive, output (native, soundcraft-wasapi-native; HF07)", "WASAPI Low Latency / IAudioClient3, output (native; HF07)"],
+    "codecs": {"import": "WAV, AIFF, FLAC, MP3, AAC/M4A, ALAC, CAF, OGG Vorbis (symphonia, MPL-2.0)", "export": "WAV/AIFF/FLAC (in-tree); MP3 CBR and AAC-LC/M4A through the Windows Media Foundation encoders (soundcraft-mf-encode; HF20) - no encoder is shipped in this package"},
+    "control_protocol": 2,
+    "sdk": "sdk/ (Python 3.8+ and Node.js 18+ clients, examples, schema; local only, not published)",
+    "signing": "unsigned",
+    "not_included": ["ASIO (needs the Steinberg SDK and the MSVC toolchain; owner build)", "code signing", "installer (MSI comes from package.ps1)", "language model (none ships)", "MP3/AAC encoders (the Windows ones are used)"],
     "verification": "cross-built on Linux; NOT executed on Windows by this build (W pending)",
     "documentation": (lambda d: {"folder": "docs/", "product_version": d.get("product_version"), "docs_revision": d.get("docs_revision"), "verified_source_sha": d.get("verification", {}).get("source_sha"), "sha256sums": sha(os.path.join(stage, "docs", "SHA256SUMS"))})(json.load(open(os.path.join(stage, "docs", "DOCS_MANIFEST.json")))),
     "files": files,
