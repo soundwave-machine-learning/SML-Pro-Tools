@@ -1,11 +1,9 @@
 //! Hotfix Pass 02: portable checks of HF07–HF13 behaviour reachable from the UI layer.
 use egui::vec2;
-#[allow(unused_imports)]
 use egui_kittest::{Harness, kittest::Queryable};
 use serde_json::json;
 use soundcraft_ui_egui::{Services, SoundApp};
 
-#[allow(dead_code)]
 fn harness(w: f32, h: f32, ppp: f32) -> Harness<'static, SoundApp> {
     let app = SoundApp::new(soundcraft_engine::demo::demo_engine(), None, Services::default());
     let mut h = Harness::builder().with_size(vec2(w, h)).with_pixels_per_point(ppp).with_step_dt(1.0 / 60.0).build_ui_state(
@@ -45,4 +43,21 @@ fn hf12_a_scan_request_writes_a_recovery_point_first() {
     assert!(soundcraft_ui_egui::starts_plugin_scan("engine.clap_plugins", &json!({"rescan": true})));
     assert!(!soundcraft_ui_egui::starts_plugin_scan("engine.clap_plugins", &json!({})));
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+/// HF07: Audio Setup leads with the driver type and states that a buffer's duration is not
+/// round-trip latency; existing Audio Setup tests cover device drafts and Apply/Cancel.
+#[test]
+fn hf07_audio_setup_shows_driver_type_and_buffer_meaning() {
+    let mut h = harness(1366.0, 768.0, 1.0);
+    h.state_mut().ui.show_playback_engine = true;
+    h.run_steps(4);
+    h.get_by_label("Driver type");
+    h.get_by_label("Buffer size (requested)");
+    h.get_by_label("Buffer duration is one callback's length, not the total or round-trip monitoring latency.");
+    let types = soundcraft_playback::device::driver_types();
+    if cfg!(windows) {
+        assert!(types.iter().any(|d| d.name == "WASAPI Exclusive" && !d.available));
+    }
+    assert!(types.iter().all(|d| d.available || !d.note.is_empty()), "every unavailable driver says why");
 }

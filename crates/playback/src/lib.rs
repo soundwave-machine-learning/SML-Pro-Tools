@@ -86,6 +86,9 @@ struct Shared {
     stream_generation: std::sync::atomic::AtomicU64,
     stream_frames: std::sync::atomic::AtomicU64,
     last_callback_frames: AtomicU32,
+    /// Smallest and largest callback sizes seen on this stream (HF07: callback variability).
+    min_callback_frames: AtomicU32,
+    max_callback_frames: AtomicU32,
     /// Set by the audio thread when compensation latency changed during recording.
     latency_alarm: AtomicBool,
     /// Output stream failure: 0 none, 1 device not available, 2 other backend error (set from
@@ -206,6 +209,8 @@ impl Shared {
             stream_generation: std::sync::atomic::AtomicU64::new(0),
             stream_frames: std::sync::atomic::AtomicU64::new(0),
             last_callback_frames: AtomicU32::new(0),
+            min_callback_frames: AtomicU32::new(u32::MAX),
+            max_callback_frames: AtomicU32::new(0),
             latency_alarm: AtomicBool::new(false),
             output_lost: std::sync::atomic::AtomicU8::new(0),
             monitor_db_milli: std::sync::atomic::AtomicI32::new(0),
@@ -485,6 +490,8 @@ impl AudioState {
         self.shared.stream_generation.store(stamp.generation, Ordering::Relaxed);
         self.shared.stream_frames.store(self.clock.frames(), Ordering::Relaxed);
         self.shared.last_callback_frames.store(stamp.frames, Ordering::Relaxed);
+        self.shared.min_callback_frames.fetch_min(stamp.frames, Ordering::Relaxed);
+        self.shared.max_callback_frames.fetch_max(stamp.frames, Ordering::Relaxed);
         let monitoring = self.input.is_some() && self.session.tracks.iter().any(|t| t.mixer.input_monitor || t.mixer.record_arm);
         if !self.playing && !monitoring {
             out.iter_mut().for_each(|x| *x = 0.0);
@@ -963,6 +970,13 @@ impl Player {
 
     pub fn take_latency_alarm(&self) -> bool {
         self.shared.latency_alarm.swap(false, Ordering::AcqRel)
+    }
+
+    /// Smallest and largest callback sizes this stream delivered so far (`None` before the first
+    /// callback). A fixed-size driver shows one value; a varying one shows the spread.
+    pub fn callback_range(&self) -> Option<(u32, u32)> {
+        let (lo, hi) = (self.shared.min_callback_frames.load(Ordering::Relaxed), self.shared.max_callback_frames.load(Ordering::Relaxed));
+        (hi > 0 && lo <= hi).then_some((lo, hi))
     }
 
     /// Stream clock telemetry: (generation, device frames serviced, last callback size).

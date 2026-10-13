@@ -183,6 +183,10 @@ pub struct UiState {
     /// Output devices found by the last scan in the Playback Engine window.
     #[serde(skip)]
     pub output_devices: Vec<soundcraft_playback::device::DeviceCaps>,
+    /// Audio Setup driver type (host) the device lists are filtered to (HF07); `None` = the
+    /// chosen output's host, else every host.
+    #[serde(skip)]
+    pub driver_choice: Option<String>,
     /// Requested output device (host, name) and buffer (0 = backend default).
     #[serde(skip)]
     pub device_choice: Option<(String, String)>,
@@ -328,6 +332,7 @@ impl Default for UiState {
             visual_filter: String::new(),
             visual_gesture: None,
             output_devices: Vec::new(),
+            driver_choice: None,
             device_choice: None,
             buffer_choice: 0,
             input_devices: Vec::new(),

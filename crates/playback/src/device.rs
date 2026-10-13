@@ -68,6 +68,103 @@ pub struct NegotiatedConfig {
     /// Buffer range the backend reports for this config.
     pub reported_buffer: BufferRange,
     pub clock_lock: ClockLock,
+    /// The buffer actually asked of the backend (`None` = its default). Differs from
+    /// `requested_buffer` when the host cannot set the buffer (HF07: WASAPI shared mode).
+    #[serde(default)]
+    pub applied_buffer: Option<u32>,
+    /// Why the requested buffer was not applied as asked, shown beside the delivered size.
+    #[serde(default)]
+    pub buffer_note: Option<String>,
+}
+
+/// How a host honours a requested buffer size (HF07).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum BufferControl {
+    /// The driver takes the requested size (ASIO, CoreAudio, ALSA, JACK…), within its range.
+    Settable,
+    /// The operating system's audio engine sets the period; a request cannot change it. cpal 0.16
+    /// opens WASAPI in shared, event-driven mode, where Windows calls back once per engine period
+    /// (usually 10 ms = 480 frames at 48 kHz) whatever buffer is asked for.
+    EnginePeriod,
+}
+
+/// How `host` honours buffer requests in this build.
+pub fn buffer_control(host: &str) -> BufferControl {
+    if host.eq_ignore_ascii_case("WASAPI") { BufferControl::EnginePeriod } else { BufferControl::Settable }
+}
+
+/// A driver type offered in Audio Setup, with whether this build can use it and why not.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct DriverType {
+    /// Host name as devices report it ("WASAPI", "ASIO", "ALSA", …).
+    pub name: String,
+    /// What it is, for the menu ("Windows shared mode", …).
+    pub mode: String,
+    pub available: bool,
+    pub buffer: BufferControl,
+    /// Why it is unavailable, or what to know about it.
+    pub note: String,
+}
+
+/// The ASIO build requirement, stated once.
+pub const ASIO_BLOCKER: &str = "ASIO is not in this build. It needs Steinberg's ASIO SDK, used under a licence the owner must accept (Steinberg's own licence or GPLv3), plus the MSVC toolchain and LLVM at build time; this candidate is cross-built with the GNU toolchain. The interface's ASIO driver is what delivers 64/128-frame buffers.";
+/// Why WASAPI exclusive mode is not offered.
+pub const WASAPI_EXCLUSIVE_BLOCKER: &str = "WASAPI exclusive mode is not available: the audio library this build uses (cpal 0.16) opens WASAPI in shared mode only. Exclusive mode needs a separate Windows audio backend (not written yet).";
+
+/// The driver types to offer: every host compiled into this build (`compiled`), plus, on
+/// Windows, the ones this build cannot use with the reason (pure, for tests).
+pub fn driver_types_for(compiled: &[String], windows: bool) -> Vec<DriverType> {
+    let mut out: Vec<DriverType> = compiled
+        .iter()
+        .map(|h| {
+            let buffer = buffer_control(h);
+            let (mode, note) = match h.to_ascii_uppercase().as_str() {
+                "WASAPI" => (
+                    "Windows audio, shared mode",
+                    "Windows mixes this app with others and sets the buffer itself (its engine period, usually 10 ms = 480 frames at 48 kHz); a smaller buffer cannot be requested.",
+                ),
+                "ASIO" => ("manufacturer's ASIO driver", "The driver sets the buffer; its control panel is opened from the driver's own utility."),
+                "COREAUDIO" => ("macOS Core Audio", ""),
+                "ALSA" => ("Linux ALSA", ""),
+                "JACK" => ("JACK server", "The JACK server sets the buffer."),
+                _ => ("", ""),
+            };
+            DriverType { name: h.clone(), mode: mode.into(), available: true, buffer, note: note.into() }
+        })
+        .collect();
+    if windows {
+        if !compiled.iter().any(|h| h.eq_ignore_ascii_case("ASIO")) {
+            out.push(DriverType {
+                name: "ASIO".into(),
+                mode: "manufacturer's ASIO driver".into(),
+                available: false,
+                buffer: BufferControl::Settable,
+                note: ASIO_BLOCKER.into(),
+            });
+        }
+        out.push(DriverType {
+            name: "WASAPI Exclusive".into(),
+            mode: "Windows audio, exclusive mode".into(),
+            available: false,
+            buffer: BufferControl::Settable,
+            note: WASAPI_EXCLUSIVE_BLOCKER.into(),
+        });
+    }
+    out
+}
+
+/// [`driver_types_for`] this build and platform.
+pub fn driver_types() -> Vec<DriverType> {
+    #[cfg(not(target_arch = "wasm32"))]
+    let compiled: Vec<String> = cpal::available_hosts().into_iter().map(|h| h.name().to_string()).collect();
+    #[cfg(target_arch = "wasm32")]
+    let compiled: Vec<String> = Vec::new();
+    driver_types_for(&compiled, cfg!(windows))
+}
+
+/// Buffer duration in milliseconds (a buffer's length, not round-trip latency).
+pub fn buffer_ms(frames: u32, rate: u32) -> f64 {
+    f64::from(frames) * 1000.0 / f64::from(rate.max(1))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -129,6 +226,18 @@ pub fn negotiate(req: &DeviceRequest, devices: &[DeviceCaps]) -> Result<Negotiat
     {
         return Err(NegotiationError::UnsupportedBuffer { device: dev.name.clone(), frames: fr, min, max });
     }
+    // HF07: a host whose engine sets the period cannot take a fixed buffer. Say so and open
+    // with the backend default instead of passing a request that is silently not honoured.
+    let (applied_buffer, buffer_note) = match (req.buffer_frames, buffer_control(&dev.host)) {
+        (Some(fr), BufferControl::EnginePeriod) => (
+            None,
+            Some(format!(
+                "{} shared mode cannot use the requested {fr} frames: Windows sets the buffer (usually 10 ms). For small buffers use the interface's ASIO driver.",
+                dev.host
+            )),
+        ),
+        (b, _) => (b, None),
+    };
     Ok(NegotiatedConfig {
         host: dev.host.clone(),
         device: dev.name.clone(),
@@ -137,6 +246,8 @@ pub fn negotiate(req: &DeviceRequest, devices: &[DeviceCaps]) -> Result<Negotiat
         requested_buffer: req.buffer_frames,
         reported_buffer: cfg.buffer,
         clock_lock: ClockLock::Unknown,
+        applied_buffer,
+        buffer_note,
     })
 }
 
@@ -223,7 +334,7 @@ pub fn stream_config(cfg: &NegotiatedConfig) -> cpal::StreamConfig {
     cpal::StreamConfig {
         channels: cfg.channels,
         sample_rate: cpal::SampleRate(cfg.sample_rate),
-        buffer_size: match cfg.requested_buffer {
+        buffer_size: match cfg.applied_buffer {
             Some(n) => cpal::BufferSize::Fixed(n),
             None => cpal::BufferSize::Default,
         },
@@ -306,6 +417,38 @@ mod tests {
         assert_eq!(negotiate(&r, &iface()).unwrap().channels, 8);
         r.channels = 10;
         assert!(matches!(negotiate(&r, &iface()), Err(NegotiationError::UnsupportedChannels { .. })));
+    }
+
+    /// HF07: WASAPI (shared, as cpal 0.16 opens it) cannot take a fixed buffer. The owner asked
+    /// for 128 frames and got 480 with no warning; the request is now opened with the backend
+    /// default and the reason is reported, while a settable host still gets exactly what was asked.
+    #[test]
+    fn wasapi_shared_never_silently_accepts_a_fixed_buffer() {
+        let c = negotiate(&req(Some("WASAPI"), Some("Speakers"), 48_000, Some(128)), &iface()).unwrap();
+        assert_eq!((c.requested_buffer, c.applied_buffer), (Some(128), None));
+        assert!(c.buffer_note.as_deref().is_some_and(|n| n.contains("128 frames") && n.contains("ASIO")), "{c:?}");
+        assert_eq!(stream_config(&c).buffer_size, cpal::BufferSize::Default);
+        let a = negotiate(&req(Some("ASIO"), Some("Studio Interface"), 48_000, Some(64)), &iface()).unwrap();
+        assert_eq!((a.applied_buffer, a.buffer_note.as_deref()), (Some(64), None));
+        assert_eq!(stream_config(&a).buffer_size, cpal::BufferSize::Fixed(64));
+        // No buffer asked: nothing to warn about.
+        let d = negotiate(&req(Some("WASAPI"), None, 48_000, None), &iface()).unwrap();
+        assert_eq!(d.buffer_note, None);
+        assert!((buffer_ms(64, 48_000) - 1.333).abs() < 0.001 && (buffer_ms(128, 48_000) - 2.667).abs() < 0.001);
+    }
+
+    /// Driver types: compiled hosts are offered; on Windows ASIO (when not compiled) and WASAPI
+    /// exclusive are listed as unavailable with the exact reason, never as working choices.
+    #[test]
+    fn driver_types_state_what_this_build_can_use() {
+        let w = driver_types_for(&["WASAPI".to_string()], true);
+        let names: Vec<(&str, bool)> = w.iter().map(|d| (d.name.as_str(), d.available)).collect();
+        assert_eq!(names, [("WASAPI", true), ("ASIO", false), ("WASAPI Exclusive", false)]);
+        assert_eq!(w[0].buffer, BufferControl::EnginePeriod);
+        assert!(w[1].note.contains("Steinberg") && w[2].note.contains("shared mode only"));
+        let with_asio = driver_types_for(&["ASIO".to_string(), "WASAPI".to_string()], true);
+        assert!(with_asio.iter().any(|d| d.name == "ASIO" && d.available && d.buffer == BufferControl::Settable));
+        assert_eq!(driver_types_for(&["ALSA".to_string()], false).len(), 1);
     }
 
     /// Real-driver capability audit on this machine (whatever it has; often nothing in CI).

@@ -595,13 +595,60 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
                 .font(crate::theme::bold(crate::theme::size::CAPTION))
                 .color(crate::theme::Tokens::current().section_label),
         );
-        ui.label(
-            egui::RichText::new(
-                "Audio host: the platform default (WASAPI on Windows). ASIO is not in this build (it needs Steinberg's SDK at build time).",
-            )
-            .small(),
-        );
+        // HF07: Driver type → interface → inputs/outputs → sample rate → buffer.
+        let drivers = soundcraft_playback::device::driver_types();
+        let driver = app
+            .ui
+            .driver_choice
+            .clone()
+            .or_else(|| app.ui.device_choice.as_ref().map(|c| c.0.clone()))
+            .or_else(|| drivers.iter().find(|d| d.available).map(|d| d.name.clone()));
+        let driver_info = drivers.iter().find(|d| Some(&d.name) == driver.as_ref()).cloned();
+        let engine_period = driver_info.as_ref().is_some_and(|d| d.buffer == soundcraft_playback::device::BufferControl::EnginePeriod);
         egui::Grid::new("as_basic").num_columns(2).spacing(vec2(12.0, 6.0)).show(ui, |ui| {
+            ui.label("Driver type");
+            ui.horizontal(|ui| {
+                let shown = driver_info.as_ref().map_or("none available".to_string(), |d| {
+                    if d.mode.is_empty() { d.name.clone() } else { format!("{} — {}", d.name, d.mode) }
+                });
+                egui::ComboBox::from_id_salt("as_driver").selected_text(shown).width(300.0).show_ui(ui, |ui| {
+                    for d in &drivers {
+                        let label = if d.mode.is_empty() { d.name.clone() } else { format!("{} — {}", d.name, d.mode) };
+                        let label = if d.available { label } else { format!("{label} (not in this build)") };
+                        let r = ui.add_enabled(d.available, egui::Button::selectable(driver.as_deref() == Some(d.name.as_str()), label)).on_disabled_hover_text(&d.note);
+                        if r.clicked() {
+                            if app.ui.device_choice.as_ref().is_some_and(|c| c.0 != d.name) {
+                                app.ui.device_choice = None;
+                            }
+                            app.ui.driver_choice = Some(d.name.clone());
+                        }
+                    }
+                });
+                // The selected driver's own settings: for WASAPI, Windows' Sound control panel.
+                let panel = cfg!(windows) && driver.as_deref().is_some_and(|d| d.eq_ignore_ascii_case("WASAPI"));
+                let r = ui
+                    .add_enabled(panel, egui::Button::new("Driver panel…"))
+                    .on_hover_text("Opens Windows' Sound control panel (device formats, exclusive-mode permission, levels)")
+                    .on_disabled_hover_text("Only the Windows Sound panel (for WASAPI) can be opened from here; ASIO drivers are not in this build");
+                if r.clicked() {
+                    #[cfg(not(target_arch = "wasm32"))]
+                    match std::process::Command::new("control").arg("mmsys.cpl").spawn() {
+                        Ok(_) => app.ui.status = "Opened Windows' Sound control panel".into(),
+                        Err(e) => app.ui.status = format!("Could not open the Sound control panel: {e}"),
+                    }
+                }
+            });
+            ui.end_row();
+            if let Some(d) = driver_info.as_ref().filter(|d| !d.note.is_empty()) {
+                ui.label("");
+                ui.label(egui::RichText::new(&d.note).small());
+                ui.end_row();
+            }
+            if cfg!(windows) && !drivers.iter().any(|d| d.name == "ASIO" && d.available) {
+                ui.label("");
+                ui.label(egui::RichText::new(soundcraft_playback::device::ASIO_BLOCKER).small().color(crate::theme::Tokens::current().text_dim));
+                ui.end_row();
+            }
             // Output device (draft).
             ui.label("Output device");
             ui.horizontal(|ui| {
@@ -616,7 +663,7 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
                     if ui.selectable_label(app.ui.device_choice.is_none(), "default device").clicked() {
                         app.ui.device_choice = None;
                     }
-                    for d in app.ui.output_devices.clone() {
+                    for d in app.ui.output_devices.clone().into_iter().filter(|d| driver.as_ref().is_none_or(|h| d.host.eq_ignore_ascii_case(h))) {
                         let sel = app.ui.device_choice.as_ref() == Some(&(d.host.clone(), d.name.clone()));
                         if ui.selectable_label(sel, format!("{}: {}", d.host, d.name)).clicked() {
                             app.ui.device_choice = Some((d.host, d.name));
@@ -646,7 +693,7 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
                     if ui.selectable_label(false, "default input").clicked() {
                         app.ui.input_draft = Some(None);
                     }
-                    for d in app.ui.input_devices.clone() {
+                    for d in app.ui.input_devices.clone().into_iter().filter(|d| driver.as_ref().is_none_or(|h| d.host.eq_ignore_ascii_case(h))) {
                         if ui.selectable_label(false, format!("{}: {}", d.host, d.name)).clicked() {
                             let buffer = (app.ui.buffer_choice > 0).then_some(app.ui.buffer_choice);
                             match soundcraft_playback::device::input_request(&d, rate, buffer) {
@@ -676,28 +723,94 @@ fn audio_setup(app: &mut SoundApp, ui: &mut egui::Ui) {
                 None => format!("session {rate} Hz · no output device"),
             });
             ui.end_row();
-            // Buffer (draft).
+            // Buffer (draft). HF07: only what the driver can honour is offered.
             ui.label("Buffer size (requested)");
-            egui::ComboBox::from_id_salt("pe_buffer")
-                .selected_text(if app.ui.buffer_choice == 0 { "default buffer".to_string() } else { format!("{} frames", app.ui.buffer_choice) })
-                .show_ui(ui, |ui| {
-                    for b in [0u32, 32, 64, 128, 256, 512, 1024] {
-                        let l = if b == 0 { "default buffer".to_string() } else { format!("{b} frames ({:.1} ms)", f64::from(b) * 1000.0 / f64::from(rate.max(1))) };
-                        if ui.selectable_label(app.ui.buffer_choice == b, l).clicked() {
-                            app.ui.buffer_choice = b;
-                        }
+            if engine_period {
+                ui.vertical(|ui| {
+                    ui.add_enabled(false, egui::Button::new("set by Windows (shared mode)"))
+                        .on_disabled_hover_text("WASAPI shared mode: Windows' audio engine sets the buffer (its period, usually 10 ms); a size cannot be requested");
+                    if app.ui.buffer_choice > 0 {
+                        ui.horizontal(|ui| {
+                            ui.colored_label(
+                                crate::theme::Tokens::current().warning,
+                                format!("A {}-frame buffer is saved but cannot be applied with this driver.", app.ui.buffer_choice),
+                            );
+                            if ui.small_button("Use driver default").clicked() {
+                                app.ui.buffer_choice = 0;
+                            }
+                        });
                     }
                 });
+            } else {
+                egui::ComboBox::from_id_salt("pe_buffer")
+                    .selected_text(if app.ui.buffer_choice == 0 {
+                        "driver default".to_string()
+                    } else {
+                        format!("{} frames ({:.3} ms)", app.ui.buffer_choice, soundcraft_playback::device::buffer_ms(app.ui.buffer_choice, rate))
+                    })
+                    .show_ui(ui, |ui| {
+                        for b in [0u32, 32, 64, 128, 256, 512, 1024] {
+                            let l = if b == 0 {
+                                "driver default".to_string()
+                            } else {
+                                format!("{b} frames ({:.3} ms buffer)", soundcraft_playback::device::buffer_ms(b, rate))
+                            };
+                            if ui.selectable_label(app.ui.buffer_choice == b, l).clicked() {
+                                app.ui.buffer_choice = b;
+                            }
+                        }
+                    });
+            }
             ui.end_row();
             ui.label("Buffer (delivered)");
-            ui.label(app.player.as_ref().map_or("no output stream".to_string(), |p| {
-                let (_, _, last) = p.stream_clock();
-                if last == 0 {
-                    "no callback yet".to_string()
-                } else {
-                    format!("{last} frames per callback ({:.2} ms) — what the driver actually delivers", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
+            ui.vertical(|ui| {
+                match app.player.as_ref() {
+                    None => {
+                        ui.label("no output stream");
+                    }
+                    Some(p) => {
+                        let neg = p.negotiated.as_ref();
+                        let mode = neg.map_or("default device".to_string(), |n| {
+                            let m = if soundcraft_playback::device::buffer_control(&n.host) == soundcraft_playback::device::BufferControl::EnginePeriod {
+                                " (shared mode)"
+                            } else {
+                                ""
+                            };
+                            format!("{}{m}", n.host)
+                        });
+                        match p.callback_range() {
+                            None => {
+                                ui.label(format!("{mode} · no callback yet"));
+                            }
+                            Some((lo, hi)) => {
+                                let r = p.device_rate;
+                                let spread = if lo == hi {
+                                    format!("{lo} frames per callback ({:.3} ms)", soundcraft_playback::device::buffer_ms(lo, r))
+                                } else {
+                                    format!(
+                                        "{lo}–{hi} frames per callback ({:.3}–{:.3} ms; varies)",
+                                        soundcraft_playback::device::buffer_ms(lo, r),
+                                        soundcraft_playback::device::buffer_ms(hi, r)
+                                    )
+                                };
+                                ui.label(format!("{spread} · {mode} · {r} Hz"));
+                                if let Some(req) = neg.and_then(|n| n.requested_buffer)
+                                    && (lo != req || hi != req)
+                                {
+                                    ui.colored_label(
+                                        crate::theme::Tokens::current().warning,
+                                        format!("Requested {req} frames; the driver delivers {}.", if lo == hi { format!("{lo}") } else { format!("{lo}–{hi}") }),
+                                    );
+                                }
+                            }
+                        }
+                        if let Some(note) = neg.and_then(|n| n.buffer_note.as_deref()) {
+                            ui.label(egui::RichText::new(note).small());
+                        }
+                    }
                 }
-            }));
+                ui.label(egui::RichText::new("Buffer duration is one callback's length, not the total or round-trip monitoring latency.").small().italics());
+            });
             ui.end_row();
             // Monitoring.
             ui.label("Monitoring");
@@ -832,17 +945,29 @@ fn latency_ledger(app: &mut SoundApp, ui: &mut egui::Ui) {
             ui.label("Requested buffer");
             ui.label(p.negotiated.as_ref().and_then(|n| n.requested_buffer).map_or("backend default".to_string(), |b| format!("{b} frames")));
             ui.end_row();
+            ui.label("Buffer asked of the driver");
+            ui.label(p.negotiated.as_ref().map_or("backend default".to_string(), |n| match (n.applied_buffer, n.requested_buffer) {
+                (Some(b), _) => format!("{b} frames"),
+                (None, Some(r)) => format!("driver default (the requested {r} frames cannot be set with {})", n.host),
+                (None, None) => "driver default".to_string(),
+            }));
+            ui.end_row();
             ui.label("Driver-reported buffer range");
             ui.label(p.negotiated.as_ref().map_or("not queried".to_string(), |n| match n.reported_buffer {
+                soundcraft_playback::device::BufferRange::Range { min: 0, max: u32::MAX } => {
+                    "not limited by the driver (software audio engine)".to_string()
+                }
                 soundcraft_playback::device::BufferRange::Range { min, max } => format!("{min}–{max} frames"),
                 soundcraft_playback::device::BufferRange::Unknown => "Unknown (not reported)".to_string(),
             }));
             ui.end_row();
             ui.label("Delivered callback (observed)");
-            ui.label(if last == 0 {
-                "no callback yet".to_string()
-            } else {
-                format!("{last} frames = {:.2} ms", f64::from(last) * 1000.0 / f64::from(p.device_rate.max(1)))
+            ui.label(match p.callback_range() {
+                None => "no callback yet".to_string(),
+                Some((lo, hi)) => format!(
+                    "last {last} frames = {:.3} ms; smallest {lo}, largest {hi} since the stream opened",
+                    soundcraft_playback::device::buffer_ms(last, p.device_rate)
+                ),
             });
             ui.end_row();
             ui.label("Output buffering (calculated)");
