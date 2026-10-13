@@ -14,7 +14,9 @@
     4. Unpacks the zip into a staging folder beside the install folder and checks every file
        against the zip's MANIFEST.json (SHA-256).
     5. Copies the per-user settings folder (%APPDATA%\SoundCraft, top-level files only: ui.json,
-       shortcuts and the like) into the backup as well. The original settings are not changed.
+       shortcuts, control-token and the like) into the backup as well. The original settings are
+       not changed. The copy of control-token (the control channel's password, Hotfix 03) is
+       made readable by you only, and its contents are never printed or logged.
     6. Renames the install folder to <folder>.backup-<timestamp> and moves the new build into
        place. Anything in the old folder that did not come from a package (for example sessions
        you saved there) is copied into the new folder too, and listed.
@@ -169,6 +171,21 @@ if ($settings -and (Test-Path -LiteralPath $settings)) {
     New-Item -ItemType Directory -Path $dest | Out-Null
     Get-ChildItem -LiteralPath $settings -File | Copy-Item -Destination $dest
     $settingsCopy = "$settings (top-level files) copied to $dest; the originals are unchanged"
+    # The control-channel token (Hotfix 03) is a password: the copy must stay readable by this
+    # user only (a copy inherits the backup folder's permissions), and it is never printed.
+    $tokenCopy = Join-Path $dest 'control-token'
+    if (Test-Path -LiteralPath $tokenCopy) {
+        if ($IsWindows -or $env:OS -eq 'Windows_NT') {
+            $acl = New-Object System.Security.AccessControl.FileSecurity
+            $acl.SetAccessRuleProtection($true, $false)
+            $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().User
+            $acl.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($me, 'FullControl', 'Allow')))
+            Set-Acl -LiteralPath $tokenCopy -AclObject $acl
+        } else {
+            chmod 600 -- $tokenCopy
+        }
+        $settingsCopy += '; includes control-token (the control channel password; contents not shown), readable by you only'
+    }
 }
 
 # 7. Record what happened.
