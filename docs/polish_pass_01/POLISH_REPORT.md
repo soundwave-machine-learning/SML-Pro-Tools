@@ -166,6 +166,24 @@ native DPI, font hinting, pointer feel or device behaviour.
 6. **Mixer captions:** strip section captions remain 10 points, and fader scale 9, to fit 98-point
    strips. Larger type would need wider strips; that is a layout decision for the owner.
 
-## Candidate
+## Candidate (staged, not installed)
 
-_Filled in after the build._
+Built with `OUT=dist/polish01-windows bash packaging/windows/cross-build.sh`. This is the GNU
+cross-build (`x86_64-pc-windows-gnu`, rustc 1.97.0, release, `--locked`): WASAPI only, unsigned,
+no installer, with the documentation bundle at revision 2026-10-13.3. Source `4154aa8` (clean
+tree). Program code is identical to `59038e2`; the compiled-in manual is the one at `4154aa8`.
+
+| Artifact | SHA-256 |
+|---|---|
+| `soundcraft-0.5.0-windows-x64-gnu-portable.zip` | `f8f72c8e5a986fd92127c5c6fd36f72e3dd919c27b826cef69ddd8c107222daf` |
+| `soundcraft.exe` (inside) | `05779db859a5ad86c25739de3c23efffcda0e5522caef1ea97d8f2f3f0aab726` |
+| `soundcraft-cli.exe` (inside) | `9b419bde19f69b0dad1c4339a7adea43056521e3b95b6b9d7742d7eb966e4891` |
+| `MANIFEST.json` (beside the zip) | `015bd85b2ad657b42a4a04d8d359cd5b70358ae09cf96752b73130638a6e9310` |
+
+**Not installed.** The installed Hotfix Pass 01 candidate (`soundcraft.exe` `192521f6…`) was not
+touched, as asked. To try this build side by side, extract the zip into a new folder and run
+`soundcraft.exe` from there. It uses the same settings folder (`%APPDATA%\SoundCraft`): the
+Appearance choice and the new Split/theme preferences are shared, and older builds ignore the new
+fields. To replace the installed candidate later (only with your go-ahead), use
+`packaging/windows/Update-SMLStudioCandidate.ps1` with this zip; it keeps a timestamped backup and
+supports `-Rollback`.
