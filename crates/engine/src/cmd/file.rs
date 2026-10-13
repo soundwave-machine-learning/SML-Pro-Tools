@@ -277,7 +277,10 @@ fn bounce(e: &mut Engine, p: &Value) -> Result<Value> {
         return bounce_lossy(e, p, &path, r, codec);
     }
     let format = soundcraft_audio_io::encode_format_for(format_name).ok_or_else(|| {
-        bad("file.bounce_mix", format!("cannot write `{format_name}` files (supported: {})", soundcraft_audio_io::ENCODE_EXTENSIONS))
+        bad(
+            "file.bounce_mix",
+            format!("cannot write `{format_name}` files (supported: {}; mp3, m4a on Windows)", soundcraft_audio_io::ENCODE_EXTENSIONS),
+        )
     })?;
     let bit_depth = match p.get("bit_depth").map(|b| b.to_string().trim_matches('"').to_string()).as_deref() {
         Some("16") => soundcraft_audio_io::BitDepth::Int16,
@@ -483,11 +486,19 @@ mod tests {
         let mut e = Engine::default();
         let dir = std::env::temp_dir().join(format!("sc-bounce-ext-{}", std::process::id()));
         assert!(std::fs::create_dir_all(&dir).is_ok());
-        for name in ["mix.mp3", "mix.ogg", "mix.xyz"] {
+        for name in ["mix.ogg", "mix.xyz"] {
             let path = dir.join(name);
             let err = e.execute("file.bounce_mix", &json!({"path": path.to_string_lossy(), "start": 0, "end": 480})).map(|_| ()).unwrap_err();
             assert!(err.to_string().contains("supported: wav"), "{name}: {err}");
             assert!(!path.exists(), "{name} must not be written");
+        }
+        // HF20: MP3 is a real format now (Windows encoder). Where there is no encoder it is
+        // refused with that reason, and nothing is written.
+        if !soundcraft_mf_encode::available() {
+            let path = dir.join("mix.mp3");
+            let err = e.execute("file.bounce_mix", &json!({"path": path.to_string_lossy(), "start": 0, "end": 480})).map(|_| ()).unwrap_err();
+            assert!(err.to_string().contains("not available on this platform"), "{err}");
+            assert!(!path.exists());
         }
         let ok = dir.join("mix.flac");
         assert!(e.execute("file.bounce_mix", &json!({"path": ok.to_string_lossy(), "start": 0, "end": 480})).is_ok());

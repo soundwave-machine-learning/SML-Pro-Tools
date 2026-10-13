@@ -21,7 +21,7 @@
     "control_methods": 16,
     "engine_commands": 543,
     "mcp_tools": 17,
-    "ui_commands": 97
+    "ui_commands": 98
   },
   "engine_commands": [
     {
@@ -3342,7 +3342,7 @@
       "menu": [
         "File"
       ],
-      "params": "{path, format?: wav|aiff|flac, bit_depth?: 16|24|32f, start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, rate?: Hz, metadata?: {description, originator}, report?: true|path, overwrite?: false, acknowledge_missing?: false} — refuses an existing file, a missing or failed plugin unless acknowledged; adds no limiter/normaliser/dither of its own",
+      "params": "{path, format?: wav|aiff|flac|mp3|m4a, bit_depth?: 16|24|32f, bitrate?: kbps (mp3 128-320, m4a 96-192; Windows encoders only, CBR), start?, end?, source?: main|bus name, normalize?: false, dither?: true, fold_down?: stereo, tail?: seconds|auto, rate?: Hz, metadata?: {description, originator}, report?: true|path, overwrite?: false, acknowledge_missing?: false} — refuses an existing file, a missing or failed plugin unless acknowledged; adds no limiter/normaliser/dither of its own",
       "pro_tools": [
         "Ctrl+Alt+B"
       ],
@@ -8623,6 +8623,14 @@
       "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
       "menu": "View > Narrow Mix",
       "pro_tools": "Ctrl+Alt+M",
+      "studio_one": null
+    },
+    {
+      "id": "window.external_control",
+      "label": "External Control…",
+      "layer": "ui (desktop app only; not available to the headless CLI or a standalone MCP server)",
+      "menu": "Setup > External Control...",
+      "pro_tools": null,
       "studio_one": null
     },
     {

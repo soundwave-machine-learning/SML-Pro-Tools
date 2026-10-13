@@ -53,10 +53,21 @@ pub fn default_token_path() -> Option<PathBuf> {
     config_dir().map(|d| token_path(&d))
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+fn os_random(b: &mut [u8]) -> Result<(), String> {
+    getrandom::fill(b).map_err(|e| format!("no OS randomness: {e}"))
+}
+
+/// The browser build has no control server and never creates a token.
+#[cfg(target_arch = "wasm32")]
+fn os_random(_: &mut [u8]) -> Result<(), String> {
+    Err("control tokens are not available in the browser build".into())
+}
+
 /// A new random token.
 pub fn generate() -> Result<String, String> {
     let mut b = [0u8; 32];
-    getrandom::fill(&mut b).map_err(|e| format!("no OS randomness: {e}"))?;
+    os_random(&mut b)?;
     let mut s = String::with_capacity(PREFIX.len() + 64);
     s.push_str(PREFIX);
     for x in b {

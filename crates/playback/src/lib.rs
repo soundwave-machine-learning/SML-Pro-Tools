@@ -25,7 +25,6 @@
 pub mod capture;
 pub mod clock;
 pub mod device;
-#[cfg(not(target_arch = "wasm32"))]
 pub use soundcraft_wasapi_native as wasapi_native;
 pub mod ptt;
 pub mod record;

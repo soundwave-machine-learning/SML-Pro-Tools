@@ -15,10 +15,11 @@ soundcraft-dsp.workspace = true
 log.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+# HF07: Windows-only FFI inside; safe stubs elsewhere (the browser build too).
+soundcraft-wasapi-native.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 cpal.workspace = true
-soundcraft-wasapi-native.workspace = true
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 cpal = { workspace = true, features = ["wasm-bindgen"] }

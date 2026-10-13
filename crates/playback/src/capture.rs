@@ -956,10 +956,15 @@ mod tests {
         for k in 0..40u64 {
             assert!(ring.push(&block, 0, k * 256));
         }
-        // Wait until the writer has journaled something, then "kill the process": forget the
-        // capture without finishing it (the thread stops; nothing is finalized).
-        for _ in 0..200 {
-            if read_journal(cap.media()).is_ok_and(|j| j.durable_frames > 0) {
+        // "Kill the process": forget the capture without finishing it (nothing is finalized).
+        // `forget` does not stop the writer thread, so first wait until it can never journal
+        // again: the ring is drained and fewer frames than one checkpoint are past the last
+        // journaled one. Otherwise its checkpoint races `recover`'s journal write on the same
+        // temporary file.
+        let total = 40 * 256;
+        for _ in 0..1000 {
+            let d = read_journal(cap.media()).map_or(0, |j| j.durable_frames);
+            if ring.queued_samples() == 0 && d > 0 && total - d < 2048 {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(5));
