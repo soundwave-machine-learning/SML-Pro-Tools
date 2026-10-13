@@ -14,7 +14,7 @@ egui 0.36, offscreen wgpu renders. There was no Windows host, display, audio dev
 | Documentation | the commit that adds this file (style guide, manual, Grok guide, evidence) |
 | Candidate | see *Candidate* below |
 
-Time: work ran from 03:11 to about 04:00 UTC of the three hours allowed. It stopped when the
+Time: work ran from 03:11 to 03:52 UTC (about 40 minutes of the three hours allowed). It stopped when the
 listed areas were complete and tested; nothing was repeated to fill time.
 
 ## What changed, by workspace
